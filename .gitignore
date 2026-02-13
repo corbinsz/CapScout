@@ -22,3 +22,16 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Backend data/models
+backend/data/raw/
+backend/data/processed/
+backend/models/trained/
+backend/.env
