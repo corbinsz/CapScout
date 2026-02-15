@@ -1,13 +1,15 @@
 """
-Settings API — save/read API keys.
+Settings API — save/read API keys, city list.
 Keys are persisted to backend/.env and reloaded into config.
 """
 import os
 from flask import Blueprint, request, jsonify
 import config
+from cities import list_cities, CITIES
 from services.rentcast_service import has_api_key as rentcast_has_key
 from services.realtor_service import has_api_key as rapidapi_has_key
 from services.redfin_service import has_data as redfin_has_data, save_csv as redfin_save_csv, row_count as redfin_row_count
+from services.prediction_service import models_available
 
 settings_bp = Blueprint('settings', __name__)
 
@@ -37,11 +39,12 @@ def _write_env(env):
 @settings_bp.route('/settings/keys', methods=['GET'])
 def get_keys_status():
     """Return which API keys are configured (not the keys themselves)."""
+    city_key = request.args.get('city', 'austin')
     return jsonify({
         'rentcast': rentcast_has_key(),
         'rapidapi': rapidapi_has_key(),
-        'redfin': redfin_has_data(),
-        'redfin_count': redfin_row_count() if redfin_has_data() else 0,
+        'redfin': redfin_has_data(city_key),
+        'redfin_count': redfin_row_count(city_key) if redfin_has_data(city_key) else 0,
     })
 
 
@@ -79,9 +82,34 @@ def upload_redfin_csv():
     if not file.filename or not file.filename.lower().endswith('.csv'):
         return jsonify({'error': 'Please upload a .csv file'}), 400
 
+    city_key = request.form.get('city', 'austin')
+
     try:
-        count = redfin_save_csv(file)
+        count = redfin_save_csv(file, city_key=city_key)
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
 
     return jsonify({'ok': True, 'count': count})
+
+
+@settings_bp.route('/cities')
+def get_cities():
+    """GET /api/cities — list all supported cities with data/model status."""
+    result = []
+    for city_info in list_cities():
+        key = city_info['key']
+        listings_path = os.path.join(config.city_data_dir(key), 'listings.csv')
+        has_data = os.path.isfile(listings_path)
+        has_models = models_available(city_key=key)
+        result.append({
+            'key': key,
+            'name': city_info['name'],
+            'state': city_info['state'],
+            'display': city_info['display'],
+            'latitude': city_info['latitude'],
+            'longitude': city_info['longitude'],
+            'default_zoom': city_info['default_zoom'],
+            'has_data': has_data,
+            'has_models': has_models,
+        })
+    return jsonify(result)

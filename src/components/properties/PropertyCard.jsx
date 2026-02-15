@@ -5,11 +5,19 @@ import { formatCurrency, formatPercent } from '../../utils/formatters';
 export default function PropertyCard({ property, compact = false }) {
   const {
     id, name, neighbourhood, address, photo_url, price, bedrooms, bathrooms,
-    accommodates, occupancy_rate, score, monthly_revenue, predicted, source,
+    accommodates, occupancy_rate, score, monthly_revenue, predicted, source, url,
   } = property;
 
   const isForSale = source === 'rentcast' || source === 'realtor' || source === 'redfin';
   const locationText = address || neighbourhood || '';
+
+  const handleExternalClick = (e) => {
+    if (url) {
+      e.preventDefault();
+      e.stopPropagation();
+      window.open(url, '_blank', 'noopener');
+    }
+  };
 
   return (
     <Link to={`/property/${id}`} className={`property-card${compact ? ' property-card--compact' : ''}`}>
@@ -23,7 +31,12 @@ export default function PropertyCard({ property, compact = false }) {
               {locationText && <span className="placeholder-address">{locationText}</span>}
             </div>
           )}
-          <ScoreBadge score={score} />
+          {isForSale && <ScoreBadge score={score} />}
+          {url && (
+            <button className="external-link-btn" onClick={handleExternalClick} title="View on Redfin">
+              Redfin &#8599;
+            </button>
+          )}
         </div>
       )}
 
@@ -70,8 +83,10 @@ export default function PropertyCard({ property, compact = false }) {
                 <span className="pcm-value">{formatCurrency(predicted?.predicted_monthly_revenue)}</span>
               </div>
               <div className="pcm-item">
-                <span className="pcm-label">Score</span>
-                <span className="pcm-value">{score?.toFixed(1) ?? '—'}</span>
+                <span className="pcm-label">STR Area</span>
+                <span className={`pcm-value str-tag str-${property.str_activity || 'unknown'}`}>
+                  {property.str_activity === 'active' ? 'Active' : property.str_activity === 'low' ? 'Low' : property.str_activity === 'none' ? 'None' : '—'}
+                </span>
               </div>
             </>
           ) : (
@@ -85,8 +100,8 @@ export default function PropertyCard({ property, compact = false }) {
                 <span className="pcm-value">{formatCurrency(monthly_revenue)}</span>
               </div>
               <div className="pcm-item">
-                <span className="pcm-label">Score</span>
-                <span className="pcm-value">{score?.toFixed(1) ?? '—'}</span>
+                <span className="pcm-label">Rating</span>
+                <span className="pcm-value">{property.rating?.toFixed(1) ?? '—'}</span>
               </div>
             </>
           )}

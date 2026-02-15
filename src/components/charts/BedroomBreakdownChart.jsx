@@ -19,7 +19,7 @@ export default function BedroomBreakdownChart({ data = [] }) {
             <YAxis yAxisId="right" orientation="right" tickFormatter={v => formatCurrency(v)} />
             <Tooltip formatter={(v, name) => name === 'avgRevenue' ? formatCurrency(v) : v} />
             <Legend />
-            <Bar yAxisId="left" dataKey="count" fill="#006AFF" name="Listings" radius={[4, 4, 0, 0]} />
+            <Bar yAxisId="left" dataKey="count" fill="#BF5700" name="Listings" radius={[4, 4, 0, 0]} />
             <Bar yAxisId="right" dataKey="avgRevenue" fill="#d9840d" name="Avg Revenue" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>

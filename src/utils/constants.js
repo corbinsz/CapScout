@@ -1,5 +1,6 @@
-export const AUSTIN_CENTER = [30.2672, -97.7431];
+export const AUSTIN_CENTER = [30.2672, -97.7431]; // fallback
 export const DEFAULT_ZOOM = 11;
+export const DEFAULT_CITY = 'austin';
 
 export const SORT_OPTIONS = [
   { value: 'score', label: 'Investment Score' },

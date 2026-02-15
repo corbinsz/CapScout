@@ -1,9 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchProperties } from '../services/propertyService';
+import { useCity } from '../contexts/CityContext';
+
+const DEBOUNCE_MS = 350;
 
 export default function useProperties(initialParams = {}) {
+  const { currentCity } = useCity();
   const [properties, setProperties] = useState([]);
   const [total, setTotal] = useState(0);
+  const [totalAvailable, setTotalAvailable] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -13,31 +18,71 @@ export default function useProperties(initialParams = {}) {
     sort_by: 'score',
     sort_order: 'desc',
     per_page: 20,
+    str_viable: true,
+    min_price: 150000,
+    max_price: 750000,
+    bedrooms: null,
     ...initialParams,
   });
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const data = await fetchProperties({ ...filters, page });
-      setProperties(data.items || []);
-      setTotal(data.total || 0);
-      setMessage(data.message || null);
-    } catch (err) {
-      setError(err.response?.data?.error || err.message);
-    } finally {
-      setLoading(false);
+  const debounceRef = useRef(null);
+  const abortRef = useRef(null);
+
+  const load = useCallback(async (immediate = false) => {
+    // Cancel any pending debounce
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    // Abort any in-flight request
+    if (abortRef.current) abortRef.current.abort();
+
+    const doFetch = async () => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchProperties(
+          { ...filters, page, city: currentCity },
+          { signal: controller.signal }
+        );
+        if (!controller.signal.aborted) {
+          setProperties(data.items || []);
+          setTotal(data.total || 0);
+          setTotalAvailable(data.total_available || data.total || 0);
+          setMessage(data.message || null);
+        }
+      } catch (err) {
+        if (err.name === 'CanceledError' || err.name === 'AbortError') return;
+        setError(err.response?.data?.error || err.message);
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    };
+
+    if (immediate) {
+      doFetch();
+    } else {
+      setLoading(true);
+      debounceRef.current = setTimeout(doFetch, DEBOUNCE_MS);
     }
-  }, [filters, page]);
+  }, [filters, page, currentCity]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (abortRef.current) abortRef.current.abort();
+    };
+  }, []);
+
+  // Reset to page 1 when city changes
+  useEffect(() => { setPage(1); }, [currentCity]);
 
   const updateFilters = useCallback((newFilters) => {
     setFilters(prev => ({ ...prev, ...newFilters }));
     setPage(1);
   }, []);
 
-  return { properties, total, page, setPage, loading, error, message, filters, updateFilters, reload: load };
+  return { properties, total, totalAvailable, page, setPage, loading, error, message, filters, updateFilters, reload: () => load(true) };
 }

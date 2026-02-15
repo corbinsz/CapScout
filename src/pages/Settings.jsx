@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useCity } from '../contexts/CityContext';
 import { predictProperty } from '../services/propertyService';
 import { formatCurrency } from '../utils/formatters';
 import api from '../services/api';
 
 export default function Settings() {
+  const { currentCity, cityMeta } = useCity();
   const [rentcastKey, setRentcastKey] = useState('');
   const [rapidapiKey, setRapidapiKey] = useState('');
   const [keyStatus, setKeyStatus] = useState({ rentcast: false, rapidapi: false });
@@ -20,16 +22,29 @@ export default function Settings() {
     purchase_price: 450000,
     bedrooms: 3,
     bathrooms: 2,
-    latitude: 30.27,
-    longitude: -97.74,
+    latitude: cityMeta?.latitude || 30.27,
+    longitude: cityMeta?.longitude || -97.74,
   });
   const [testResult, setTestResult] = useState(null);
   const [testError, setTestError] = useState(null);
   const [testing, setTesting] = useState(false);
 
   useEffect(() => {
-    api.get('/settings/keys').then(res => setKeyStatus(res.data)).catch(() => {});
-  }, []);
+    api.get('/settings/keys', { params: { city: currentCity } }).then(res => setKeyStatus(res.data)).catch(() => {});
+  }, [currentCity]);
+
+  // Update test form coords when city changes
+  useEffect(() => {
+    if (cityMeta) {
+      setTestForm(f => ({
+        ...f,
+        latitude: cityMeta.latitude,
+        longitude: cityMeta.longitude,
+      }));
+      setTestResult(null);
+      setTestError(null);
+    }
+  }, [cityMeta]);
 
   const handleSaveKeys = async () => {
     setSaving(true);
@@ -56,6 +71,7 @@ export default function Settings() {
     try {
       const formData = new FormData();
       formData.append('file', redfinFile);
+      formData.append('city', currentCity);
       const res = await api.post('/settings/redfin-upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
@@ -72,7 +88,7 @@ export default function Settings() {
     setTesting(true);
     setTestError(null);
     try {
-      const result = await predictProperty(testForm);
+      const result = await predictProperty({ ...testForm, city: currentCity });
       setTestResult(result);
     } catch (err) {
       setTestError(err.response?.data?.error || err.message);
@@ -80,11 +96,13 @@ export default function Settings() {
     setTesting(false);
   };
 
+  const cityDisplay = cityMeta?.display || 'Austin, TX';
+
   return (
     <div>
       <div className="page-header">
         <h1>Settings</h1>
-        <p>Configure API keys and test the prediction model</p>
+        <p>Configure API keys and test the prediction model for {cityDisplay}</p>
       </div>
 
       {/* Redfin CSV Import */}
@@ -95,13 +113,13 @@ export default function Settings() {
             <div style={{ marginBottom: 16, fontSize: 14, lineHeight: 1.7 }}>
               <p style={{ marginBottom: 8, fontWeight: 600 }}>How to get free for-sale listings (no account needed):</p>
               <ol style={{ margin: 0, paddingLeft: 20 }}>
-                <li>Go to <strong>redfin.com</strong> and search for a city (e.g. "Austin, TX")</li>
+                <li>Go to <strong>redfin.com</strong> and search for a city (e.g. "{cityDisplay}")</li>
                 <li>Apply any filters you want (price, beds, home type, etc.)</li>
                 <li>Click the <strong>"Download All"</strong> link near the top-right of the results — it saves a <code>.csv</code> file</li>
                 <li>Choose that file below and click <strong>Upload CSV</strong></li>
               </ol>
               <p className="help-text" style={{ marginTop: 8 }}>
-                Redfin data replaces any previous upload. Re-upload anytime for fresh listings.
+                Uploading saves to the currently selected city ({cityDisplay}). Re-upload anytime for fresh listings.
               </p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -126,7 +144,7 @@ export default function Settings() {
             )}
             {!keyStatus.redfin && !uploadMsg && (
               <p style={{ marginTop: 12, color: 'var(--text-muted)' }}>
-                No Redfin data uploaded yet.
+                No Redfin data uploaded yet for {cityDisplay}.
               </p>
             )}
             {uploadMsg && (
@@ -256,7 +274,7 @@ export default function Settings() {
                 <div style={{ marginTop: 16 }}>
                   <div className="detail-stats">
                     <div className="detail-stat">
-                      <span className="stat-label">STR Score</span>
+                      <span className="stat-label">CapScout Score</span>
                       <span className="stat-value" style={{ color: 'var(--primary)' }}>{testResult.score?.toFixed(1)}</span>
                     </div>
                     <div className="detail-stat">
@@ -276,11 +294,11 @@ export default function Settings() {
                       <span className="stat-value">{testResult.financials?.roi}%</span>
                     </div>
                     <div className="detail-stat">
-                      <span className="stat-label">Monthly Cashflow</span>
+                      <span className="stat-label">Annual Cashflow</span>
                       <span className="stat-value" style={{
-                        color: testResult.financials?.monthly_cashflow >= 0 ? 'var(--green)' : 'var(--red)'
+                        color: testResult.financials?.annual_cashflow >= 0 ? 'var(--green)' : 'var(--red)'
                       }}>
-                        {formatCurrency(testResult.financials?.monthly_cashflow)}
+                        {formatCurrency(testResult.financials?.annual_cashflow)}
                       </span>
                     </div>
                   </div>

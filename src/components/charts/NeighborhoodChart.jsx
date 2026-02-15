@@ -18,7 +18,7 @@ export default function NeighborhoodChart({ data = [] }) {
             <XAxis type="number" tickFormatter={v => formatCurrency(v)} />
             <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 12 }} />
             <Tooltip formatter={v => formatCurrency(v)} />
-            <Bar dataKey="revenue" fill="#006AFF" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="revenue" fill="#BF5700" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

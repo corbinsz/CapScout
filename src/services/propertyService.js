@@ -1,13 +1,18 @@
 import api from './api';
 
-export async function fetchProperties(params = {}) {
-  const { data } = await api.get('/properties', { params });
+export async function fetchProperties(params = {}, opts = {}) {
+  const { data } = await api.get('/properties', { params, signal: opts.signal });
   return data;
 }
 
-export async function fetchProperty(id) {
-  const { data } = await api.get(`/properties/${id}`);
+export async function fetchProperty(id, city, overrides = {}) {
+  const { data } = await api.get(`/properties/${id}`, { params: { city, ...overrides } });
   return data;
+}
+
+export async function searchProperties(query, city) {
+  const { data } = await api.get('/search', { params: { q: query, city } });
+  return data.results || [];
 }
 
 export async function predictProperty(propertyData) {

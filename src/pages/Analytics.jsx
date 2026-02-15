@@ -1,4 +1,5 @@
 import useAnalytics from '../hooks/useAnalytics';
+import { useCity } from '../contexts/CityContext';
 import MetricCard from '../components/common/MetricCard';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
@@ -10,6 +11,8 @@ import { formatCurrency, formatPercent, formatNumber } from '../utils/formatters
 
 export default function Analytics() {
   const { data, loading, error } = useAnalytics();
+  const { cityMeta } = useCity();
+  const cityDisplay = cityMeta?.display || 'Austin, TX';
 
   if (loading) return <LoadingSpinner message="Loading analytics..." />;
   if (error) return <ErrorMessage message={error} />;
@@ -19,7 +22,7 @@ export default function Analytics() {
     <div>
       <div className="page-header">
         <h1>Market Analytics</h1>
-        <p>Austin, TX short-term rental market overview and insights</p>
+        <p>{cityDisplay} short-term rental market overview and insights</p>
       </div>
 
       <div className="metrics-row">

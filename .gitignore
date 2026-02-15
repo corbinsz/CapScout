@@ -31,7 +31,11 @@ __pycache__/
 venv/
 
 # Backend data/models
-backend/data/raw/
-backend/data/processed/
+backend/data/
 backend/models/trained/
 backend/.env
+
+# Temp/debug files
+tmp_*
+nul
+*.cookies.txt

@@ -6,3 +6,5 @@ numpy
 joblib
 requests
 python-dotenv
+xgboost
+lightgbm

@@ -1,15 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { BEDROOM_OPTIONS, SORT_OPTIONS } from '../../utils/constants';
 
 const SOURCE_OPTIONS = [
-  { value: 'forsale', label: 'For Sale' },
-  { value: 'airbnb', label: 'Airbnb Rentals' },
+  { value: 'forsale', label: 'For Sale', desc: 'Homes for sale with STR projections' },
+  { value: 'airbnb', label: 'Airbnb Data', desc: 'Real Airbnb listings powering our predictions' },
 ];
 
 export default function FilterPanel({ filters, onFilterChange, onReset }) {
   const [open, setOpen] = useState(null);
+  const panelRef = useRef(null);
 
   const toggle = (key) => setOpen(prev => prev === key ? null : key);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClick(e) {
+      if (panelRef.current && !panelRef.current.contains(e.target)) {
+        setOpen(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   const handleChange = (key) => (e) => {
     const val = e.target.value;
@@ -52,19 +64,15 @@ export default function FilterPanel({ filters, onFilterChange, onReset }) {
   };
 
   return (
-    <div className="filter-panel">
+    <div className="filter-panel" ref={panelRef}>
       {/* Source toggle */}
       <div className="filter-chip source-toggle">
         {SOURCE_OPTIONS.map(opt => (
           <button
             key={opt.value}
             className={`filter-chip-btn${currentSource === opt.value ? ' active' : ''}`}
-            onClick={() => {
-              onFilterChange('source', opt.value);
-              // Reset price filters when switching source (different ranges)
-              onFilterChange('min_price', null);
-              onFilterChange('max_price', null);
-            }}
+            title={opt.desc}
+            onClick={() => onFilterChange('source', opt.value, { min_price: null, max_price: null })}
           >
             {opt.label}
           </button>
@@ -81,23 +89,41 @@ export default function FilterPanel({ filters, onFilterChange, onReset }) {
           <span className="chip-arrow">&#9662;</span>
         </button>
         {open === 'price' && (
-          <div className="filter-dropdown">
-            <label>{isForSale ? 'Purchase price range' : 'Nightly rate range'}</label>
-            <div className="filter-dropdown-row">
-              <input
-                type="number"
-                placeholder={isForSale ? '100000' : '0'}
-                value={filters.min_price ?? ''}
-                onChange={handleChange('min_price')}
-              />
-              <span>–</span>
-              <input
-                type="number"
-                placeholder={isForSale ? '2000000' : '1000'}
-                value={filters.max_price ?? ''}
-                onChange={handleChange('max_price')}
-              />
+          <div className="filter-dropdown fd-price">
+            <div className="fd-header">{isForSale ? 'Purchase Price Range' : 'Nightly Rate Range'}</div>
+            <div className="fd-price-inputs">
+              <div className="fd-price-field">
+                <span className="fd-price-label">Min</span>
+                <div className="fd-input-wrap">
+                  <span className="fd-input-prefix">$</span>
+                  <input
+                    type="number"
+                    placeholder={isForSale ? '100,000' : '0'}
+                    value={filters.min_price ?? ''}
+                    onChange={handleChange('min_price')}
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <span className="fd-price-divider" />
+              <div className="fd-price-field">
+                <span className="fd-price-label">Max</span>
+                <div className="fd-input-wrap">
+                  <span className="fd-input-prefix">$</span>
+                  <input
+                    type="number"
+                    placeholder={isForSale ? '2,000,000' : '1,000'}
+                    value={filters.max_price ?? ''}
+                    onChange={handleChange('max_price')}
+                  />
+                </div>
+              </div>
             </div>
+            {hasActiveFilter('price') && (
+              <button className="fd-clear" onClick={() => { onFilterChange('min_price', null); onFilterChange('max_price', null); }}>
+                Clear price filter
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -112,13 +138,21 @@ export default function FilterPanel({ filters, onFilterChange, onReset }) {
           <span className="chip-arrow">&#9662;</span>
         </button>
         {open === 'bedrooms' && (
-          <div className="filter-dropdown">
-            <label>Bedrooms</label>
-            <select value={filters.bedrooms ?? ''} onChange={handleChange('bedrooms')}>
+          <div className="filter-dropdown fd-bedrooms">
+            <div className="fd-header">Bedrooms</div>
+            <div className="fd-pill-group">
               {BEDROOM_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+                <button
+                  key={o.value}
+                  className={`fd-pill${String(filters.bedrooms ?? '') === String(o.value) ? ' selected' : ''}`}
+                  onClick={() => {
+                    onFilterChange('bedrooms', o.value === '' ? null : Number(o.value));
+                  }}
+                >
+                  {o.label}
+                </button>
               ))}
-            </select>
+            </div>
           </div>
         )}
       </div>
@@ -134,15 +168,26 @@ export default function FilterPanel({ filters, onFilterChange, onReset }) {
             <span className="chip-arrow">&#9662;</span>
           </button>
           {open === 'neighborhood' && (
-            <div className="filter-dropdown">
-              <label>Neighborhood</label>
-              <input
-                type="text"
-                placeholder="Search neighborhoods..."
-                value={filters.neighborhood ?? ''}
-                onChange={handleChange('neighborhood')}
-                autoFocus
-              />
+            <div className="filter-dropdown fd-neighborhood">
+              <div className="fd-header">Neighborhood</div>
+              <div className="fd-input-wrap fd-search-wrap">
+                <svg className="fd-search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="8.5" cy="8.5" r="5.5" />
+                  <line x1="13" y1="13" x2="18" y2="18" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Type a neighborhood name..."
+                  value={filters.neighborhood ?? ''}
+                  onChange={handleChange('neighborhood')}
+                  autoFocus
+                />
+              </div>
+              {filters.neighborhood && (
+                <button className="fd-clear" onClick={() => onFilterChange('neighborhood', '')}>
+                  Clear neighborhood
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -158,16 +203,37 @@ export default function FilterPanel({ filters, onFilterChange, onReset }) {
           <span className="chip-arrow">&#9662;</span>
         </button>
         {open === 'sort' && (
-          <div className="filter-dropdown">
-            <label>Sort by</label>
-            <select value={filters.sort_by ?? 'score'} onChange={handleChange('sort_by')}>
+          <div className="filter-dropdown fd-sort">
+            <div className="fd-header">Sort By</div>
+            <div className="fd-option-list">
               {SORT_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+                <button
+                  key={o.value}
+                  className={`fd-option${(filters.sort_by ?? 'score') === o.value ? ' selected' : ''}`}
+                  onClick={() => {
+                    onFilterChange('sort_by', o.value);
+                    setOpen(null);
+                  }}
+                >
+                  <span className="fd-option-radio" />
+                  {o.label}
+                </button>
               ))}
-            </select>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Confidence filter toggle — only for For Sale */}
+      {isForSale && (
+        <button
+          className={`filter-chip-btn str-viable-btn${filters.str_viable ? ' active' : ''}`}
+          onClick={() => onFilterChange('str_viable', !filters.str_viable)}
+          title="Hide properties with low prediction confidence (not enough nearby Airbnb data)"
+        >
+          {filters.str_viable ? 'Confident Predictions Only' : 'All Confidence Levels'}
+        </button>
+      )}
 
       <button className="filter-reset-btn" onClick={onReset}>Reset</button>
     </div>

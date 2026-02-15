@@ -3,7 +3,7 @@ import { formatCurrency, formatPercent } from '../../utils/formatters';
 export default function PropertyPopup({ property }) {
   const { id, name, price, bedrooms, bathrooms, occupancy_rate, score, monthly_revenue } = property;
   return (
-    <div>
+    <div className="map-popup-body">
       <strong>{name || `Property #${id}`}</strong>
       <div>{bedrooms} bd / {bathrooms} ba</div>
       <div>Nightly: {formatCurrency(price)}</div>

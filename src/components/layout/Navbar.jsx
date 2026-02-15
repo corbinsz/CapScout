@@ -1,4 +1,7 @@
 import { NavLink } from 'react-router-dom';
+import Logo from './Logo';
+import CitySelector from './CitySelector';
+import SearchBar from './SearchBar';
 
 export default function Navbar() {
   return (
@@ -6,10 +9,12 @@ export default function Navbar() {
       <div className="navbar-inner">
         <div className="navbar-brand">
           <NavLink to="/">
-            <span className="brand-icon">S</span>
-            STR Predictor
+            <Logo size={30} />
+            CapScout
           </NavLink>
+          <CitySelector />
         </div>
+        <SearchBar />
         <div className="navbar-links">
           <NavLink to="/" end>Dashboard</NavLink>
           <NavLink to="/map">Map</NavLink>

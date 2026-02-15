@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import useProperties from '../hooks/useProperties';
+import { useCity } from '../contexts/CityContext';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import FilterPanel from '../components/filters/FilterPanel';
@@ -7,8 +8,10 @@ import PropertyList from '../components/properties/PropertyList';
 import { formatCurrency, formatPercent, formatNumber } from '../utils/formatters';
 
 export default function Dashboard() {
-  const { properties, total, page, setPage, loading, error, filters, updateFilters, reload, message } = useProperties();
+  const { properties, total, totalAvailable, page, setPage, loading, error, filters, updateFilters, reload, message } = useProperties();
+  const { cityMeta } = useCity();
 
+  const cityDisplay = cityMeta?.display || 'Austin, TX';
   const isForSale = (filters.source || 'forsale') !== 'airbnb';
 
   const summary = useMemo(() => {
@@ -26,11 +29,11 @@ export default function Dashboard() {
   return (
     <div>
       <div className="hero-section">
-        <h1>STR Investment Dashboard</h1>
+        <h1>CapScout Dashboard</h1>
         <p>
           {isForSale
-            ? 'Austin, TX houses for sale — scored by predicted STR investment potential'
-            : 'Austin, TX short-term rental listings ranked by predicted performance'}
+            ? `${cityDisplay} houses for sale — scored by short-term rental investment potential`
+            : `${cityDisplay} active Airbnb listings — this is the real-world data our ML model trains on to generate predictions for homes for sale`}
         </p>
         {summary && (
           <div className="hero-stats">
@@ -51,7 +54,7 @@ export default function Dashboard() {
               <span className="hero-stat-label">{isForSale ? 'Avg Pred. Occ' : 'Avg Occupancy'}</span>
             </div>
             <div className="hero-stat">
-              <span className="hero-stat-value">{formatNumber(total)}</span>
+              <span className="hero-stat-value">{formatNumber(totalAvailable)}</span>
               <span className="hero-stat-label">Total Properties</span>
             </div>
           </div>
@@ -60,7 +63,7 @@ export default function Dashboard() {
 
       <FilterPanel
         filters={filters}
-        onFilterChange={(key, val) => updateFilters({ [key]: val })}
+        onFilterChange={(key, val, extra) => updateFilters({ [key]: val, ...extra })}
         onReset={() => updateFilters({
           source: 'forsale', min_price: null, max_price: null, bedrooms: null,
           neighborhood: '', sort_by: 'score', sort_order: 'desc',
@@ -68,9 +71,16 @@ export default function Dashboard() {
       />
 
       {message && <div className="fallback-banner">{message}</div>}
-      {loading && <LoadingSpinner message="Loading properties..." />}
       {error && <ErrorMessage message={error} onRetry={reload} />}
-      {!loading && !error && <PropertyList properties={properties} />}
+      {!error && (
+        <div className={`property-results${loading ? ' results-loading' : ''}`}>
+          {loading && <div className="results-overlay"><LoadingSpinner message="Updating..." /></div>}
+          {properties.length > 0
+            ? <PropertyList properties={properties} />
+            : !loading && <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px 0' }}>No properties match your filters.</p>
+          }
+        </div>
+      )}
 
       {totalPages > 1 && (
         <div className="pagination">
@@ -78,6 +88,12 @@ export default function Dashboard() {
           <span className="page-indicator">Page {page} of {totalPages}</span>
           <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>Next</button>
         </div>
+      )}
+      {filters.sort_by === 'score' && totalAvailable > total && (
+        <p className="score-note">
+          Showing top {formatNumber(total)} investment candidates of {formatNumber(totalAvailable)} listings.
+          Sort by price to browse all properties.
+        </p>
       )}
     </div>
   );
