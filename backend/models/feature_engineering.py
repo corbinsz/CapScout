@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import re
 import os
+from sklearn.cluster import KMeans
 import config
 
 
@@ -190,40 +191,74 @@ def load_and_clean_listings(city_key=None):
     # Distance to city center
     df = add_distance_to_center(df, city_key)
 
+    # --- Assessor enrichment (sqft, year_built, lot_size) ---
+    enrichment_path = os.path.join(config.city_data_dir(city_key), 'assessor_enrichment.csv')
+    if os.path.exists(enrichment_path):
+        enrich = pd.read_csv(enrichment_path)
+        df = df.merge(
+            enrich[['listing_id', 'sqft', 'year_built', 'lot_sqft']],
+            left_on='id', right_on='listing_id', how='left',
+        )
+        df.drop(columns=['listing_id'], inplace=True, errors='ignore')
+        # Sanity-check ranges
+        df.loc[df['sqft'] < 100, 'sqft'] = np.nan
+        df.loc[df['sqft'] > 15000, 'sqft'] = np.nan
+        df.loc[df['year_built'] < 1800, 'year_built'] = np.nan
+        df.loc[df['year_built'] > 2026, 'year_built'] = np.nan
+        df.loc[df['lot_sqft'] < 100, 'lot_sqft'] = np.nan
+        df.loc[df['lot_sqft'] > 500000, 'lot_sqft'] = np.nan
+        # Derived features
+        df['sqft_per_bedroom'] = df['sqft'] / df['bedrooms'].clip(lower=1)
+        df['property_age'] = 2025 - df['year_built']
+        df['lot_acres'] = df['lot_sqft'] / 43560.0
+        n_enriched = df['sqft'].notna().sum()
+        print(f'  Assessor enrichment: {n_enriched}/{len(df)} listings with sqft')
+    else:
+        # No enrichment: create NaN columns so feature pipeline works
+        for col in ['sqft', 'year_built', 'lot_sqft', 'sqft_per_bedroom',
+                     'property_age', 'lot_acres']:
+            df[col] = np.nan
+
     return df
 
 
 def get_feature_columns():
-    """Return the list of feature column names used by the model."""
+    """Return the list of feature column names used by the model.
+
+    Only includes features that are available (or derivable) for BOTH
+    Airbnb training data AND for-sale prediction targets.  Airbnb-only
+    features (review scores, host metrics, booking activity) are excluded
+    because they get median-filled as constants for for-sale properties,
+    adding noise without signal.
+    """
     base = [
         'bedrooms', 'bathrooms_clean', 'accommodates', 'beds',
         'latitude', 'longitude', 'distance_to_center', 'amenity_count',
-        'review_scores_rating', 'review_scores_cleanliness',
-        'review_scores_location', 'review_scores_value',
-        'review_scores_accuracy', 'review_scores_checkin',
-        'review_scores_communication',
     ]
     amenity_cols = [f'has_{a.replace(" ", "_")}' for a in KEY_AMENITIES]
     property_type_cols = [f'is_{pt.replace("entire ", "").replace(" ", "_")}' for pt in PROPERTY_TYPES]
-    host_cols = [
-        'is_superhost', 'is_instant_bookable',
-        'host_response_pct', 'host_acceptance_pct',
-        'days_as_host', 'host_listings',
+    # Physical property features from county assessor enrichment
+    physical_cols = [
+        'sqft', 'year_built', 'lot_sqft',
+        'sqft_per_bedroom', 'property_age', 'lot_acres',
     ]
-    activity_cols = [
-        'min_nights', 'num_reviews', 'reviews_per_month_clean',
-        'reviews_ltm', 'avail_365',
-    ]
-    return base + amenity_cols + property_type_cols + host_cols + activity_cols
+    return base + amenity_cols + property_type_cols + physical_cols
 
 
 def prepare_features(df):
-    """Extract feature matrix and targets from cleaned dataframe."""
+    """Extract feature matrix and targets from cleaned dataframe.
+
+    Returns raw (unsmoothed) targets. Call smooth_targets() separately
+    after splitting into train/test to avoid target leakage.
+    """
     feature_cols = get_feature_columns()
     available_cols = [c for c in feature_cols if c in df.columns]
 
     X = df[available_cols].copy()
+    # Two-step fill: median for columns with partial data, then 0 for all-NaN columns
+    # (e.g. physical features in cities without assessor enrichment)
     X = X.fillna(X.median())
+    X = X.fillna(0)
 
     targets = {}
     if 'price_clean' in df.columns:
@@ -231,7 +266,10 @@ def prepare_features(df):
     if 'occupancy_rate' in df.columns:
         targets['occupancy'] = df['occupancy_rate'].values
 
-    return X, targets, available_cols
+    # Listing IDs for group splitting and smoothing
+    listing_ids = df['id'].values if 'id' in df.columns else np.arange(len(df))
+
+    return X, targets, available_cols, listing_ids
 
 
 # ---------------------------------------------------------------------------
@@ -288,6 +326,99 @@ def load_calendar_monthly(city_key=None):
     return monthly
 
 
+def smooth_targets(X, y_price, y_occ, listing_ids, months=None,
+                   train_mask=None, n_clusters=20, min_group=3):
+    """Smooth targets to geographic area medians.
+
+    Groups by (geographic_cluster x bedrooms [x month]).
+
+    IMPORTANT: If train_mask is provided, clusters and medians are computed
+    from TRAINING data only, then applied to all rows.  This prevents target
+    leakage — test targets are defined by what the training data says the
+    area median is, not by the test listing's own price.
+
+    Args:
+        X: Feature DataFrame (must have latitude, longitude, bedrooms cols)
+        y_price: raw price target array
+        y_occ: raw occupancy target array
+        listing_ids: array of listing IDs
+        months: optional int array (1-12) for monthly grouping
+        train_mask: boolean array — True for training rows.  If None, uses
+                    all data (only appropriate for final production model).
+        n_clusters: number of geographic clusters
+        min_group: minimum listings per group for a stable median
+
+    Returns:
+        (smoothed_y_price, smoothed_y_occ, n_smoothed, n_groups)
+    """
+    n = len(X)
+    if n < 10 or 'latitude' not in X.columns or 'longitude' not in X.columns:
+        return y_price.copy(), y_occ.copy(), 0, 0
+
+    # Which rows to use for fitting clusters + computing medians
+    if train_mask is not None:
+        fit_idx = np.where(train_mask)[0]
+    else:
+        fit_idx = np.arange(n)
+
+    # Build temp DataFrame for grouping
+    tmp = pd.DataFrame({
+        'latitude': X['latitude'].values,
+        'longitude': X['longitude'].values,
+        'bedrooms': X['bedrooms'].values if 'bedrooms' in X.columns else 2,
+        'listing_id': listing_ids,
+        'price': y_price,
+        'occ': y_occ,
+    })
+    if months is not None:
+        tmp['month'] = months
+
+    # Cluster on unique TRAINING listing coordinates only
+    fit_data = tmp.iloc[fit_idx]
+    fit_coords = fit_data.groupby('listing_id')[['latitude', 'longitude']].first()
+
+    if len(fit_coords) < 10:
+        return y_price.copy(), y_occ.copy(), 0, 0
+
+    n_clust = max(2, min(n_clusters, len(fit_coords) // 5))
+    kmeans = KMeans(n_clusters=n_clust, random_state=42, n_init=10)
+    kmeans.fit(fit_coords.values)
+
+    # Assign ALL rows to nearest training cluster
+    tmp['_cluster'] = kmeans.predict(tmp[['latitude', 'longitude']].values)
+    tmp['_bed_bin'] = tmp['bedrooms'].clip(upper=5).fillna(2).astype(int)
+
+    group_cols = ['_cluster', '_bed_bin']
+    if months is not None:
+        group_cols.append('month')
+
+    # Compute medians from TRAINING rows only
+    fit_tmp = tmp.iloc[fit_idx]
+    group_medians = fit_tmp.groupby(group_cols).agg(
+        _med_price=('price', 'median'),
+        _med_occ=('occ', 'median'),
+        _group_size=('price', 'count'),
+    ).reset_index()
+
+    # Apply training-derived medians to ALL rows
+    tmp = tmp.merge(group_medians, on=group_cols, how='left')
+
+    has_data = tmp['_group_size'].fillna(0) >= min_group
+    smoothed_price = y_price.copy()
+    smoothed_occ = y_occ.copy()
+    smoothed_price[has_data.values] = tmp.loc[has_data, '_med_price'].values
+    smoothed_occ[has_data.values] = tmp.loc[has_data, '_med_occ'].values
+
+    n_smoothed = int(has_data.sum())
+    n_groups = int((group_medians['_group_size'] >= min_group).sum())
+    total_groups = len(group_medians)
+    label = 'train-only' if train_mask is not None else 'all-data'
+    print(f'  Target smoothing ({label}): {n_smoothed}/{n} rows to area medians '
+          f'({n_groups}/{total_groups} groups with {min_group}+ listings)')
+
+    return smoothed_price, smoothed_occ, n_smoothed, n_groups
+
+
 def prepare_monthly_data(df, calendar_monthly):
     """
     Create an expanded dataset: one row per listing x month.
@@ -296,13 +427,18 @@ def prepare_monthly_data(df, calendar_monthly):
     If calendar lacks prices, falls back to listing-level price_clean.
     Adds cyclical month encoding (sin_month, cos_month).
 
-    Returns: X, y_price, y_occupancy, feature_cols
+    Returns raw (unsmoothed) targets.  Call smooth_targets() separately
+    after splitting into train/test to avoid target leakage.
+
+    Returns: X, y_price, y_occupancy, feature_cols, listing_ids, months
+        listing_ids: numpy array for group-aware train/test splitting
+        months: raw int months (1-12) for use by smooth_targets()
     """
     feature_cols = get_feature_columns()
     available_cols = [c for c in feature_cols if c in df.columns]
 
     if 'id' not in df.columns:
-        return None, None, None, None
+        return None, None, None, None, None, None
 
     # Include price_clean for fallback when calendar lacks prices
     keep_cols = ['id'] + available_cols
@@ -314,7 +450,7 @@ def prepare_monthly_data(df, calendar_monthly):
     merged = base.merge(calendar_monthly, on='listing_id', how='inner')
 
     if len(merged) == 0:
-        return None, None, None, None
+        return None, None, None, None, None, None
 
     # Fill missing calendar prices with listing-level price
     if merged['avg_price'].isna().any() and 'price_clean' in merged.columns:
@@ -325,12 +461,26 @@ def prepare_monthly_data(df, calendar_monthly):
     merged = merged[merged['avg_price'] > 0]
 
     if len(merged) == 0:
-        return None, None, None, None
+        return None, None, None, None, None, None
 
-    # Cap dataset size to keep training fast
+    # Cap dataset size to keep training fast — sample by listing to keep
+    # all months of each listing together
     MAX_ROWS = 50_000
     if len(merged) > MAX_ROWS:
-        merged = merged.sample(n=MAX_ROWS, random_state=42)
+        unique_ids = merged['listing_id'].unique()
+        np.random.RandomState(42).shuffle(unique_ids)
+        keep_ids = set()
+        row_count = 0
+        for lid in unique_ids:
+            n = (merged['listing_id'] == lid).sum()
+            if row_count + n > MAX_ROWS:
+                break
+            keep_ids.add(lid)
+            row_count += n
+        merged = merged[merged['listing_id'].isin(keep_ids)]
+
+    # Save raw months before converting to sin/cos
+    raw_months = merged['month'].values.copy()
 
     # Cyclical month encoding
     merged['sin_month'] = np.sin(2 * np.pi * merged['month'] / 12)
@@ -339,14 +489,16 @@ def prepare_monthly_data(df, calendar_monthly):
     monthly_feature_cols = available_cols + ['sin_month', 'cos_month']
     X = merged[monthly_feature_cols].copy()
     X = X.fillna(X.median())
+    X = X.fillna(0)
     y_price = merged['avg_price'].values
     y_occ = merged['occupancy_rate'].values
+    listing_ids = merged['listing_id'].values
 
-    return X, y_price, y_occ, monthly_feature_cols
+    return X, y_price, y_occ, monthly_feature_cols, listing_ids, raw_months
 
 
 # Keep old function name as alias for backward compat
 def prepare_monthly_occupancy_data(df, calendar_monthly):
     """Backward-compatible wrapper."""
-    X, y_price, y_occ, feature_cols = prepare_monthly_data(df, calendar_monthly)
+    X, y_price, y_occ, feature_cols, _ids, _months = prepare_monthly_data(df, calendar_monthly)
     return X, y_occ, feature_cols

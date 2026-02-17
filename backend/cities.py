@@ -19,6 +19,11 @@ CITIES = {
         'ia_city': 'austin',
         'ia_date': '2025-06-13',
         'redfin_region_id': 30818,
+        'assessor': {
+            'source': 'travis_cad',
+            'download_url': 'https://traviscad.org/publicinformation',
+            'files': ['improvement_detail_2025.zip'],
+        },
     },
     'nashville': {
         'name': 'Nashville',
@@ -35,6 +40,7 @@ CITIES = {
         'ia_city': 'nashville',
         'ia_date': '2025-06-19',
         'redfin_region_id': 13415,
+        'assessor': None,  # Davidson County: bulk building data not freely available
     },
     'san-diego': {
         'name': 'San Diego',
@@ -51,6 +57,7 @@ CITIES = {
         'ia_city': 'san-diego',
         'ia_date': '2025-03-16',
         'redfin_region_id': 16904,
+        'assessor': None,  # San Diego County: building data restricted
     },
     'dallas': {
         'name': 'Dallas',
@@ -67,6 +74,11 @@ CITIES = {
         'ia_city': 'dallas',
         'ia_date': '2025-06-15',
         'redfin_region_id': 30794,
+        'assessor': {
+            'source': 'dallas_cad',
+            'download_url': 'https://www.dallascad.org/DataProducts.aspx',
+            'files': ['DCAD2025_CERTIFIED_07242025.zip'],
+        },
     },
     'asheville': {
         'name': 'Asheville',
@@ -83,6 +95,7 @@ CITIES = {
         'ia_city': 'asheville',
         'ia_date': '2025-06-17',
         'redfin_region_id': 555,
+        'assessor': None,  # Buncombe County: building data limited
     },
     'seattle': {
         'name': 'Seattle',
@@ -99,6 +112,12 @@ CITIES = {
         'ia_city': 'seattle',
         'ia_date': '2025-03-16',
         'redfin_region_id': 16163,
+        'assessor': {
+            'source': 'king_county',
+            'download_url': 'https://info.kingcounty.gov/assessor/datadownload/default.aspx',
+            'files': ['EXTR_ResBldg.csv', 'EXTR_Parcel.csv'],
+            'arcgis_parcels': 'https://gismaps.kingcounty.gov/arcgis/rest/services/Property/KingCo_Parcels/MapServer/0',
+        },
     },
 }
 

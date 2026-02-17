@@ -212,7 +212,8 @@ def predict_property(features_dict, month=None, city_key=None, summary_only=Fals
     Predict nightly rate and occupancy for a property.
 
     features_dict should contain: bedrooms, bathrooms_clean, accommodates, latitude, longitude
-    Optional: amenity_count, beds, review_scores_*, has_* amenity flags
+    Optional: amenity_count, beds, has_* amenity flags, is_* property type flags,
+              sqft, year_built, lot_sqft, property_age, sqft_per_bedroom, lot_acres
 
     month: optional int (1-12). If given, returns prediction for that month.
     If None, returns full 12-month breakdown with seasonal adjustments.
@@ -233,20 +234,10 @@ def predict_property(features_dict, month=None, city_key=None, summary_only=Fals
         # Batched: predict all 12 months in 2 model calls (not 24)
         monthly_rates, raw_monthly_occs = _predict_all_months(base_row, m)
 
-        # The monthly occupancy model can produce extreme seasonal lows
-        # because calendar training data conflates host-blocked dates with
-        # genuine low demand.  Correct by:
-        # 1. Floor each month at 15 % (even slow markets get some bookings)
-        # 2. Ensure annual average is at least 45 % (scale up, preserve shape)
-        monthly_occs = [max(occ, 0.20) for occ in raw_monthly_occs]
-        avg_occ = sum(monthly_occs) / 12
-        MIN_ANNUAL_OCC = 0.55
-        if avg_occ > 0 and avg_occ < MIN_ANNUAL_OCC:
-            scale_factor = MIN_ANNUAL_OCC / avg_occ
-            monthly_occs = [float(np.clip(occ * scale_factor, 0.15, 0.95))
-                            for occ in monthly_occs]
-        else:
-            monthly_occs = [float(np.clip(occ, 0, 0.95)) for occ in monthly_occs]
+        # Light guardrails: floor at 5% (avoid exact zeros from model noise)
+        # and cap at 95%. No annual scaling — trust the model's output.
+        monthly_occs = [float(np.clip(occ, 0.05, 0.95))
+                        for occ in raw_monthly_occs]
     else:
         # No monthly model: flat base prediction + city seasonal factors
         X = pd.DataFrame([base_row], columns=feature_cols)

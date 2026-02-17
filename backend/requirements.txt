@@ -6,5 +6,6 @@ numpy
 joblib
 requests
 python-dotenv
+scipy
 xgboost
 lightgbm

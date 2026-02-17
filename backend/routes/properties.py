@@ -14,6 +14,52 @@ from services.streetview_service import get_streetview_url
 
 STREETVIEW_SCORE_THRESHOLD = 30
 
+# Map for-sale property_type strings to the model's binary is_* flags.
+# Keys are lowercased substrings matched against the listing's property_type.
+_PROPERTY_TYPE_MAP = {
+    'single family': 'is_home',
+    'multi-family': 'is_home',
+    'mobile': 'is_home',
+    'manufactured': 'is_home',
+    'condo': 'is_condo',
+    'co-op': 'is_condo',
+    'townhouse': 'is_townhouse',
+    'cabin': 'is_cabin',
+    'cottage': 'is_cottage',
+}
+
+
+def _property_type_flags(item):
+    """Convert a for-sale property_type string to model binary flags."""
+    pt = (item.get('property_type') or '').lower()
+    if not pt:
+        return {}
+    flags = {}
+    for substring, flag in _PROPERTY_TYPE_MAP.items():
+        if substring in pt:
+            flags[flag] = 1
+            break
+    return flags
+
+
+def _physical_features(item):
+    """Extract physical property features from a listing dict for ML prediction."""
+    feats = {}
+    sqft = item.get('sqft')
+    if sqft and sqft > 0:
+        feats['sqft'] = sqft
+        beds = item.get('bedrooms', 1) or 1
+        feats['sqft_per_bedroom'] = sqft / beds
+    year = item.get('year_built')
+    if year and year > 1800:
+        feats['year_built'] = year
+        feats['property_age'] = 2025 - year
+    lot = item.get('lot_size')
+    if lot and lot > 0:
+        feats['lot_sqft'] = lot
+        feats['lot_acres'] = lot / 43560.0
+    return feats
+
 properties_bp = Blueprint('properties', __name__)
 
 
@@ -125,6 +171,8 @@ def _score_item(item, purchase_price, city_key=None):
             'accommodates': item.get('bedrooms', 2) * 2,
             'latitude': item.get('latitude', city['latitude']),
             'longitude': item.get('longitude', city['longitude']),
+            **_physical_features(item),
+            **_property_type_flags(item),
         }
         prediction = predict_property(features, city_key=city_key, summary_only=True)
         hoa_annual = (item.get('hoa_monthly') or 0) * 12
@@ -318,6 +366,8 @@ def get_property(property_id):
                 'accommodates': target.get('accommodates', target.get('bedrooms', 2) * 2),
                 'latitude': target.get('latitude', city['latitude']),
                 'longitude': target.get('longitude', city['longitude']),
+                **_physical_features(target),
+                **_property_type_flags(target),
             }, city_key=city_key)
             target['predicted'] = prediction
             if is_forsale:

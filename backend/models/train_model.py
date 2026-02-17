@@ -1,11 +1,15 @@
 """
 Train ML models for STR investment prediction.
 
-Compares regression models via RandomizedSearchCV (5-fold CV),
-selects the winner by lowest mean CV MSE, and reports final metrics
-on a held-out test set.
+Uses LightGBM and XGBoost — the two best models for this tabular
+regression task.  Both handle NaN natively (important for optional
+physical features like sqft), are histogram-based (fast), and
+consistently outperform linear/random-forest on this data.
 
-Usage: python -m models.train_model  (from backend/ directory)
+Compares via RandomizedSearchCV (5-fold CV), selects the winner by
+lowest mean CV MSE, and reports final metrics on a held-out test set.
+
+Usage: python -m models.train_model [city_key] [--fast|--quick]
 """
 import os
 import sys
@@ -14,9 +18,8 @@ import warnings
 import joblib
 import numpy as np
 from scipy import stats as sp_stats
-from sklearn.linear_model import Ridge
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.model_selection import train_test_split, RandomizedSearchCV
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import train_test_split, GroupShuffleSplit, RandomizedSearchCV
 from sklearn.metrics import (
     mean_squared_error,
     mean_absolute_error,
@@ -32,6 +35,7 @@ from models.feature_engineering import (
     prepare_features,
     load_calendar_monthly,
     prepare_monthly_data,
+    smooth_targets,
 )
 
 # Suppress convergence / future warnings during search
@@ -58,44 +62,33 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 def _build_candidates():
-    """Return list of (name, estimator, param_distributions) tuples."""
+    """Return list of (name, estimator, param_distributions) tuples.
+
+    Only LightGBM and XGBoost — the two best models for tabular regression
+    with optional NaN features.  Falls back to sklearn GradientBoosting
+    only if neither library is installed.
+    """
     candidates = []
 
-    # 1. Ridge (linear baseline)
-    candidates.append((
-        "Ridge",
-        Ridge(),
-        {"alpha": [0.01, 0.1, 1, 10, 100, 1000]},
-    ))
+    # 1. LightGBM (preferred — fastest, best NaN handling)
+    if HAS_LGB:
+        candidates.append((
+            "LightGBM",
+            LGBMRegressor(random_state=42, verbosity=-1),
+            {
+                "n_estimators": sp_stats.randint(200, 801),
+                "max_depth": sp_stats.randint(4, 12),
+                "learning_rate": sp_stats.uniform(0.01, 0.19),
+                "subsample": sp_stats.uniform(0.7, 0.3),
+                "colsample_bytree": sp_stats.uniform(0.5, 0.5),
+                "num_leaves": sp_stats.randint(20, 128),
+                "min_child_samples": sp_stats.randint(5, 51),
+                "reg_alpha": sp_stats.uniform(0, 1),
+                "reg_lambda": sp_stats.uniform(0, 1),
+            },
+        ))
 
-    # 2. Random Forest
-    candidates.append((
-        "RandomForest",
-        RandomForestRegressor(random_state=42),
-        {
-            "n_estimators": sp_stats.randint(100, 501),
-            "max_depth": [5, 8, 10, 12, 16, None],
-            "min_samples_split": sp_stats.randint(2, 21),
-            "min_samples_leaf": sp_stats.randint(1, 11),
-            "max_features": ["sqrt", "log2", 0.5, 0.8, 1.0],
-        },
-    ))
-
-    # 3. GradientBoosting (sklearn)
-    candidates.append((
-        "GradientBoosting",
-        GradientBoostingRegressor(random_state=42),
-        {
-            "n_estimators": sp_stats.randint(100, 501),
-            "max_depth": sp_stats.randint(3, 11),
-            "learning_rate": sp_stats.uniform(0.01, 0.29),
-            "subsample": sp_stats.uniform(0.7, 0.3),
-            "min_samples_split": sp_stats.randint(2, 21),
-            "min_samples_leaf": sp_stats.randint(1, 11),
-        },
-    ))
-
-    # 4. XGBoost (if installed)
+    # 2. XGBoost (strong second — histogram-based, native NaN)
     if HAS_XGB:
         candidates.append((
             "XGBoost",
@@ -105,9 +98,9 @@ def _build_candidates():
                 tree_method="hist",
             ),
             {
-                "n_estimators": sp_stats.randint(100, 501),
-                "max_depth": sp_stats.randint(3, 11),
-                "learning_rate": sp_stats.uniform(0.01, 0.29),
+                "n_estimators": sp_stats.randint(200, 801),
+                "max_depth": sp_stats.randint(4, 12),
+                "learning_rate": sp_stats.uniform(0.01, 0.19),
                 "subsample": sp_stats.uniform(0.7, 0.3),
                 "colsample_bytree": sp_stats.uniform(0.5, 0.5),
                 "reg_alpha": sp_stats.uniform(0, 1),
@@ -116,21 +109,18 @@ def _build_candidates():
             },
         ))
 
-    # 5. LightGBM (if installed)
-    if HAS_LGB:
+    # 3. Fallback: sklearn GradientBoosting (no native NaN, slower)
+    if not candidates:
         candidates.append((
-            "LightGBM",
-            LGBMRegressor(random_state=42, verbosity=-1),
+            "GradientBoosting",
+            GradientBoostingRegressor(random_state=42),
             {
-                "n_estimators": sp_stats.randint(100, 501),
-                "max_depth": sp_stats.randint(3, 11),
-                "learning_rate": sp_stats.uniform(0.01, 0.29),
+                "n_estimators": sp_stats.randint(200, 601),
+                "max_depth": sp_stats.randint(4, 10),
+                "learning_rate": sp_stats.uniform(0.01, 0.19),
                 "subsample": sp_stats.uniform(0.7, 0.3),
-                "colsample_bytree": sp_stats.uniform(0.5, 0.5),
-                "num_leaves": sp_stats.randint(15, 128),
-                "min_child_samples": sp_stats.randint(5, 51),
-                "reg_alpha": sp_stats.uniform(0, 1),
-                "reg_lambda": sp_stats.uniform(0, 1),
+                "min_samples_split": sp_stats.randint(2, 21),
+                "min_samples_leaf": sp_stats.randint(1, 11),
             },
         ))
 
@@ -241,19 +231,14 @@ def _quick_train(target_name, X_train, X_test, y_train, y_test):
 
 
 def train_target(target_name, X_train, X_test, y_train, y_test):
-    """Compare all candidate models for one target. Return best model."""
+    """Compare candidate models for one target. Return best model."""
     if QUICK_MODE:
         return _quick_train(target_name, X_train, X_test, y_train, y_test)
 
     candidates = _build_candidates()
     if FAST_MODE:
-        # In fast mode, prefer XGBoost/LightGBM (histogram-based, 10-50x faster)
-        # Fall back to sklearn GradientBoosting only if neither is available
-        fast_prefer = ['XGBoost', 'LightGBM']
-        fast = [c for c in candidates if c[0] in fast_prefer]
-        if not fast:
-            fast = [c for c in candidates if c[0] == 'GradientBoosting']
-        candidates = fast[:2]
+        # In fast mode, just use the first (best) candidate
+        candidates = candidates[:1]
     results = []
 
     for name, estimator, param_dist in candidates:
@@ -293,7 +278,7 @@ def train_models(city_key=None):
     print(f"  {len(df)} listings after cleaning")
 
     print("Preparing features...")
-    X, targets, feature_cols = prepare_features(df)
+    X, targets, feature_cols, listing_ids = prepare_features(df)
     print(f"  {len(feature_cols)} features: {feature_cols[:5]}...")
 
     avail = []
@@ -302,9 +287,10 @@ def train_models(city_key=None):
     if HAS_LGB:
         avail.append("LightGBM")
     if avail:
-        print(f"  Optional libraries available: {', '.join(avail)}")
+        print(f"  ML libraries: {', '.join(avail)}")
     else:
-        print("  Note: Install xgboost/lightgbm for additional model candidates")
+        print("  WARNING: Install lightgbm and/or xgboost for best results")
+        print("           Falling back to sklearn GradientBoosting (slower, no native NaN)")
 
     models_dir = config.city_models_dir(city_key)
 
@@ -362,13 +348,17 @@ def train_models(city_key=None):
     X_monthly = None
 
     MIN_MONTHLY_ROWS = 500  # Need enough data for monthly models to generalize
+    monthly_listing_ids = None
+    monthly_months = None
     if calendar_monthly is not None:
         print(f"  Calendar data loaded: {len(calendar_monthly)} listing-month rows")
-        X_monthly, y_price_monthly, y_occ_monthly, monthly_feature_cols = prepare_monthly_data(df, calendar_monthly)
+        X_monthly, y_price_monthly, y_occ_monthly, monthly_feature_cols, monthly_listing_ids, monthly_months = prepare_monthly_data(df, calendar_monthly)
         if X_monthly is not None and len(X_monthly) >= MIN_MONTHLY_ROWS:
             use_monthly = True
-            print(f"  Monthly dataset: {len(X_monthly)} rows, {len(monthly_feature_cols)} features")
+            n_listings = len(np.unique(monthly_listing_ids))
+            print(f"  Monthly dataset: {len(X_monthly)} rows from {n_listings} listings, {len(monthly_feature_cols)} features")
             print(f"  (includes sin_month, cos_month for seasonality)")
+            print(f"  Split: by listing ID (all months of a listing stay in train OR test)")
         elif X_monthly is not None:
             print(f"  Monthly dataset too small ({len(X_monthly)} rows < {MIN_MONTHLY_ROWS}), using listing-level data")
 
@@ -380,37 +370,58 @@ def train_models(city_key=None):
                 os.remove(stale_path)
                 print(f"  Removed stale {stale}")
 
+    # ---- Split FIRST, then smooth (prevents target leakage) ----
+    if use_monthly:
+        # Split by listing ID — all months of a listing go to train OR test
+        gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+        idx_train, idx_test = next(gss.split(X_monthly, groups=monthly_listing_ids))
+        n_train_listings = len(np.unique(monthly_listing_ids[idx_train]))
+        n_test_listings = len(np.unique(monthly_listing_ids[idx_test]))
+        print(f"\n  Split: {len(idx_train)} train rows ({n_train_listings} listings) | {len(idx_test)} test rows ({n_test_listings} listings)")
+
+        # Smooth using ONLY training data — test targets come from train-derived medians
+        train_mask = np.zeros(len(X_monthly), dtype=bool)
+        train_mask[idx_train] = True
+        y_price_sm, y_occ_sm, _, _ = smooth_targets(
+            X_monthly, y_price_monthly, y_occ_monthly, monthly_listing_ids,
+            months=monthly_months, train_mask=train_mask)
+
+        # Save monthly metadata
+        joblib.dump(monthly_feature_cols, os.path.join(models_dir, "monthly_feature_columns.joblib"))
+        monthly_medians = X_monthly.median().to_dict()
+        joblib.dump(monthly_medians, os.path.join(models_dir, "monthly_feature_medians.joblib"))
+
+    elif "price" in targets:
+        idx_train, idx_test = train_test_split(
+            np.arange(len(X)), test_size=0.2, random_state=42
+        )
+        print(f"\n  Split: {len(idx_train)} train | {len(idx_test)} test (listing-level)")
+
+        # Smooth using ONLY training data
+        train_mask = np.zeros(len(X), dtype=bool)
+        train_mask[idx_train] = True
+        y_price_sm, y_occ_sm, _, _ = smooth_targets(
+            X, targets['price'], targets.get('occupancy', np.zeros(len(X))),
+            listing_ids, train_mask=train_mask)
+
     # ---- Nightly price ----
     print("\n" + "=" * 60)
     print("TARGET: nightly price")
     print("=" * 60)
 
     if use_monthly:
-        # Train price on monthly data (with seasonality)
-        print("  Training on monthly price data (seasonal)")
-        joblib.dump(monthly_feature_cols, os.path.join(models_dir, "monthly_feature_columns.joblib"))
-        monthly_medians = X_monthly.median().to_dict()
-        joblib.dump(monthly_medians, os.path.join(models_dir, "monthly_feature_medians.joblib"))
-
-        idx_train, idx_test = train_test_split(
-            np.arange(len(X_monthly)), test_size=0.2, random_state=42
-        )
+        print("  Training on monthly price data (seasonal, train-only smoothing)")
         X_train, X_test = X_monthly.iloc[idx_train], X_monthly.iloc[idx_test]
-        y_train, y_test = y_price_monthly[idx_train], y_price_monthly[idx_test]
+        y_train, y_test = y_price_sm[idx_train], y_price_sm[idx_test]
 
         best_price = train_target("price", X_train, X_test, y_train, y_test)
         joblib.dump(best_price, os.path.join(models_dir, "price_model.joblib"))
         print("  Saved price_model.joblib (month-aware)")
 
     elif "price" in targets:
-        # Fallback: listing-level price (no seasonality)
-        print("  No calendar data — training on listing-level price")
-        idx_train, idx_test = train_test_split(
-            np.arange(len(X)), test_size=0.2, random_state=42
-        )
+        print("  No calendar data -- training on listing-level price (train-only smoothing)")
         X_train, X_test = X.iloc[idx_train], X.iloc[idx_test]
-        y = targets["price"]
-        y_train, y_test = y[idx_train], y[idx_test]
+        y_train, y_test = y_price_sm[idx_train], y_price_sm[idx_test]
 
         best_price = train_target("price", X_train, X_test, y_train, y_test)
         joblib.dump(best_price, os.path.join(models_dir, "price_model.joblib"))
@@ -422,26 +433,18 @@ def train_models(city_key=None):
     print("=" * 60)
 
     if use_monthly:
-        # Train occupancy on monthly data (same X, different y)
-        print("  Training on monthly occupancy data (seasonal)")
-        idx_train, idx_test = train_test_split(
-            np.arange(len(X_monthly)), test_size=0.2, random_state=42
-        )
+        print("  Training on monthly occupancy data (seasonal, train-only smoothing)")
         X_train, X_test = X_monthly.iloc[idx_train], X_monthly.iloc[idx_test]
-        y_train, y_test = y_occ_monthly[idx_train], y_occ_monthly[idx_test]
+        y_train, y_test = y_occ_sm[idx_train], y_occ_sm[idx_test]
 
         best_occ = train_target("occupancy", X_train, X_test, y_train, y_test)
         joblib.dump(best_occ, os.path.join(models_dir, "occupancy_model.joblib"))
         print("  Saved occupancy_model.joblib (month-aware)")
 
     elif "occupancy" in targets:
-        print("  No calendar data — training on listing-level occupancy")
-        idx_train, idx_test = train_test_split(
-            np.arange(len(X)), test_size=0.2, random_state=42
-        )
+        print("  No calendar data -- training on listing-level occupancy (train-only smoothing)")
         X_train, X_test = X.iloc[idx_train], X.iloc[idx_test]
-        y = targets["occupancy"]
-        y_train, y_test = y[idx_train], y[idx_test]
+        y_train, y_test = y_occ_sm[idx_train], y_occ_sm[idx_test]
 
         best_occ = train_target("occupancy", X_train, X_test, y_train, y_test)
         joblib.dump(best_occ, os.path.join(models_dir, "occupancy_model.joblib"))
