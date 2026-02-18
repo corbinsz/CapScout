@@ -122,9 +122,21 @@ def list_properties():
     city_key = request.args.get('city', 'austin')
     str_viable = request.args.get('str_viable', '').lower() in ('true', '1', 'yes')
 
+    # Parse optional financial assumption overrides
+    mortgage_rate_pct = request.args.get('mortgage_rate', type=float)
+    mortgage_term = request.args.get('mortgage_term', type=int)
+    down_payment_pct_val = request.args.get('down_payment_pct', type=float)
+    fin_overrides = {}
+    if mortgage_rate_pct is not None:
+        fin_overrides['mortgage_rate'] = mortgage_rate_pct / 100
+    if mortgage_term is not None:
+        fin_overrides['mortgage_term'] = mortgage_term
+    if down_payment_pct_val is not None:
+        fin_overrides['down_payment_pct'] = down_payment_pct_val / 100
+
     fs_args = dict(min_price=min_price, max_price=max_price, bedrooms=bedrooms,
                    sort_by=sort_by, sort_order=sort_order, city_key=city_key,
-                   str_viable=str_viable)
+                   str_viable=str_viable, fin_overrides=fin_overrides)
 
     # --- For-sale cascade: Redfin CSV -> RentCast -> RapidAPI -> Airbnb fallback ---
     if source == 'forsale':
@@ -159,7 +171,7 @@ def list_properties():
                               neighborhood, sort_by, sort_order, city_key)
 
 
-def _score_item(item, purchase_price, city_key=None):
+def _score_item(item, purchase_price, city_key=None, fin_overrides=None):
     """Add ML predictions and investment score to an item dict."""
     if not models_available(city_key):
         return
@@ -182,6 +194,7 @@ def _score_item(item, purchase_price, city_key=None):
             prediction['predicted_occupancy_rate'],
             city_key=city_key,
             hoa_annual=hoa_annual,
+            **(fin_overrides or {}),
         )
         item['score'] = scoring['score']
         item['predicted'] = prediction
@@ -198,7 +211,7 @@ def _score_item(item, purchase_price, city_key=None):
 
 def _forsale_properties(backend, page, per_page, min_price, max_price,
                         bedrooms, sort_by, sort_order, city_key=None,
-                        str_viable=False):
+                        str_viable=False, fin_overrides=None):
     """Build unified property list from a for-sale backend."""
     city = get_city_or_default(city_key)
     if backend == 'redfin':
@@ -233,7 +246,7 @@ def _forsale_properties(backend, page, per_page, min_price, max_price,
         filtered.sort(key=lambda x: x.get('price', 0))
         batch = filtered[:SCORE_BATCH]
         for item in batch:
-            _score_item(item, item.get('price', 0), city_key)
+            _score_item(item, item.get('price', 0), city_key, fin_overrides)
         if str_viable:
             batch = [it for it in batch if it.get('confidence_level') != 'low']
         batch.sort(key=lambda x: x.get('score') or 0, reverse=(sort_order == 'desc'))
@@ -247,7 +260,7 @@ def _forsale_properties(backend, page, per_page, min_price, max_price,
         start = (page - 1) * per_page
         page_items = filtered[start:start + per_page]
         for item in page_items:
-            _score_item(item, item.get('price', 0), city_key)
+            _score_item(item, item.get('price', 0), city_key, fin_overrides)
         if str_viable:
             page_items = [it for it in page_items if it.get('confidence_level') != 'low']
 

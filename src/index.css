@@ -1018,6 +1018,12 @@ body {
   padding-left: 32px;
 }
 
+/* --- Financing dropdown --- */
+.fd-financing { min-width: 220px; }
+.fd-financing-fields { display: flex; flex-direction: column; gap: var(--space-sm); }
+.fd-financing-field { display: flex; flex-direction: column; gap: 3px; }
+.fd-financing-field input { width: 100%; }
+
 /* --- Clear button --- */
 .fd-clear {
   display: block;

@@ -67,6 +67,7 @@ export default function Dashboard() {
         onReset={() => updateFilters({
           source: 'forsale', min_price: null, max_price: null, bedrooms: null,
           neighborhood: '', sort_by: 'score', sort_order: 'desc',
+          mortgage_rate: null, mortgage_term: null, down_payment_pct: null,
         })}
       />
 

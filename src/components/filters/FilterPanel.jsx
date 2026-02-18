@@ -36,6 +36,7 @@ export default function FilterPanel({ filters, onFilterChange, onReset }) {
     if (key === 'bedrooms') return filters.bedrooms != null;
     if (key === 'neighborhood') return !!filters.neighborhood;
     if (key === 'sort') return filters.sort_by && filters.sort_by !== 'score';
+    if (key === 'financing') return filters.mortgage_rate != null || filters.mortgage_term != null || filters.down_payment_pct != null;
     return false;
   };
 
@@ -59,6 +60,13 @@ export default function FilterPanel({ filters, onFilterChange, onReset }) {
     if (key === 'sort') {
       const opt = SORT_OPTIONS.find(o => o.value === filters.sort_by);
       return opt ? `Sort: ${opt.label}` : 'Sort';
+    }
+    if (key === 'financing') {
+      const parts = [];
+      if (filters.mortgage_rate != null) parts.push(`${filters.mortgage_rate}%`);
+      if (filters.down_payment_pct != null) parts.push(`${filters.down_payment_pct}% down`);
+      if (filters.mortgage_term != null) parts.push(`${filters.mortgage_term}yr`);
+      return parts.length ? parts.join(' / ') : 'Financing';
     }
     return key;
   };
@@ -223,6 +231,78 @@ export default function FilterPanel({ filters, onFilterChange, onReset }) {
           </div>
         )}
       </div>
+
+      {/* Financing chip — only for For Sale */}
+      {isForSale && (
+        <div className="filter-chip">
+          <button
+            className={`filter-chip-btn${open === 'financing' || hasActiveFilter('financing') ? ' active' : ''}`}
+            onClick={() => toggle('financing')}
+          >
+            {chipLabel('financing')}
+            <span className="chip-arrow">&#9662;</span>
+          </button>
+          {open === 'financing' && (
+            <div className="filter-dropdown fd-financing">
+              <div className="fd-header">Financing Assumptions</div>
+              <div className="fd-financing-fields">
+                <div className="fd-financing-field">
+                  <span className="fd-price-label">Interest Rate %</span>
+                  <div className="fd-input-wrap">
+                    <input
+                      type="number"
+                      placeholder="7"
+                      step="0.125"
+                      min="0"
+                      max="20"
+                      value={filters.mortgage_rate ?? ''}
+                      onChange={handleChange('mortgage_rate')}
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                <div className="fd-financing-field">
+                  <span className="fd-price-label">Down Payment %</span>
+                  <div className="fd-input-wrap">
+                    <input
+                      type="number"
+                      placeholder="20"
+                      step="5"
+                      min="0"
+                      max="100"
+                      value={filters.down_payment_pct ?? ''}
+                      onChange={handleChange('down_payment_pct')}
+                    />
+                  </div>
+                </div>
+                <div className="fd-financing-field">
+                  <span className="fd-price-label">Loan Term (yr)</span>
+                  <div className="fd-input-wrap">
+                    <input
+                      type="number"
+                      placeholder="30"
+                      step="5"
+                      min="5"
+                      max="40"
+                      value={filters.mortgage_term ?? ''}
+                      onChange={handleChange('mortgage_term')}
+                    />
+                  </div>
+                </div>
+              </div>
+              {hasActiveFilter('financing') && (
+                <button className="fd-clear" onClick={() => {
+                  onFilterChange('mortgage_rate', null);
+                  onFilterChange('mortgage_term', null);
+                  onFilterChange('down_payment_pct', null);
+                }}>
+                  Reset to defaults
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Confidence filter toggle — only for For Sale */}
       {isForSale && (
