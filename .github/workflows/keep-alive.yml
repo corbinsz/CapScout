@@ -1,0 +1,13 @@
+name: Keep Render alive
+
+on:
+  schedule:
+    # Every 10 minutes (buffer for GitHub Actions cron delays)
+    - cron: '*/10 * * * *'
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: curl -fsS -o /dev/null https://capscout.onrender.com/api/health
