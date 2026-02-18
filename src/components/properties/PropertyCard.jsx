@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import ScoreBadge from './ScoreBadge';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
+import { resolveBackendUrl } from '../../services/api';
 
 export default function PropertyCard({ property, compact = false }) {
   const {
@@ -24,7 +25,7 @@ export default function PropertyCard({ property, compact = false }) {
       {!compact && (
         <div className="property-card-image">
           {photo_url ? (
-            <img src={photo_url} alt={name || 'Property'} />
+            <img src={resolveBackendUrl(photo_url)} alt={name || 'Property'} />
           ) : (
             <div className="property-card-placeholder">
               <span className="placeholder-icon">&#127968;</span>

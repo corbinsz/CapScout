@@ -5,6 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { fetchProperty } from '../services/propertyService';
 import { useCity } from '../contexts/CityContext';
+import { resolveBackendUrl } from '../services/api';
 import ScoreBadge from '../components/properties/ScoreBadge';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
@@ -185,7 +186,7 @@ function CompCard({ comp }) {
     <div className="comp-card">
       <div className="comp-card-img">
         {comp.picture_url || comp.photo_url ? (
-          <img src={comp.picture_url || comp.photo_url} alt={comp.name || 'Listing'} />
+          <img src={resolveBackendUrl(comp.picture_url || comp.photo_url)} alt={comp.name || 'Listing'} />
         ) : (
           <div className="comp-card-placeholder">No Image</div>
         )}
@@ -344,7 +345,7 @@ export default function PropertyPage() {
         {/* Hero photo if available */}
         {property.photo_url && (
           <div className="property-hero-photo">
-            <img src={property.photo_url} alt={property.address || property.name || 'Property'} />
+            <img src={resolveBackendUrl(property.photo_url)} alt={property.address || property.name || 'Property'} />
           </div>
         )}
 
