@@ -350,6 +350,12 @@ def train_models(city_key=None):
     MIN_MONTHLY_ROWS = 500  # Need enough data for monthly models to generalize
     monthly_listing_ids = None
     monthly_months = None
+
+    if calendar_monthly is None:
+        print("  No calendar data found — generating synthetic monthly data...")
+        from models.feature_engineering import synthesize_calendar_monthly
+        calendar_monthly = synthesize_calendar_monthly(df, city_key=city_key)
+
     if calendar_monthly is not None:
         print(f"  Calendar data loaded: {len(calendar_monthly)} listing-month rows")
         X_monthly, y_price_monthly, y_occ_monthly, monthly_feature_cols, monthly_listing_ids, monthly_months = prepare_monthly_data(df, calendar_monthly)

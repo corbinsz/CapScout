@@ -310,6 +310,12 @@ def load_calendar_monthly(city_key=None):
     has_prices = cal['price_clean'].notna().sum() > len(cal) * 0.1
 
     if has_prices:
+        # Cap extreme nightly prices before aggregating — some hosts set
+        # $5,000+ for holidays, which dominates monthly averages and hurts
+        # model training.  Cap at P99 of the price distribution.
+        p99 = cal['price_clean'].quantile(0.99)
+        cal['price_clean'] = cal['price_clean'].clip(upper=p99)
+
         monthly = cal.groupby(['listing_id', 'month']).agg(
             occupancy_rate=('booked', 'mean'),
             avg_price=('price_clean', 'mean'),
@@ -324,6 +330,55 @@ def load_calendar_monthly(city_key=None):
         monthly['avg_price'] = np.nan  # will be filled from listing price
 
     return monthly
+
+
+def synthesize_calendar_monthly(df, city_key=None):
+    """
+    Create synthetic monthly data for cities without calendar data.
+
+    Expands each listing into 12 rows (one per month), using the city's
+    seasonal factors to scale price and occupancy. This gives the model
+    seasonal awareness even without real calendar data.
+
+    The listing's `price_clean` is treated as the annual average nightly rate.
+    The listing's availability is converted to a base occupancy rate:
+        occupancy ≈ 1 - (availability_365 / 365)
+
+    Returns a DataFrame matching load_calendar_monthly() output format:
+        listing_id, month, occupancy_rate, avg_price
+    """
+    from cities import get_seasonal_factors, DEFAULT_CITY
+
+    ck = city_key or DEFAULT_CITY
+    seasonal = get_seasonal_factors(ck)
+
+    if 'id' not in df.columns or 'price_clean' not in df.columns:
+        return None
+
+    base = df[['id', 'price_clean']].copy()
+    base = base.rename(columns={'id': 'listing_id'})
+    base = base.dropna(subset=['price_clean'])
+    base = base[base['price_clean'] > 0]
+
+    # Estimate base occupancy from availability fields
+    if 'availability_365' in df.columns:
+        avail = df.loc[base.index, 'availability_365'].fillna(180)
+        base['base_occ'] = (1.0 - avail / 365.0).clip(0.05, 0.95)
+    else:
+        base['base_occ'] = 0.50  # default 50% if no availability data
+
+    rows = []
+    for month in range(1, 13):
+        chunk = base.copy()
+        chunk['month'] = month
+        chunk['avg_price'] = chunk['price_clean'] * seasonal['price'][month - 1]
+        chunk['occupancy_rate'] = (chunk['base_occ'] * seasonal['occupancy'][month - 1]).clip(0.0, 1.0)
+        rows.append(chunk[['listing_id', 'month', 'occupancy_rate', 'avg_price']])
+
+    result = pd.concat(rows, ignore_index=True)
+    print(f'  Synthetic monthly data: {len(result)} rows from {len(base)} listings '
+          f'(12 months x seasonal factors)')
+    return result
 
 
 def smooth_targets(X, y_price, y_occ, listing_ids, months=None,

@@ -38,7 +38,7 @@ CITIES = {
         'str_permit_annual': 350,         # Nashville STR permit ~$313-350/yr
         'ia_state': 'tn',
         'ia_city': 'nashville',
-        'ia_date': '2025-06-19',
+        'ia_date': '2025-06-19',  # calendar from 2024-06-22
         'redfin_region_id': 13415,
         'assessor': None,  # Davidson County: bulk building data not freely available
     },
@@ -93,7 +93,7 @@ CITIES = {
         'str_permit_annual': 200,         # Buncombe County STR permit
         'ia_state': 'nc',
         'ia_city': 'asheville',
-        'ia_date': '2025-06-17',
+        'ia_date': '2023-12-18',
         'redfin_region_id': 555,
         'assessor': None,  # Buncombe County: building data limited
     },

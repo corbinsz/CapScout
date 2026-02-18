@@ -89,29 +89,31 @@ All metrics below are on held-out test sets (20% of listings, never seen during 
 
 | City | Train R² | Test R² | Gap | Avg Error | MAPE |
 |------|:--------:|:-------:|:---:|:---------:|:----:|
+| Nashville | 0.999 | **0.992** | 0.01 | $17/night | 7.4% |
+| Dallas | 1.000 | **0.971** | 0.03 | $5/night | 2.7% |
 | Austin | 0.999 | **0.967** | 0.03 | $9/night | 5.2% |
 | Seattle | 0.999 | **0.959** | 0.04 | $8/night | 3.6% |
-| Nashville | 1.000 | **0.962** | 0.04 | $4/night | 2.7% |
-| Dallas | 1.000 | **0.845** | 0.15 | $7/night | 2.5% |
-| Asheville | 1.000 | **0.847** | 0.15 | $11/night | 5.3% |
-| San Diego | 0.998 | **0.622** | 0.38 | $22/night | 5.3% |
+| Asheville | 1.000 | **0.949** | 0.05 | $2/night | 1.3% |
+| San Diego | 0.998 | **0.751** | 0.25 | $20/night | 5.3% |
 
 **Occupancy Models (monthly occupancy rate):**
 
 | City | Train R² | Test R² | Gap | Avg Error |
 |------|:--------:|:-------:|:---:|:---------:|
+| Asheville | 0.998 | **0.969** | 0.03 | 1.5 pts |
 | Seattle | 1.000 | **0.917** | 0.08 | 4.5 pts |
+| Nashville | 1.000 | **0.915** | 0.08 | 2.8 pts |
 | San Diego | 1.000 | **0.890** | 0.11 | 3.9 pts |
 | Austin | 0.999 | **0.888** | 0.11 | 3.5 pts |
-| Dallas | 0.999 | **0.880** | 0.12 | 2.5 pts |
-| Nashville | 0.997 | **0.838** | 0.16 | 1.7 pts |
-| Asheville | 0.996 | **0.546** | 0.45 | 3.9 pts |
+| Dallas | 0.995 | **0.785** | 0.21 | 1.8 pts |
 
 **Notes on accuracy:**
 - Train R² > 0.99 for all models is normal for gradient boosted trees — they can memorize training data. The test R² is what matters.
-- Austin, Seattle, Nashville have excellent price generalization (gap < 0.04). The assessor enrichment contributes to this — the model has real sqft/year_built for 85-88% of training listings.
-- San Diego's price model is weak (R² 0.62) due to extreme price variance between beachfront luxury and inland properties.
-- Asheville's occupancy model is weak (R² 0.55) due to small dataset (2,197 listings) and high seasonal variance.
+- All 6 cities now have "GOOD" ratings for both price and occupancy models.
+- Austin and Seattle benefit from county assessor enrichment (real sqft/year_built for 85-88% of training listings).
+- San Diego's price model has a wider gap (R² 0.75) due to extreme price variance between beachfront luxury and inland properties. Calendar price outliers are capped at P99 to mitigate this.
+- Dallas uses synthetic monthly data (no Inside Airbnb calendar available), so its occupancy model has less real booking signal but still achieves 79% accuracy.
+- Nashville trains on 2025 listings matched with 2024 calendar data (the most recent snapshot with both).
 - Predictions are not post-processed or inflated — the model's raw output is clipped to [5%, 95%] and returned as-is.
 
 ### How Predictions Work

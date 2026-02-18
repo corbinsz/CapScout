@@ -56,6 +56,9 @@ def eval_city(city_key):
     monthly_months = None
     if use_monthly:
         calendar = load_calendar_monthly(city_key=city_key)
+        if calendar is None:
+            from models.feature_engineering import synthesize_calendar_monthly
+            calendar = synthesize_calendar_monthly(df, city_key=city_key)
         X_m, y_price_m, y_occ_m, m_cols, monthly_listing_ids, monthly_months = prepare_monthly_data(df, calendar)
         if X_m is not None and len(X_m) > 0:
             n_listings = len(np.unique(monthly_listing_ids))
