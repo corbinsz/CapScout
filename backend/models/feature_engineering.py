@@ -6,18 +6,11 @@ from sklearn.cluster import KMeans
 import config
 
 
-KEY_AMENITIES = [
-    'pool', 'hot tub', 'wifi', 'kitchen', 'free parking',
-    'air conditioning', 'washer', 'dryer', 'gym', 'ev charger',
-    'self check-in', 'dedicated workspace', 'fireplace', 'bbq',
-    'outdoor dining', 'patio', 'lake access', 'waterfront'
-]
-
-# Top property types to create binary flags for
+# Property types that map to Redfin for-sale categories.
+# Excluded: rental_unit, guesthouse, guest_suite (N/A for for-sale).
 PROPERTY_TYPES = [
-    'entire home', 'entire rental unit', 'entire condo',
-    'entire townhouse', 'entire guesthouse', 'entire guest suite',
-    'entire cabin', 'entire cottage',
+    'entire home', 'entire condo',
+    'entire townhouse', 'entire cabin', 'entire cottage',
 ]
 
 
@@ -40,19 +33,6 @@ def parse_bathrooms(row):
     match = re.search(r'([\d.]+)', str(text))
     return float(match.group(1)) if match else 1.0
 
-
-def count_amenities(amenities_str):
-    """Count total amenities from the amenities JSON-like string."""
-    if pd.isna(amenities_str):
-        return 0
-    return len(re.findall(r'"([^"]+)"', str(amenities_str)))
-
-
-def has_amenity(amenities_str, keyword):
-    """Check if a specific amenity keyword exists."""
-    if pd.isna(amenities_str):
-        return 0
-    return 1 if keyword.lower() in str(amenities_str).lower() else 0
 
 
 def parse_pct(val):
@@ -120,15 +100,8 @@ def load_and_clean_listings(city_key=None):
         df['occupancy_rate'] = 1 - (df['availability_30'] / 30.0)
         df['occupancy_rate'] = df['occupancy_rate'].clip(0, 1)
 
-    # Amenity features
-    if 'amenities' in df.columns:
-        df['amenity_count'] = df['amenities'].apply(count_amenities)
-        for amenity in KEY_AMENITIES:
-            col_name = f'has_{amenity.replace(" ", "_")}'
-            df[col_name] = df['amenities'].apply(lambda x, a=amenity: has_amenity(x, a))
-
     # Fill missing numeric columns
-    for col in ['bedrooms', 'beds', 'accommodates']:
+    for col in ['bedrooms', 'accommodates']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(df[col].median() if df[col].notna().any() else 1)
 
@@ -225,24 +198,22 @@ def load_and_clean_listings(city_key=None):
 def get_feature_columns():
     """Return the list of feature column names used by the model.
 
-    Only includes features that are available (or derivable) for BOTH
-    Airbnb training data AND for-sale prediction targets.  Airbnb-only
-    features (review scores, host metrics, booking activity) are excluded
-    because they get median-filled as constants for for-sale properties,
-    adding noise without signal.
+    Only 17 features that exist for BOTH Airbnb training data AND
+    Redfin for-sale properties.  Amenities (Redfin has none), review
+    scores, host metrics, and booking activity are excluded -- they
+    get median-filled as constants for for-sale properties, adding
+    noise without signal.
     """
     base = [
-        'bedrooms', 'bathrooms_clean', 'accommodates', 'beds',
-        'latitude', 'longitude', 'distance_to_center', 'amenity_count',
+        'bedrooms', 'bathrooms_clean', 'accommodates',
+        'latitude', 'longitude', 'distance_to_center',
     ]
-    amenity_cols = [f'has_{a.replace(" ", "_")}' for a in KEY_AMENITIES]
     property_type_cols = [f'is_{pt.replace("entire ", "").replace(" ", "_")}' for pt in PROPERTY_TYPES]
-    # Physical property features from county assessor enrichment
     physical_cols = [
         'sqft', 'year_built', 'lot_sqft',
         'sqft_per_bedroom', 'property_age', 'lot_acres',
     ]
-    return base + amenity_cols + property_type_cols + physical_cols
+    return base + property_type_cols + physical_cols
 
 
 def prepare_features(df):
@@ -311,10 +282,10 @@ def load_calendar_monthly(city_key=None):
 
     if has_prices:
         # Cap extreme nightly prices before aggregating — some hosts set
-        # $5,000+ for holidays, which dominates monthly averages and hurts
-        # model training.  Cap at P99 of the price distribution.
-        p99 = cal['price_clean'].quantile(0.99)
-        cal['price_clean'] = cal['price_clean'].clip(upper=p99)
+        # placeholder prices ($9,999) to block dates.  Cap at P95 rather
+        # than P99 because cities like Nashville have P99=$9,999 (garbage).
+        p95 = cal['price_clean'].quantile(0.95)
+        cal['price_clean'] = cal['price_clean'].clip(upper=p95)
 
         monthly = cal.groupby(['listing_id', 'month']).agg(
             occupancy_rate=('booked', 'mean'),
@@ -517,22 +488,6 @@ def prepare_monthly_data(df, calendar_monthly):
 
     if len(merged) == 0:
         return None, None, None, None, None, None
-
-    # Cap dataset size to keep training fast — sample by listing to keep
-    # all months of each listing together
-    MAX_ROWS = 50_000
-    if len(merged) > MAX_ROWS:
-        unique_ids = merged['listing_id'].unique()
-        np.random.RandomState(42).shuffle(unique_ids)
-        keep_ids = set()
-        row_count = 0
-        for lid in unique_ids:
-            n = (merged['listing_id'] == lid).sum()
-            if row_count + n > MAX_ROWS:
-                break
-            keep_ids.add(lid)
-            row_count += n
-        merged = merged[merged['listing_id'].isin(keep_ids)]
 
     # Save raw months before converting to sin/cos
     raw_months = merged['month'].values.copy()

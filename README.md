@@ -36,18 +36,41 @@ The enrichment pipeline (`scripts/enrich_listings.py`) downloads assessor CSVs, 
 
 If no for-sale data is available, the dashboard falls back to showing Airbnb listings ranked by predicted performance.
 
+**Redfin CSV filtering pipeline:** The raw CSV goes through two filter stages before reaching the dashboard:
+
+1. **Import filter** — removes vacant land, commercial properties, parking, multi-family 5+ units, construction plans, listings with no address/price, and 0-bedroom units. This count is shown on the Settings page.
+2. **Dashboard filter** — removes listings where the price parses to $0 (pending, withdrawn, or "coming soon" listings that Redfin includes without a real price).
+
+For example, a 4,290-row Austin CSV might show 3,735 on the Settings page and 2,572 on the dashboard.
+
 **Street View photos** are fetched from the Google Maps Static API for properties scoring above 30. Images are cached permanently to disk so each location is only fetched once. A monthly counter enforces the free-tier limit (~25,000 requests/month). The API key stays server-side — the frontend loads images through a proxy route.
 
 ## Machine Learning Pipeline
 
-CapScout trains **two models per city** from the Inside Airbnb dataset:
+CapScout trains **two XGBoost models per city** from the Inside Airbnb dataset:
 
 - **Price Model** — predicts the expected nightly rate from property features and location
 - **Occupancy Model** — predicts monthly occupancy with seasonal awareness (uses calendar data to capture month-by-month booking patterns)
 
+### The Complete Pipeline
+
+```
+Inside Airbnb data (listings + calendar)
+    --> Clean & filter (entire homes only, P2-P98 listing prices, P95 calendar prices)
+    --> K-means geographic clustering (~20 zones)
+    --> Target smoothing (group medians by zone x bedrooms x month)
+    --> XGBoost + RandomizedSearchCV (50 iters, 5-fold CV)
+    --> Final model retrained on 100% of data
+    --> Predict on Redfin for-sale properties
+```
+
+**Data cleaning notes:** Calendar prices are capped at P95 (95th percentile) rather than P99 because some cities (notably Nashville) have tens of thousands of entries at $9,999 — hosts use placeholder pricing to block dates. P95 removes this garbage while keeping legitimately expensive listings.
+
+**No hold-out split.** The model trains on 100% of Airbnb data. Cross-validation folds handle evaluation during hyperparameter search, and the final model is retrained on all data with the best parameters. The real "test set" is Redfin for-sale properties — data the model has never seen and that comes from a completely different distribution.
+
 ### Prediction Strategy: Area Median Targeting
 
-The core challenge in STR revenue prediction is that individual Airbnb hosts set wildly different prices for similar properties — two identical 3-bedroom homes on the same street can list at $150/night and $400/night depending on the host's pricing strategy, photo quality, and marketing. Trying to predict individual host pricing from property features alone yields ~54% accuracy (R²=0.54).
+The core challenge in STR revenue prediction is that individual Airbnb hosts set wildly different prices for similar properties — two identical 3-bedroom homes on the same street can list at $150/night and $400/night depending on the host's pricing strategy, photo quality, and marketing. Trying to predict individual host pricing from property features alone yields ~54% accuracy.
 
 CapScout solves this with **area median targeting**: instead of training the model to predict what each individual listing charges, we train it to predict what a **typical listing in that area earns**. The training pipeline:
 
@@ -62,59 +85,67 @@ This eliminates host-specific noise from the training signal. For occupancy, thi
 
 For investors, this answers: *"What would a typical STR at this location earn?"* — not *"What does one specific Airbnb host happen to charge?"*
 
-### Feature Selection
+### Feature Selection (17 features + 2 seasonal)
 
-Only features that exist for **both** Airbnb training data and for-sale properties are included (40 total). Airbnb-only features like review scores, host metrics, and booking activity were removed because they get filled with meaningless constants for for-sale properties. The model uses:
+Only features that exist for **both** Airbnb training data and Redfin for-sale properties are included. Amenities (Redfin has no amenity data), review scores, host metrics, and booking activity were all removed — they get median-filled as constants for for-sale properties, contributing noise without signal.
 
-- **Property basics** — bedrooms, bathrooms, accommodates, beds
-- **Location** — latitude, longitude, distance to city center
-- **Amenities** — 18 binary flags (pool, hot tub, kitchen, parking, A/C, etc.)
-- **Property type** — 8 binary flags (home, condo, townhouse, cabin, etc.)
-- **Physical features** — sqft, year built, lot size, sqft/bedroom, property age, lot acres (from county assessor enrichment; NaN-filled for unenriched cities)
-- **Seasonality** — cyclical month encoding (sin/cos) for month-aware predictions
+| Feature | Redfin Source | Type |
+|---------|--------------|------|
+| `bedrooms` | BEDS | real |
+| `bathrooms_clean` | BATHS | real |
+| `accommodates` | bedrooms x 2 | derived |
+| `latitude` | LATITUDE | real |
+| `longitude` | LONGITUDE | real |
+| `distance_to_center` | haversine(lat/lng, city center) | derived |
+| `is_home` | PROPERTY TYPE | flag |
+| `is_condo` | PROPERTY TYPE | flag |
+| `is_townhouse` | PROPERTY TYPE | flag |
+| `is_cabin` | PROPERTY TYPE | flag |
+| `is_cottage` | PROPERTY TYPE | flag |
+| `sqft` | SQUARE FEET | real |
+| `year_built` | YEAR BUILT | real |
+| `lot_sqft` | LOT SIZE | real |
+| `sqft_per_bedroom` | sqft / bedrooms | derived |
+| `property_age` | 2025 - year_built | derived |
+| `lot_acres` | lot_sqft / 43560 | derived |
+| `sin_month` | month (1-12) | seasonal |
+| `cos_month` | month (1-12) | seasonal |
 
-Physical features are the key bridge between training data and for-sale properties: Redfin listings already have sqft, year_built, and lot_size, and now the training data does too (via assessor enrichment). For enriched cities, the model uses real structural data instead of training medians.
+Physical features (sqft, year_built, lot_sqft) are the key bridge between training data and for-sale properties: Redfin listings already have these, and now the training data does too (via county assessor enrichment). For enriched cities, the model uses real structural data instead of training medians.
 
-### Model Selection
+### XGBoost + Hyperparameter Tuning
 
-Training compares **LightGBM and XGBoost** — the two best algorithms for tabular regression. Both handle missing values natively (important for optional features like sqft) and are histogram-based for fast training. The winner is selected automatically by lowest cross-validated MSE (50 iterations of randomized hyperparameter search, 5-fold CV). Models are trained independently per city.
+**XGBoost** is the sole model — appropriate for our data sizes (40K-156K rows per city), handles missing values natively (important for optional features like sqft in unenriched cities), and is histogram-based for fast training.
 
-The train/test split is done **by listing ID** (not by row) so all months of a listing stay together. This prevents data leakage and ensures honest out-of-sample evaluation — the test set contains only listings the model has never seen. Target smoothing (area medians) is computed from training data only — test listings are smoothed using training-derived cluster medians, never their own neighborhoods.
+Hyperparameters are tuned via **RandomizedSearchCV** (50 random combinations, 5-fold cross-validation):
 
-### Out-of-Sample Accuracy
+| Parameter | Range | Controls |
+|-----------|-------|----------|
+| `n_estimators` | 200-800 | Number of trees |
+| `max_depth` | 4-12 | Tree depth |
+| `learning_rate` | 0.01-0.20 | Step size |
+| `subsample` | 0.7-1.0 | Row sampling per tree |
+| `colsample_bytree` | 0.5-1.0 | Feature sampling per tree |
+| `reg_alpha` | 0-1 | L1 regularization |
+| `reg_lambda` | 0.5-2.0 | L2 regularization |
+| `min_child_weight` | 1-10 | Min leaf weight |
 
-All metrics below are on held-out test sets (20% of listings, never seen during training). Train R² shows model memorization; the gap between train and test R² indicates overfitting.
+### Model Accuracy
 
-**Price Models (nightly rate prediction):**
+Training reports two R² metrics per target:
+- **Train R²** — predict on all training data with the final refitted model. Measures how well the model fits the data.
+- **CV R²** — average R² across the 5 held-out CV folds. Measures generalization to unseen data.
 
-| City | Train R² | Test R² | Gap | Avg Error | MAPE |
-|------|:--------:|:-------:|:---:|:---------:|:----:|
-| Nashville | 0.999 | **0.992** | 0.01 | $17/night | 7.4% |
-| Dallas | 1.000 | **0.971** | 0.03 | $5/night | 2.7% |
-| Austin | 0.999 | **0.967** | 0.03 | $9/night | 5.2% |
-| Seattle | 0.999 | **0.959** | 0.04 | $8/night | 3.6% |
-| Asheville | 1.000 | **0.949** | 0.05 | $2/night | 1.3% |
-| San Diego | 0.998 | **0.751** | 0.25 | $20/night | 5.3% |
+A small gap between Train R² and CV R² means the model generalizes well. A large gap indicates overfitting.
 
-**Occupancy Models (monthly occupancy rate):**
-
-| City | Train R² | Test R² | Gap | Avg Error |
-|------|:--------:|:-------:|:---:|:---------:|
-| Asheville | 0.998 | **0.969** | 0.03 | 1.5 pts |
-| Seattle | 1.000 | **0.917** | 0.08 | 4.5 pts |
-| Nashville | 1.000 | **0.915** | 0.08 | 2.8 pts |
-| San Diego | 1.000 | **0.890** | 0.11 | 3.9 pts |
-| Austin | 0.999 | **0.888** | 0.11 | 3.5 pts |
-| Dallas | 0.995 | **0.785** | 0.21 | 1.8 pts |
-
-**Notes on accuracy:**
-- Train R² > 0.99 for all models is normal for gradient boosted trees — they can memorize training data. The test R² is what matters.
-- All 6 cities now have "GOOD" ratings for both price and occupancy models.
-- Austin and Seattle benefit from county assessor enrichment (real sqft/year_built for 85-88% of training listings).
-- San Diego's price model has a wider gap (R² 0.75) due to extreme price variance between beachfront luxury and inland properties. Calendar price outliers are capped at P99 to mitigate this.
-- Dallas uses synthetic monthly data (no Inside Airbnb calendar available), so its occupancy model has less real booking signal but still achieves 79% accuracy.
-- Nashville trains on 2025 listings matched with 2024 calendar data (the most recent snapshot with both).
-- Predictions are not post-processed or inflated — the model's raw output is clipped to [5%, 95%] and returned as-is.
+| City | Price CV R² | Occ CV R² | Notes |
+|------|:----------:|:---------:|-------|
+| San Diego | 0.996 | 0.971 | Best overall |
+| Dallas | 0.976 | 0.831 | Synthetic calendar |
+| Austin | 0.971 | 0.936 | Assessor enriched |
+| Asheville | 0.965 | 0.967 | Small but clean data |
+| Seattle | 0.951 | 0.920 | Assessor enriched |
+| Nashville | 0.921 | 0.933 | Fixed with P95 cap |
 
 ### How Predictions Work
 
@@ -157,6 +188,7 @@ Financial modeling assumes 20% down payment, 7% mortgage rate, 30-year term, and
 - **Interactive Map** — MapLibre GL map centered on the selected city with color-coded score markers
 - **Analytics** — market overview with neighborhood rankings, price distributions, bedroom breakdowns, and revenue charts
 - **Property Detail** — deep dive with ML predictions, financial analysis, comparable listings, Street View photo, and a mini map
+- **Prediction Process** — explains the full pipeline from data collection through scoring, step by step
 - **Settings** — upload Redfin CSVs, configure API keys, and test the prediction model with custom inputs
 
 ## Getting Started
@@ -190,9 +222,6 @@ python -m scripts.enrich_listings
 
 # Train ML models (~20 min per city with enrichment, ~10 min without)
 python -m models.train_model --all
-
-# Evaluate model accuracy (shows train vs test R², overfitting gaps)
-python -m scripts.eval_models
 
 # Start Flask server
 python app.py
@@ -239,11 +268,10 @@ backend/
     streetview_service.py    # Google Street View with disk cache
   models/
     feature_engineering.py   # Feature extraction, assessor merge, target smoothing
-    train_model.py           # Model training pipeline (LightGBM + XGBoost)
+    train_model.py           # Model training pipeline (XGBoost)
   scripts/
     download_data.py         # Inside Airbnb data downloader
     enrich_listings.py       # County assessor enrichment pipeline
-    eval_models.py           # Model evaluation (train vs test R², overfitting check)
     download_redfin.py       # Redfin CSV download helper
   data/
     cities/                  # Per-city data (gitignored)
@@ -261,6 +289,7 @@ src/
     Dashboard.jsx            # Property list + map view
     Analytics.jsx            # Market analytics charts
     PropertyPage.jsx         # Single property detail
+    PredictionProcess.jsx    # How-it-works methodology page
     Settings.jsx             # Configuration page
   components/
     layout/                  # Navbar, CitySelector, SearchBar, Logo
@@ -276,6 +305,6 @@ src/
 
 ## Tech Stack
 
-**Backend:** Python, Flask, scikit-learn, XGBoost, LightGBM, pandas, NumPy, SciPy, joblib
+**Backend:** Python, Flask, scikit-learn, XGBoost, pandas, NumPy, SciPy, joblib
 
 **Frontend:** React 19, Vite, MapLibre GL, Recharts, Axios, React Router

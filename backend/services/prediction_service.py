@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import config
 from cities import DEFAULT_CITY, get_seasonal_factors
-from models.feature_engineering import get_feature_columns, KEY_AMENITIES, haversine_km
+from models.feature_engineering import get_feature_columns, haversine_km
 
 
 _models_cache = {}

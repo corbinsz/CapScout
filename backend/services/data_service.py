@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 import config
 from cities import get_city_or_default, DEFAULT_CITY
-from models.feature_engineering import load_and_clean_listings, KEY_AMENITIES
+from models.feature_engineering import load_and_clean_listings
 
 
 _listings_cache = {}

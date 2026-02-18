@@ -19,6 +19,7 @@ export default function Navbar() {
           <NavLink to="/" end>Dashboard</NavLink>
           <NavLink to="/map">Map</NavLink>
           <NavLink to="/analytics">Analytics</NavLink>
+          <NavLink to="/prediction-process">Prediction Process</NavLink>
           <NavLink to="/settings">Settings</NavLink>
         </div>
       </div>
