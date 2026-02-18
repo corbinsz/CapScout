@@ -52,7 +52,8 @@ export default function useProperties(initialParams = {}) {
         }
       } catch (err) {
         if (err.name === 'CanceledError' || err.name === 'AbortError') return;
-        setError(err.response?.data?.error || err.message);
+        const msg = err.response?.data?.error || err.message;
+        setError(typeof msg === 'string' ? msg : 'Failed to load properties');
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
