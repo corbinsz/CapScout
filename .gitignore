@@ -30,9 +30,13 @@ __pycache__/
 .venv/
 venv/
 
-# Backend data/models
-backend/data/
-backend/models/trained/
+# Backend data (allow only compressed listings for deployment)
+backend/data/*
+!backend/data/cities/
+backend/data/cities/*
+!backend/data/cities/*/
+backend/data/cities/*/*
+!backend/data/cities/*/listings.csv.gz
 backend/.env
 
 # Temp/debug files

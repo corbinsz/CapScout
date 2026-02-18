@@ -71,7 +71,10 @@ def load_and_clean_listings(city_key=None):
     from cities import DEFAULT_CITY
     city_key = city_key or DEFAULT_CITY
     csv_path = os.path.join(config.city_data_dir(city_key), 'listings.csv')
-    if not os.path.exists(csv_path):
+    gz_path = csv_path + '.gz'
+    if os.path.exists(gz_path):
+        csv_path = gz_path
+    elif not os.path.exists(csv_path):
         raise FileNotFoundError(
             f"listings.csv not found at {csv_path}. "
             "Run: python -m scripts.download_data"
