@@ -54,19 +54,31 @@ def save_csv(file_storage, city_key=None):
     with open(path, 'w', encoding='utf-8', newline='') as f:
         f.write(text)
 
+    # Invalidate cache for this city
+    key = city_key or '__default__'
+    _listings_cache.pop(key, None)
+
     # Count rows
     rows = list(csv.DictReader(text.splitlines()))
     return len(rows)
 
 
+_listings_cache = {}
+
+
 def get_listings(city_key=None):
-    """Read the saved CSV and return a list of normalized dicts."""
+    """Read the saved CSV and return a list of normalized dicts (cached)."""
+    key = city_key or '__default__'
+    if key in _listings_cache:
+        return _listings_cache[key]
     if not has_data(city_key):
         return []
     with open(_csv_path(city_key), 'r', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
-        return [normalize_listing(_upper_keys(row)) for row in reader
-                if _valid_row(_upper_keys(row))]
+        listings = [normalize_listing(_upper_keys(row)) for row in reader
+                    if _valid_row(_upper_keys(row))]
+    _listings_cache[key] = listings
+    return listings
 
 
 def _upper_keys(row):
