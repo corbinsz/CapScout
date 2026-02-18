@@ -98,8 +98,9 @@ def get_cities():
     result = []
     for city_info in list_cities():
         key = city_info['key']
-        listings_path = os.path.join(config.city_data_dir(key), 'listings.csv')
-        has_data = os.path.isfile(listings_path)
+        city_dir = config.city_data_dir(key)
+        has_data = (os.path.isfile(os.path.join(city_dir, 'listings.csv')) or
+                    os.path.isfile(os.path.join(city_dir, 'listings.csv.gz')))
         has_models = models_available(city_key=key)
         result.append({
             'key': key,
