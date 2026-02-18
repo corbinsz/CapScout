@@ -330,6 +330,11 @@ body {
 }
 
 @media (max-width: 768px) {
+  .navbar {
+    height: auto;
+    padding: var(--space-sm) 0;
+  }
+
   .search-bar-wrapper {
     max-width: none;
     order: 3;
