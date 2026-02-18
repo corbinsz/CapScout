@@ -37,6 +37,7 @@ backend/data/cities/*
 !backend/data/cities/*/
 backend/data/cities/*/*
 !backend/data/cities/*/listings.csv.gz
+!backend/data/cities/*/redfin_listings.csv
 backend/.env
 
 # Temp/debug files
