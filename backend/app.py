@@ -1,3 +1,4 @@
+import threading
 from flask import Flask
 from flask_cors import CORS
 import config
@@ -28,7 +29,23 @@ def create_app():
 
     return app
 
+
+def _warmup():
+    """Preload models, BallTrees, and Redfin CSVs so first request is fast."""
+    from cities import CITIES
+    from services.prediction_service import _load_models, _get_balltree
+    from services.redfin_service import get_listings
+
+    for city_key in CITIES:
+        _load_models(city_key)
+        _get_balltree(city_key)
+        get_listings(city_key)
+
+
 app = create_app()
+
+# Warm up caches in background thread so Render health checks pass immediately
+threading.Thread(target=_warmup, daemon=True).start()
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
