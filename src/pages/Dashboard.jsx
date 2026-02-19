@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import useProperties from '../hooks/useProperties';
 import { useCity } from '../contexts/CityContext';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -9,7 +10,26 @@ import { formatCurrency, formatPercent, formatNumber } from '../utils/formatters
 
 export default function Dashboard() {
   const { properties, total, totalAvailable, page, setPage, loading, error, filters, updateFilters, reload, message } = useProperties();
-  const { cityMeta } = useCity();
+  const { cityMeta, currentCity } = useCity();
+  const navigate = useNavigate();
+  const [compareIds, setCompareIds] = useState(new Set());
+
+  const handleCompareToggle = useCallback((id) => {
+    setCompareIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else if (next.size < 3) {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const goCompare = () => {
+    const ids = [...compareIds].join(',');
+    navigate(`/compare?ids=${ids}&city=${currentCity}`);
+  };
 
   const cityDisplay = cityMeta?.display || 'Austin, TX';
 
@@ -66,11 +86,21 @@ export default function Dashboard() {
         filters={filters}
         onFilterChange={(key, val, extra) => updateFilters({ [key]: val, ...extra })}
         onReset={() => updateFilters({
-          min_price: 150000, max_price: 750000, bedrooms: null,
+          min_price: 150000, max_price: 750000, bedrooms: null, property_type: null,
           sort_by: 'score', sort_order: 'desc', str_viable: true,
           mortgage_rate: null, mortgage_term: null, down_payment_pct: null,
         })}
       />
+
+      {compareIds.size > 0 && (
+        <div className="compare-bar">
+          <span>{compareIds.size} of 3 selected</span>
+          <button className="btn btn-primary" onClick={goCompare} disabled={compareIds.size < 2}>
+            Compare
+          </button>
+          <button className="btn" onClick={() => setCompareIds(new Set())}>Clear</button>
+        </div>
+      )}
 
       {message && <div className="fallback-banner">{message}</div>}
       {error && <ErrorMessage message={error} onRetry={reload} />}
@@ -78,7 +108,7 @@ export default function Dashboard() {
         <div className={`property-results${loading ? ' results-loading' : ''}`}>
           {loading && <div className="results-overlay"><LoadingSpinner message="Updating..." /></div>}
           {properties.length > 0
-            ? <PropertyList properties={properties} />
+            ? <PropertyList properties={properties} compareIds={compareIds} onCompareToggle={handleCompareToggle} />
             : !loading && <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px 0' }}>No properties match your filters.</p>
           }
         </div>

@@ -174,6 +174,7 @@ def list_properties():
     source = request.args.get('source', 'forsale')
     city_key = request.args.get('city', 'austin')
     str_viable = request.args.get('str_viable', '').lower() in ('true', '1', 'yes')
+    property_type = request.args.get('property_type', type=str)
 
     # Parse optional financial assumption overrides
     mortgage_rate_pct = request.args.get('mortgage_rate', type=float)
@@ -188,6 +189,7 @@ def list_properties():
         fin_overrides['down_payment_pct'] = down_payment_pct_val / 100
 
     fs_args = dict(min_price=min_price, max_price=max_price, bedrooms=bedrooms,
+                   property_type=property_type,
                    sort_by=sort_by, sort_order=sort_order, city_key=city_key,
                    str_viable=str_viable, fin_overrides=fin_overrides)
 
@@ -262,15 +264,15 @@ def _score_item(item, purchase_price, city_key=None, fin_overrides=None):
         item['confidence_level'] = 'low'
 
 
-def _cache_key(backend, city_key, min_price, max_price, bedrooms, fin_overrides):
+def _cache_key(backend, city_key, min_price, max_price, bedrooms, fin_overrides, property_type=None):
     """Build a hashable cache key for scored batches."""
     fin = tuple(sorted((fin_overrides or {}).items()))
-    return (backend, city_key, min_price, max_price, bedrooms, fin)
+    return (backend, city_key, min_price, max_price, bedrooms, property_type, fin)
 
 
-def _get_scored_batch(backend, city_key, min_price, max_price, bedrooms, fin_overrides):
+def _get_scored_batch(backend, city_key, min_price, max_price, bedrooms, fin_overrides, property_type=None):
     """Return scored batch from memory cache, disk cache, or compute + cache."""
-    key = _cache_key(backend, city_key, min_price, max_price, bedrooms, fin_overrides)
+    key = _cache_key(backend, city_key, min_price, max_price, bedrooms, fin_overrides, property_type)
     now = time.time()
 
     # 1. Memory cache (fastest)
@@ -303,6 +305,8 @@ def _get_scored_batch(backend, city_key, min_price, max_price, bedrooms, fin_ove
             continue
         if bedrooms and item.get('bedrooms') != bedrooms:
             continue
+        if property_type and property_type.lower() not in (item.get('property_type') or '').lower():
+            continue
         if min_price is not None and price < min_price:
             continue
         if max_price is not None and price > max_price:
@@ -324,11 +328,11 @@ def _get_scored_batch(backend, city_key, min_price, max_price, bedrooms, fin_ove
 
 def _forsale_properties(backend, page, per_page, min_price, max_price,
                         bedrooms, sort_by, sort_order, city_key=None,
-                        str_viable=False, fin_overrides=None):
+                        str_viable=False, fin_overrides=None, property_type=None):
     """Build unified property list from a for-sale backend."""
     if sort_by == 'score':
         batch, total_available = _get_scored_batch(
-            backend, city_key, min_price, max_price, bedrooms, fin_overrides)
+            backend, city_key, min_price, max_price, bedrooms, fin_overrides, property_type)
         if str_viable:
             batch = [it for it in batch if it.get('confidence_level') != 'low']
         batch.sort(key=lambda x: x.get('score') or 0, reverse=(sort_order == 'desc'))
@@ -338,7 +342,7 @@ def _forsale_properties(backend, page, per_page, min_price, max_price,
     else:
         # Price sort: paginate first, then score just the page
         batch, total_available = _get_scored_batch(
-            backend, city_key, min_price, max_price, bedrooms, fin_overrides)
+            backend, city_key, min_price, max_price, bedrooms, fin_overrides, property_type)
         batch.sort(key=lambda x: x.get('price', 0), reverse=(sort_order == 'desc'))
         total = len(batch)
         start = (page - 1) * per_page
@@ -505,3 +509,61 @@ def get_property(property_id):
         'comparables': comps,
         'neighborhood_stats': hood_stats,
     })
+
+
+# Feature name labels for human-readable display
+_FEATURE_LABELS = {
+    'bedrooms': 'Bedrooms',
+    'bathrooms_clean': 'Bathrooms',
+    'accommodates': 'Guest Capacity',
+    'latitude': 'Latitude',
+    'longitude': 'Longitude',
+    'sqft': 'Square Footage',
+    'sqft_per_bedroom': 'Sqft per Bedroom',
+    'year_built': 'Year Built',
+    'property_age': 'Property Age',
+    'lot_sqft': 'Lot Size (sqft)',
+    'lot_acres': 'Lot Size (acres)',
+    'is_home': 'Single Family Home',
+    'is_condo': 'Condo/Co-op',
+    'is_townhouse': 'Townhouse',
+    'is_cabin': 'Cabin',
+    'is_cottage': 'Cottage',
+    'cluster_label': 'Neighborhood Cluster',
+    'month': 'Month',
+}
+
+
+@properties_bp.route('/properties/<property_id>/feature-importance')
+def feature_importance(property_id):
+    """GET /api/properties/<id>/feature-importance?city=<city_key>
+    Returns top feature importances from the XGBoost models."""
+    from services.prediction_service import get_models
+
+    city_key = request.args.get('city', 'austin')
+    models = get_models(city_key)
+    if not models:
+        return jsonify({'error': 'No models available'}), 404
+
+    result = {}
+    for model_key, label in [('price_model', 'Price Drivers'), ('occupancy_model', 'Occupancy Drivers')]:
+        model = models.get(model_key)
+        if model is None:
+            continue
+        try:
+            importances = model.feature_importances_
+            feature_names = model.get_booster().feature_names
+            if not feature_names:
+                continue
+            pairs = sorted(zip(feature_names, importances), key=lambda x: x[1], reverse=True)[:10]
+            result[model_key.replace('_model', '')] = {
+                'label': label,
+                'features': [
+                    {'name': _FEATURE_LABELS.get(name, name), 'importance': round(float(imp), 4)}
+                    for name, imp in pairs
+                ],
+            }
+        except Exception:
+            continue
+
+    return jsonify(result)

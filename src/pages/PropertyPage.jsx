@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import Map, { Marker, Popup as MapPopup, NavigationControl } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { fetchProperty } from '../services/propertyService';
+import { fetchProperty, fetchFeatureImportance } from '../services/propertyService';
 import { useCity } from '../contexts/CityContext';
 import { resolveBackendUrl } from '../services/api';
 import ScoreBadge from '../components/properties/ScoreBadge';
@@ -11,6 +11,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { formatCurrency, formatPercent } from '../utils/formatters';
 import { getScoreColor } from '../utils/scoreHelpers';
+import { scoreProperty as clientScore } from '../utils/scoringEngine';
 
 const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -254,6 +255,176 @@ function AssumptionsBar({ assumptions, onChange }) {
           value={assumptions.mortgage_term}
           onChange={e => onChange({ ...assumptions, mortgage_term: parseInt(e.target.value) || 30 })}
         />
+      </div>
+    </div>
+  );
+}
+
+function FeatureImportance({ propertyId, cityKey }) {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleToggle = () => {
+    if (!open && !data) {
+      setLoading(true);
+      fetchFeatureImportance(propertyId, cityKey)
+        .then(d => setData(d))
+        .catch(() => setData(null))
+        .finally(() => setLoading(false));
+    }
+    setOpen(prev => !prev);
+  };
+
+  const maxImp = (features) => Math.max(...features.map(f => f.importance), 0.001);
+
+  return (
+    <div className="detail-section property-detail-full">
+      <button className="section-header fi-toggle" onClick={handleToggle} style={{ cursor: 'pointer', width: '100%', border: 'none', textAlign: 'left' }}>
+        Why This Score? {open ? '\u25B2' : '\u25BC'}
+      </button>
+      {open && (
+        <div className="section-body">
+          {loading && <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>Loading feature importance...</div>}
+          {!loading && data && (
+            <div className="fi-columns">
+              {['price', 'occupancy'].map(key => data[key] && (
+                <div key={key} className="fi-col">
+                  <div className="fi-col-title">{data[key].label}</div>
+                  {data[key].features.map((f, i) => (
+                    <div key={i} className="fi-bar-row">
+                      <span className="fi-bar-label">{f.name}</span>
+                      <div className="fi-bar-track">
+                        <div
+                          className="fi-bar-fill"
+                          style={{
+                            width: `${(f.importance / maxImp(data[key].features)) * 100}%`,
+                            background: key === 'price' ? 'var(--primary)' : 'var(--teal)',
+                          }}
+                        />
+                      </div>
+                      <span className="fi-bar-value">{(f.importance * 100).toFixed(1)}%</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+          {!loading && !data && <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>Feature importance unavailable.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SensitivityAnalysis({ property, fin, pred }) {
+  const [occAdj, setOccAdj] = useState(0);
+  const [rateAdj, setRateAdj] = useState(0);
+  const [intAdj, setIntAdj] = useState(0);
+
+  const baseOcc = pred.predicted_occupancy_rate || 0;
+  const baseNightly = pred.predicted_nightly_rate || 0;
+  const baseMortgageRate = (fin.mortgage_rate || 7) / 100;
+
+  const result = useMemo(() => {
+    const adjOcc = Math.max(0, Math.min(1, baseOcc * (1 + occAdj / 100)));
+    const adjNightly = baseNightly * (1 + rateAdj / 100);
+    const adjMortgageRate = baseMortgageRate + intAdj / 100;
+    const adjAnnualRev = adjNightly * adjOcc * 365;
+
+    return clientScore({
+      purchasePrice: property.price,
+      annualRevenue: adjAnnualRev,
+      occupancy: adjOcc,
+      mortgageRate: Math.max(0, adjMortgageRate),
+      mortgageTerm: fin.mortgage_term || 30,
+      downPaymentPct: (fin.down_payment_pct || 20) / 100,
+      taxRate: (fin.tax_rate || 1.8) / 100,
+      insuranceRate: (fin.insurance_rate || 0.5) / 100,
+      expenseRatio: (fin.expense_ratio || 35) / 100,
+      hoaAnnual: fin.hoa_annual || 0,
+      strPermitAnnual: fin.str_permit_annual || 0,
+    });
+  }, [occAdj, rateAdj, intAdj, baseOcc, baseNightly, baseMortgageRate, property.price, fin]);
+
+  const currentScore = property.score || 0;
+  const currentCashflow = fin.monthly_cashflow || 0;
+  const currentCapRate = fin.cap_rate || 0;
+  const scoreDelta = result.score - currentScore;
+  const cashDelta = result.financials.monthlyCashflow - currentCashflow;
+  const capDelta = result.financials.capRate - currentCapRate;
+
+  const deltaColor = (val) => val > 0.01 ? 'var(--green)' : val < -0.01 ? 'var(--red)' : 'var(--text-muted)';
+  const deltaSign = (val) => val > 0 ? '+' : '';
+
+  return (
+    <div className="detail-section property-detail-full">
+      <div className="section-header">Sensitivity Analysis</div>
+      <div className="section-body">
+        <div className="sensitivity-sliders">
+          <div className="sensitivity-slider">
+            <label>Occupancy Adjustment</label>
+            <input type="range" min={-30} max={20} step={1} value={occAdj}
+              onChange={e => setOccAdj(Number(e.target.value))} />
+            <span className="sensitivity-val">{occAdj > 0 ? '+' : ''}{occAdj}%</span>
+          </div>
+          <div className="sensitivity-slider">
+            <label>Nightly Rate Adjustment</label>
+            <input type="range" min={-30} max={30} step={1} value={rateAdj}
+              onChange={e => setRateAdj(Number(e.target.value))} />
+            <span className="sensitivity-val">{rateAdj > 0 ? '+' : ''}{rateAdj}%</span>
+          </div>
+          <div className="sensitivity-slider">
+            <label>Interest Rate Adjustment</label>
+            <input type="range" min={-2} max={3} step={0.125} value={intAdj}
+              onChange={e => setIntAdj(Number(e.target.value))} />
+            <span className="sensitivity-val">{intAdj > 0 ? '+' : ''}{intAdj}%</span>
+          </div>
+        </div>
+        <div className="sensitivity-comparison">
+          <div className="sensitivity-col">
+            <div className="sensitivity-col-title">Current</div>
+            <div className="sensitivity-metric">
+              <span className="sensitivity-label">Score</span>
+              <span className="sensitivity-value">{currentScore}</span>
+            </div>
+            <div className="sensitivity-metric">
+              <span className="sensitivity-label">Monthly Cashflow</span>
+              <span className="sensitivity-value">{formatCurrency(currentCashflow)}</span>
+            </div>
+            <div className="sensitivity-metric">
+              <span className="sensitivity-label">Cap Rate</span>
+              <span className="sensitivity-value">{currentCapRate}%</span>
+            </div>
+          </div>
+          <div className="sensitivity-col sensitivity-col--adjusted">
+            <div className="sensitivity-col-title">Adjusted</div>
+            <div className="sensitivity-metric">
+              <span className="sensitivity-label">Score</span>
+              <span className="sensitivity-value">{result.score}
+                <span className="sensitivity-delta" style={{ color: deltaColor(scoreDelta) }}>
+                  {' '}{deltaSign(scoreDelta)}{scoreDelta.toFixed(1)}
+                </span>
+              </span>
+            </div>
+            <div className="sensitivity-metric">
+              <span className="sensitivity-label">Monthly Cashflow</span>
+              <span className="sensitivity-value">{formatCurrency(result.financials.monthlyCashflow)}
+                <span className="sensitivity-delta" style={{ color: deltaColor(cashDelta) }}>
+                  {' '}{deltaSign(cashDelta)}{formatCurrency(cashDelta)}
+                </span>
+              </span>
+            </div>
+            <div className="sensitivity-metric">
+              <span className="sensitivity-label">Cap Rate</span>
+              <span className="sensitivity-value">{result.financials.capRate}%
+                <span className="sensitivity-delta" style={{ color: deltaColor(capDelta) }}>
+                  {' '}{deltaSign(capDelta)}{capDelta.toFixed(2)}%
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -505,6 +676,11 @@ export default function PropertyPage() {
           </div>
         ) : null}
 
+        {/* Feature Importance — lazy-loads on click */}
+        {isForSale && (
+          <FeatureImportance propertyId={property.id} cityKey={initialCity.current} />
+        )}
+
         {/* Financial Analysis — only for properties with a real purchase price */}
         {isForSale && fin.cap_rate != null && (
           <div className="detail-section property-detail-full">
@@ -632,6 +808,11 @@ export default function PropertyPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Sensitivity Analysis — client-side, no API calls */}
+        {isForSale && fin.cap_rate != null && (
+          <SensitivityAnalysis property={property} fin={fin} pred={pred} />
         )}
 
         {/* Monthly Forecast Chart + Table */}

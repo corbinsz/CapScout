@@ -22,6 +22,7 @@ export default function useProperties(initialParams = {}) {
     min_price: 150000,
     max_price: 750000,
     bedrooms: null,
+    property_type: null,
     mortgage_rate: null,
     mortgage_term: null,
     down_payment_pct: null,

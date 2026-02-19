@@ -9,6 +9,13 @@ export const SORT_OPTIONS = [
   { value: 'revenue', label: 'Monthly Revenue' },
 ];
 
+export const PROPERTY_TYPE_OPTIONS = [
+  { value: '', label: 'Any' },
+  { value: 'Single Family', label: 'Single Family' },
+  { value: 'Condo', label: 'Condo' },
+  { value: 'Townhouse', label: 'Townhouse' },
+];
+
 export const BEDROOM_OPTIONS = [
   { value: '', label: 'Any' },
   { value: 1, label: '1 BR' },

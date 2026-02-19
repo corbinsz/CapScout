@@ -1,10 +1,11 @@
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import ScoreBadge from './ScoreBadge';
+import FavoriteButton from './FavoriteButton';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
 import { resolveBackendUrl } from '../../services/api';
 
-export default memo(function PropertyCard({ property, compact = false }) {
+export default memo(function PropertyCard({ property, compact = false, compareSelected = false, onCompareToggle }) {
   const {
     id, name, neighbourhood, address, photo_url, price, bedrooms, bathrooms,
     accommodates, occupancy_rate, score, monthly_revenue, predicted, financials, source, url,
@@ -34,6 +35,19 @@ export default memo(function PropertyCard({ property, compact = false }) {
             </div>
           )}
           {isForSale && <ScoreBadge score={score} />}
+          {isForSale && (property.confidence_level || property.predicted?.confidence?.level) && (
+            <span className={`confidence-dot confidence-dot--${property.confidence_level || property.predicted?.confidence?.level}`} />
+          )}
+          <FavoriteButton property={property} />
+          {onCompareToggle && (
+            <button
+              className={`compare-btn${compareSelected ? ' compare-btn--active' : ''}`}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onCompareToggle(id); }}
+              title={compareSelected ? 'Remove from comparison' : 'Add to comparison'}
+            >
+              {compareSelected ? '\u2713' : '+'}
+            </button>
+          )}
           {url && (
             <button className="external-link-btn" onClick={handleExternalClick} title="View on Redfin">
               Redfin &#8599;

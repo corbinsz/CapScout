@@ -19,7 +19,7 @@ export default function PredictionProcess() {
             nightly rate, occupancy, property type, location, and calendar availability.
           </p>
           <p style={{ marginBottom: 12 }}>
-            For cities with available county assessor records (currently Austin and Seattle),
+            For cities with available county assessor records (currently Austin, Seattle, and Dallas),
             the training data is <strong>enriched with physical property attributes</strong> &mdash;
             square footage, year built, and lot size &mdash; by spatially matching Airbnb listings
             to tax assessor parcels using nearest-neighbor search within ~200 meters.
@@ -168,7 +168,7 @@ export default function PredictionProcess() {
                 <tr><td>year_built</td><td>YEAR BUILT</td><td>real</td></tr>
                 <tr><td>lot_sqft</td><td>LOT SIZE</td><td>real</td></tr>
                 <tr><td>sqft_per_bedroom</td><td>sqft / bedrooms</td><td>derived</td></tr>
-                <tr><td>property_age</td><td>2025 - year_built</td><td>derived</td></tr>
+                <tr><td>property_age</td><td>2026 - year_built</td><td>derived</td></tr>
                 <tr><td>lot_acres</td><td>lot_sqft / 43560</td><td>derived</td></tr>
                 <tr><td>sin_month, cos_month</td><td>month (1-12)</td><td>seasonal</td></tr>
               </tbody>
@@ -235,12 +235,20 @@ export default function PredictionProcess() {
                 </tr>
               </thead>
               <tbody>
-                <tr><td>San Diego</td><td>0.996</td><td>0.971</td><td>Best overall</td></tr>
-                <tr><td>Dallas</td><td>0.976</td><td>0.831</td><td>Synthetic calendar</td></tr>
+                <tr><td>Honolulu</td><td>0.993</td><td>0.996</td><td></td></tr>
+                <tr><td>San Diego</td><td>0.996</td><td>0.971</td><td></td></tr>
+                <tr><td>Fort Lauderdale</td><td>0.981</td><td>0.943</td><td></td></tr>
+                <tr><td>Las Vegas</td><td>0.980</td><td>0.980</td><td></td></tr>
+                <tr><td>Dallas</td><td>0.973</td><td>0.853</td><td>Assessor enriched</td></tr>
+                <tr><td>New Orleans</td><td>0.972</td><td>0.947</td><td></td></tr>
                 <tr><td>Austin</td><td>0.971</td><td>0.936</td><td>Assessor enriched</td></tr>
-                <tr><td>Asheville</td><td>0.965</td><td>0.967</td><td>Small but clean</td></tr>
+                <tr><td>Asheville</td><td>0.965</td><td>0.967</td><td></td></tr>
+                <tr><td>Denver</td><td>0.961</td><td>0.925</td><td></td></tr>
+                <tr><td>Washington, D.C.</td><td>0.956</td><td>0.925</td><td></td></tr>
                 <tr><td>Seattle</td><td>0.951</td><td>0.920</td><td>Assessor enriched</td></tr>
+                <tr><td>Boston</td><td>0.932</td><td>0.907</td><td></td></tr>
                 <tr><td>Nashville</td><td>0.921</td><td>0.933</td><td></td></tr>
+                <tr><td>Fort Worth</td><td>0.886</td><td>0.809</td><td></td></tr>
               </tbody>
             </table>
           </div>
@@ -303,7 +311,7 @@ export default function PredictionProcess() {
         </div>
         <div className="section-body" style={{ fontSize: 14, lineHeight: 1.8 }}>
           <p style={{ marginBottom: 12 }}>
-            You upload a CSV downloaded from Redfin's "Download All" button. The data goes through
+            For-sale listings are fetched from Redfin's API for each city. The data goes through
             two filter stages:
           </p>
           <div style={{

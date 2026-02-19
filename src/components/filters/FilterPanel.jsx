@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { BEDROOM_OPTIONS, SORT_OPTIONS } from '../../utils/constants';
+import { BEDROOM_OPTIONS, PROPERTY_TYPE_OPTIONS, SORT_OPTIONS } from '../../utils/constants';
 import CitySelector from '../layout/CitySelector';
 
 export default function FilterPanel({ filters, onFilterChange, onReset }) {
@@ -28,6 +28,7 @@ export default function FilterPanel({ filters, onFilterChange, onReset }) {
     if (key === 'price') return filters.min_price != null || filters.max_price != null;
     if (key === 'bedrooms') return filters.bedrooms != null;
     if (key === 'sort') return filters.sort_by && filters.sort_by !== 'score';
+    if (key === 'property_type') return filters.property_type != null;
     if (key === 'financing') return filters.mortgage_rate != null || filters.mortgage_term != null || filters.down_payment_pct != null;
     return false;
   };
@@ -49,6 +50,10 @@ export default function FilterPanel({ filters, onFilterChange, onReset }) {
     if (key === 'sort') {
       const opt = SORT_OPTIONS.find(o => o.value === filters.sort_by);
       return opt ? `Sort: ${opt.label}` : 'Sort';
+    }
+    if (key === 'property_type') {
+      const opt = PROPERTY_TYPE_OPTIONS.find(o => o.value === filters.property_type);
+      return opt ? opt.label : 'Type';
     }
     if (key === 'financing') {
       const parts = [];
@@ -133,6 +138,35 @@ export default function FilterPanel({ filters, onFilterChange, onReset }) {
                   className={`fd-pill${String(filters.bedrooms ?? '') === String(o.value) ? ' selected' : ''}`}
                   onClick={() => {
                     onFilterChange('bedrooms', o.value === '' ? null : Number(o.value));
+                  }}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Property Type chip */}
+      <div className="filter-chip">
+        <button
+          className={`filter-chip-btn${open === 'property_type' || hasActiveFilter('property_type') ? ' active' : ''}`}
+          onClick={() => toggle('property_type')}
+        >
+          {chipLabel('property_type')}
+          <span className="chip-arrow">&#9662;</span>
+        </button>
+        {open === 'property_type' && (
+          <div className="filter-dropdown fd-bedrooms">
+            <div className="fd-header">Property Type</div>
+            <div className="fd-pill-group">
+              {PROPERTY_TYPE_OPTIONS.map(o => (
+                <button
+                  key={o.value}
+                  className={`fd-pill${(filters.property_type ?? '') === o.value ? ' selected' : ''}`}
+                  onClick={() => {
+                    onFilterChange('property_type', o.value === '' ? null : o.value);
                   }}
                 >
                   {o.label}

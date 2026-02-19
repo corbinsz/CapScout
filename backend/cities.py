@@ -72,7 +72,7 @@ CITIES = {
         'str_permit_annual': 0,           # Dallas no STR permit required
         'ia_state': 'tx',
         'ia_city': 'dallas',
-        'ia_date': '2025-06-15',
+        'ia_date': '2025-11-23',  # upgraded: real calendar data now available
         'redfin_region_id': 30794,
         'assessor': {
             'source': 'dallas_cad',
@@ -119,6 +119,144 @@ CITIES = {
             'arcgis_parcels': 'https://gismaps.kingcounty.gov/arcgis/rest/services/Property/KingCo_Parcels/MapServer/0',
         },
     },
+    'denver': {
+        'name': 'Denver',
+        'state': 'CO',
+        'display': 'Denver, CO',
+        'latitude': 39.7392,
+        'longitude': -104.9903,
+        'default_zoom': 11,
+        'property_tax_rate': 0.005,       # CO relatively low
+        'insurance_rate': 0.004,          # CO moderate — hail risk
+        'expense_ratio': 0.37,            # moderate-high COL
+        'str_permit_annual': 200,         # Denver STR license ~$200/yr
+        'ia_state': 'co',
+        'ia_city': 'denver',
+        'ia_date': '2025-09-29',
+        'redfin_region_id': 5155,
+        'assessor': None,
+    },
+    'new-orleans': {
+        'name': 'New Orleans',
+        'state': 'LA',
+        'display': 'New Orleans, LA',
+        'latitude': 29.9511,
+        'longitude': -90.0715,
+        'default_zoom': 12,
+        'property_tax_rate': 0.011,       # LA moderate
+        'insurance_rate': 0.008,          # LA high — hurricane risk
+        'expense_ratio': 0.33,            # lower COL
+        'str_permit_annual': 500,         # NOLA strict STR regulation
+        'ia_state': 'la',
+        'ia_city': 'new-orleans',
+        'ia_date': '2025-09-11',
+        'redfin_region_id': 14233,
+        'assessor': None,
+    },
+    # portland: removed — Dec 2025 IA scrape has zero price data
+    'washington-dc': {
+        'name': 'Washington',
+        'state': 'DC',
+        'display': 'Washington, D.C.',
+        'latitude': 38.9072,
+        'longitude': -77.0369,
+        'default_zoom': 12,
+        'property_tax_rate': 0.0085,      # DC moderate
+        'insurance_rate': 0.004,          # DC low-moderate
+        'expense_ratio': 0.40,            # very high COL
+        'str_permit_annual': 100,         # DC STR license
+        'ia_state': 'dc',
+        'ia_city': 'washington-dc',
+        'ia_date': '2025-09-22',
+        'redfin_region_id': 12839,
+        'assessor': None,
+    },
+    'boston': {
+        'name': 'Boston',
+        'state': 'MA',
+        'display': 'Boston, MA',
+        'latitude': 42.3601,
+        'longitude': -71.0589,
+        'default_zoom': 12,
+        'property_tax_rate': 0.0106,      # MA moderate-high
+        'insurance_rate': 0.005,          # MA moderate — nor'easters
+        'expense_ratio': 0.40,            # very high COL
+        'str_permit_annual': 200,         # Boston STR registration
+        'ia_state': 'ma',
+        'ia_city': 'boston',
+        'ia_date': '2025-09-23',
+        'redfin_region_id': 1826,
+        'assessor': None,
+    },
+    # san-francisco: removed — Dec 2025 IA scrape has zero price data
+    'las-vegas': {
+        'name': 'Las Vegas',
+        'state': 'NV',
+        'display': 'Las Vegas, NV',
+        'latitude': 36.1699,
+        'longitude': -115.1398,
+        'default_zoom': 11,
+        'property_tax_rate': 0.006,       # NV low — no state income tax
+        'insurance_rate': 0.003,          # NV very low risk
+        'expense_ratio': 0.35,            # moderate COL
+        'str_permit_annual': 1000,        # Clark County STR business license
+        'ia_state': 'nv',
+        'ia_city': 'clark-county-nv',
+        'ia_date': '2025-09-23',
+        'redfin_region_id': 10201,
+        'assessor': None,
+    },
+    'fort-lauderdale': {
+        'name': 'Fort Lauderdale',
+        'state': 'FL',
+        'display': 'Fort Lauderdale, FL',
+        'latitude': 26.1224,
+        'longitude': -80.1373,
+        'default_zoom': 12,
+        'property_tax_rate': 0.011,       # FL moderate
+        'insurance_rate': 0.008,          # FL high — hurricane risk
+        'expense_ratio': 0.35,            # moderate COL
+        'str_permit_annual': 250,         # Broward County STR license
+        'ia_state': 'fl',
+        'ia_city': 'broward-county',
+        'ia_date': '2025-09-26',
+        'redfin_region_id': 6173,
+        'assessor': None,
+    },
+    'fort-worth': {
+        'name': 'Fort Worth',
+        'state': 'TX',
+        'display': 'Fort Worth, TX',
+        'latitude': 32.7555,
+        'longitude': -97.3308,
+        'default_zoom': 11,
+        'property_tax_rate': 0.018,       # TX high property tax
+        'insurance_rate': 0.007,          # TX highest — storms, hail
+        'expense_ratio': 0.34,            # moderate COL
+        'str_permit_annual': 0,           # Fort Worth no STR permit required
+        'ia_state': 'tx',
+        'ia_city': 'fort-worth',
+        'ia_date': '2025-09-16',
+        'redfin_region_id': 30827,
+        'assessor': None,
+    },
+    'honolulu': {
+        'name': 'Honolulu',
+        'state': 'HI',
+        'display': 'Honolulu, HI',
+        'latitude': 21.3069,
+        'longitude': -157.8583,
+        'default_zoom': 12,
+        'property_tax_rate': 0.003,       # HI very low property tax
+        'insurance_rate': 0.004,          # HI moderate — hurricane + flood
+        'expense_ratio': 0.40,            # very high COL — island premium
+        'str_permit_annual': 500,         # Honolulu NUC permit
+        'ia_state': 'hi',
+        'ia_city': 'hawaii',
+        'ia_date': '2025-09-16',
+        'redfin_region_id': 34945,
+        'assessor': None,
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -156,6 +294,46 @@ SEASONAL_FACTORS = {
         # Pacific NW summer peak (Jul-Aug); rainy winter lull
         'price':     [0.78, 0.80, 0.88, 0.95, 1.08, 1.20, 1.28, 1.25, 1.10, 0.95, 0.85, 0.88],
         'occupancy': [0.75, 0.78, 0.85, 0.95, 1.10, 1.22, 1.28, 1.25, 1.08, 0.95, 0.82, 0.97],
+    },
+    'denver': {
+        # Ski season (Dec-Mar) + summer outdoor peaks; shoulder dips
+        'price':     [1.15, 1.10, 1.20, 0.95, 0.90, 1.05, 1.15, 1.10, 0.95, 0.88, 0.82, 0.75],
+        'occupancy': [1.10, 1.08, 1.15, 0.95, 0.92, 1.08, 1.18, 1.12, 0.95, 0.88, 0.80, 0.79],
+    },
+    'new-orleans': {
+        # Mardi Gras (Feb) + Jazz Fest (Apr-May) peaks; brutal summer heat lull
+        'price':     [0.90, 1.35, 1.05, 1.20, 1.10, 0.82, 0.78, 0.75, 0.80, 1.05, 1.00, 1.20],
+        'occupancy': [0.88, 1.30, 1.02, 1.18, 1.08, 0.82, 0.78, 0.75, 0.82, 1.05, 1.02, 1.30],
+    },
+    'washington-dc': {
+        # Cherry blossom (Mar-Apr) + summer tourism; winter dip
+        'price':     [0.82, 0.85, 1.15, 1.20, 1.10, 1.08, 1.05, 0.95, 1.00, 1.05, 0.88, 0.87],
+        'occupancy': [0.80, 0.85, 1.12, 1.18, 1.10, 1.08, 1.05, 0.98, 1.02, 1.05, 0.88, 0.89],
+    },
+    'boston': {
+        # Fall foliage (Oct) + summer; deep winter lull
+        'price':     [0.75, 0.78, 0.88, 1.00, 1.10, 1.18, 1.22, 1.15, 1.10, 1.25, 0.82, 0.77],
+        'occupancy': [0.72, 0.78, 0.88, 1.02, 1.10, 1.20, 1.22, 1.15, 1.10, 1.22, 0.82, 0.79],
+    },
+    'las-vegas': {
+        # Convention season (Jan, Mar) + NYE/holiday; brutal summer heat
+        'price':     [1.15, 1.00, 1.20, 1.05, 0.95, 0.82, 0.78, 0.80, 0.90, 1.05, 1.10, 1.20],
+        'occupancy': [1.12, 1.00, 1.18, 1.05, 0.95, 0.82, 0.78, 0.80, 0.92, 1.05, 1.10, 1.23],
+    },
+    'fort-lauderdale': {
+        # Snowbird season (Jan-Mar) peak; hurricane summer dip
+        'price':     [1.25, 1.30, 1.25, 1.05, 0.90, 0.82, 0.80, 0.78, 0.75, 0.85, 1.05, 1.20],
+        'occupancy': [1.22, 1.28, 1.22, 1.05, 0.90, 0.82, 0.80, 0.78, 0.75, 0.85, 1.08, 1.25],
+    },
+    'fort-worth': {
+        # Similar to Dallas — business travel; spring/fall slight peaks
+        'price':     [0.90, 0.92, 1.08, 1.10, 1.06, 1.00, 0.92, 0.90, 0.96, 1.12, 1.05, 0.99],
+        'occupancy': [0.88, 0.90, 1.05, 1.08, 1.05, 1.02, 0.95, 0.92, 0.98, 1.10, 1.02, 1.05],
+    },
+    'honolulu': {
+        # Winter escape (Dec-Mar) peak; slight summer dip but always strong
+        'price':     [1.15, 1.12, 1.10, 1.00, 0.92, 0.88, 0.90, 0.92, 0.88, 0.95, 1.05, 1.13],
+        'occupancy': [1.12, 1.10, 1.08, 1.00, 0.92, 0.90, 0.92, 0.95, 0.90, 0.95, 1.05, 1.11],
     },
 }
 

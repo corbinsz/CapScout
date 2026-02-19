@@ -43,6 +43,11 @@ def models_available(city_key=None):
     return 'price_model' in m and 'occupancy_model' in m
 
 
+def get_models(city_key=None):
+    """Return the raw model dict for feature importance etc."""
+    return _load_models(city_key)
+
+
 def _is_monthly_model(m):
     """Check if models were trained with month features."""
     cols = m.get('monthly_feature_columns', m.get('occupancy_feature_columns'))

@@ -19,3 +19,8 @@ export async function predictProperty(propertyData) {
   const { data } = await api.post('/predict', propertyData);
   return data;
 }
+
+export async function fetchFeatureImportance(id, city) {
+  const { data } = await api.get(`/properties/${id}/feature-importance`, { params: { city } });
+  return data;
+}
