@@ -677,24 +677,25 @@ export default function PropertyPage() {
         )}
 
         {/* Location + Neighborhood Stats — combined */}
-        {property.latitude && property.longitude && (
+        {property.latitude != null && property.longitude != null && (
           <div className="detail-section property-detail-full">
             <div className="section-header">
               Location{neighborhood_stats ? ` — ${neighborhood_stats.neighbourhood_cleansed}` : ''}
             </div>
-            <div style={{ height: 280, overflow: 'hidden' }}>
+            <div style={{ height: 300, position: 'relative' }}>
               <Map
+                key={`map-${property.id}`}
                 initialViewState={{
-                  longitude: property.longitude,
-                  latitude: property.latitude,
+                  longitude: Number(property.longitude),
+                  latitude: Number(property.latitude),
                   zoom: 14,
                 }}
-                style={{ width: '100%', height: '100%' }}
+                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
                 mapStyle={MAP_STYLE}
                 scrollZoom={false}
               >
                 <NavigationControl position="top-right" showCompass={false} />
-                <Marker longitude={property.longitude} latitude={property.latitude} anchor="center">
+                <Marker longitude={Number(property.longitude)} latitude={Number(property.latitude)} anchor="center">
                   <div className="map-dot map-dot-lg" style={{ background: getScoreColor(property.score) }} />
                 </Marker>
                 {comparables?.map(c => (
