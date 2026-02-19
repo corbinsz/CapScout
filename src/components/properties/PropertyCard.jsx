@@ -80,6 +80,10 @@ export default function PropertyCard({ property, compact = false }) {
                 <span className="pcm-value">{formatCurrency(predicted?.predicted_nightly_rate)}</span>
               </div>
               <div className="pcm-item">
+                <span className="pcm-label">Pred. Occupancy</span>
+                <span className="pcm-value">{formatPercent(predicted?.predicted_occupancy_rate)}</span>
+              </div>
+              <div className="pcm-item">
                 <span className="pcm-label">NOI / mo</span>
                 <span className="pcm-value">{formatCurrency(financials?.noi != null ? financials.noi / 12 : null)}</span>
               </div>
