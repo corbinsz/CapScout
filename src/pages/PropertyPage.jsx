@@ -186,7 +186,7 @@ function CompCard({ comp }) {
     <div className="comp-card">
       <div className="comp-card-img">
         {comp.picture_url || comp.photo_url ? (
-          <img src={resolveBackendUrl(comp.picture_url || comp.photo_url)} alt={comp.name || 'Listing'} />
+          <img src={resolveBackendUrl(comp.picture_url || comp.photo_url)} alt={comp.name || 'Listing'} loading="lazy" />
         ) : (
           <div className="comp-card-placeholder">No Image</div>
         )}

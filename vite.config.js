@@ -11,4 +11,22 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('maplibre-gl') || id.includes('react-map-gl')) {
+            return 'maplibre'
+          }
+          if (id.includes('recharts') || id.includes('d3-')) {
+            return 'recharts'
+          }
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/') ||
+              id.includes('react-router') || id.includes('node_modules/axios/')) {
+            return 'vendor'
+          }
+        },
+      },
+    },
+  },
 })

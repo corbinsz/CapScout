@@ -1,9 +1,10 @@
+import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import ScoreBadge from './ScoreBadge';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
 import { resolveBackendUrl } from '../../services/api';
 
-export default function PropertyCard({ property, compact = false }) {
+export default memo(function PropertyCard({ property, compact = false }) {
   const {
     id, name, neighbourhood, address, photo_url, price, bedrooms, bathrooms,
     accommodates, occupancy_rate, score, monthly_revenue, predicted, financials, source, url,
@@ -25,7 +26,7 @@ export default function PropertyCard({ property, compact = false }) {
       {!compact && (
         <div className="property-card-image">
           {photo_url ? (
-            <img src={resolveBackendUrl(photo_url)} alt={name || 'Property'} />
+            <img src={resolveBackendUrl(photo_url)} alt={name || 'Property'} loading="lazy" width={320} height={170} />
           ) : (
             <div className="property-card-placeholder">
               <span className="placeholder-icon">&#127968;</span>
@@ -112,4 +113,4 @@ export default function PropertyCard({ property, compact = false }) {
       )}
     </Link>
   );
-}
+})
