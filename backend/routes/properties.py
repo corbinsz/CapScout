@@ -1,3 +1,5 @@
+import time
+import copy
 from flask import Blueprint, request, jsonify
 from cities import get_city_or_default
 from services.data_service import get_all_listings_summary, get_comparable_listings, search_listings
@@ -13,6 +15,8 @@ from services.redfin_service import get_listings as redfin_listings, has_data as
 from services.streetview_service import get_streetview_url
 
 STREETVIEW_SCORE_THRESHOLD = 30
+_SCORE_CACHE_TTL = 600  # 10 minutes
+_score_cache = {}  # key -> (timestamp, scored_batch, total_available)
 
 # Map for-sale property_type strings to the model's binary is_* flags.
 # Keys are lowercased substrings matched against the listing's property_type.
@@ -209,10 +213,20 @@ def _score_item(item, purchase_price, city_key=None, fin_overrides=None):
         item['confidence_level'] = 'low'
 
 
-def _forsale_properties(backend, page, per_page, min_price, max_price,
-                        bedrooms, sort_by, sort_order, city_key=None,
-                        str_viable=False, fin_overrides=None):
-    """Build unified property list from a for-sale backend."""
+def _cache_key(backend, city_key, min_price, max_price, bedrooms, fin_overrides):
+    """Build a hashable cache key for scored batches."""
+    fin = tuple(sorted((fin_overrides or {}).items()))
+    return (backend, city_key, min_price, max_price, bedrooms, fin)
+
+
+def _get_scored_batch(backend, city_key, min_price, max_price, bedrooms, fin_overrides):
+    """Return scored batch from cache or compute + cache it."""
+    key = _cache_key(backend, city_key, min_price, max_price, bedrooms, fin_overrides)
+    now = time.time()
+    cached = _score_cache.get(key)
+    if cached and (now - cached[0]) < _SCORE_CACHE_TTL:
+        return copy.deepcopy(cached[1]), cached[2]
+
     city = get_city_or_default(city_key)
     if backend == 'redfin':
         items = redfin_listings(city_key)
@@ -223,7 +237,6 @@ def _forsale_properties(backend, page, per_page, min_price, max_price,
         raw = realtor_for_sale(city=city['name'], state_code=city['state'], limit=50)
         items = [normalize_realtor(p) for p in (raw or [])]
 
-    # Filter (fast — no ML scoring yet)
     filtered = []
     for item in items:
         price = item.get('price', 0)
@@ -239,14 +252,23 @@ def _forsale_properties(backend, page, per_page, min_price, max_price,
 
     total_available = len(filtered)
 
+    SCORE_BATCH = 100
+    filtered.sort(key=lambda x: x.get('price', 0))
+    batch = filtered[:SCORE_BATCH]
+    for item in batch:
+        _score_item(item, item.get('price', 0), city_key, fin_overrides)
+
+    _score_cache[key] = (now, copy.deepcopy(batch), total_available)
+    return batch, total_available
+
+
+def _forsale_properties(backend, page, per_page, min_price, max_price,
+                        bedrooms, sort_by, sort_order, city_key=None,
+                        str_viable=False, fin_overrides=None):
+    """Build unified property list from a for-sale backend."""
     if sort_by == 'score':
-        # Score the cheapest properties (best STR candidates).
-        # We can't score all listings (3000+) so we score a batch and paginate within it.
-        SCORE_BATCH = 100
-        filtered.sort(key=lambda x: x.get('price', 0))
-        batch = filtered[:SCORE_BATCH]
-        for item in batch:
-            _score_item(item, item.get('price', 0), city_key, fin_overrides)
+        batch, total_available = _get_scored_batch(
+            backend, city_key, min_price, max_price, bedrooms, fin_overrides)
         if str_viable:
             batch = [it for it in batch if it.get('confidence_level') != 'low']
         batch.sort(key=lambda x: x.get('score') or 0, reverse=(sort_order == 'desc'))
@@ -255,12 +277,12 @@ def _forsale_properties(backend, page, per_page, min_price, max_price,
         total = len(batch)
     else:
         # Price sort: paginate first, then score just the page
-        total = total_available
-        filtered.sort(key=lambda x: x.get('price', 0), reverse=(sort_order == 'desc'))
+        batch, total_available = _get_scored_batch(
+            backend, city_key, min_price, max_price, bedrooms, fin_overrides)
+        batch.sort(key=lambda x: x.get('price', 0), reverse=(sort_order == 'desc'))
+        total = len(batch)
         start = (page - 1) * per_page
-        page_items = filtered[start:start + per_page]
-        for item in page_items:
-            _score_item(item, item.get('price', 0), city_key, fin_overrides)
+        page_items = batch[start:start + per_page]
         if str_viable:
             page_items = [it for it in page_items if it.get('confidence_level') != 'low']
 
