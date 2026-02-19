@@ -733,8 +733,7 @@ body {
 }
 
 .property-card-metrics {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   background: linear-gradient(90deg, var(--primary-light) 0%, var(--teal-light) 100%);
@@ -745,7 +744,8 @@ body {
 .property-card-metrics .pcm-item {
   display: flex;
   flex-direction: column;
-  min-width: 0;
+  justify-content: flex-end;
+  flex: 1;
 }
 
 .property-card-metrics .pcm-label {
@@ -754,14 +754,12 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
-  white-space: nowrap;
 }
 
 .property-card-metrics .pcm-value {
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
-  white-space: nowrap;
 }
 
 .property-card-metrics .pcm-item:nth-child(1) .pcm-value { color: var(--primary); }
