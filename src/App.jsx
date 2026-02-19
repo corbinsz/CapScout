@@ -6,6 +6,7 @@ import MapPage from './pages/MapPage'
 import Analytics from './pages/Analytics'
 import PropertyPage from './pages/PropertyPage'
 import PredictionProcess from './pages/PredictionProcess'
+import TrainingData from './pages/TrainingData'
 import Settings from './pages/Settings'
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/property/:id" element={<PropertyPage />} />
           <Route path="/prediction-process" element={<PredictionProcess />} />
+          <Route path="/training-data" element={<TrainingData />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
       </Routes>

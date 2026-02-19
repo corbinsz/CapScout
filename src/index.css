@@ -474,7 +474,14 @@ body {
 .hero-section p {
   color: var(--text-muted);
   font-size: 15px;
+  margin-bottom: var(--space-sm);
+}
+.hero-section p.hero-detail,
+.hero-section p.training-data-note {
+  font-size: 13px;
+  line-height: 1.5;
   margin-bottom: var(--space-lg);
+  max-width: 720px;
 }
 
 .hero-stats {

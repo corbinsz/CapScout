@@ -12,7 +12,6 @@ export default function Dashboard() {
   const { cityMeta } = useCity();
 
   const cityDisplay = cityMeta?.display || 'Austin, TX';
-  const isForSale = (filters.source || 'forsale') !== 'airbnb';
 
   const summary = useMemo(() => {
     if (!properties.length) return null;
@@ -30,10 +29,12 @@ export default function Dashboard() {
     <div>
       <div className="hero-section">
         <h1>CapScout Dashboard</h1>
-        <p>
-          {isForSale
-            ? `${cityDisplay} houses for sale — scored by short-term rental investment potential`
-            : `${cityDisplay} active Airbnb listings — this is the real-world data our ML model trains on to generate predictions for homes for sale`}
+        <p>{cityDisplay} homes for sale -- scored by short-term rental investment potential.</p>
+        <p className="hero-detail">
+          Each property is run through our ML model to predict nightly rate and occupancy,
+          then scored on five financial metrics. Use the filters below to narrow by price,
+          bedrooms, or financing assumptions. Adjust the interest rate, down payment, and
+          loan term to see how different scenarios affect each property's investment score.
         </p>
         {summary && (
           <div className="hero-stats">
@@ -43,15 +44,15 @@ export default function Dashboard() {
             </div>
             <div className="hero-stat">
               <span className="hero-stat-value">{formatCurrency(summary.avgPrice)}</span>
-              <span className="hero-stat-label">{isForSale ? 'Avg Price' : 'Avg Nightly'}</span>
+              <span className="hero-stat-label">Avg Price</span>
             </div>
             <div className="hero-stat">
               <span className="hero-stat-value">{formatCurrency(summary.avgRevenue)}</span>
-              <span className="hero-stat-label">{isForSale ? 'Avg Pred. Rev' : 'Avg Monthly Rev'}</span>
+              <span className="hero-stat-label">Avg Pred. Rev</span>
             </div>
             <div className="hero-stat">
               <span className="hero-stat-value">{formatPercent(summary.avgOcc)}</span>
-              <span className="hero-stat-label">{isForSale ? 'Avg Pred. Occ' : 'Avg Occupancy'}</span>
+              <span className="hero-stat-label">Avg Pred. Occ</span>
             </div>
             <div className="hero-stat">
               <span className="hero-stat-value">{formatNumber(totalAvailable)}</span>
@@ -65,8 +66,8 @@ export default function Dashboard() {
         filters={filters}
         onFilterChange={(key, val, extra) => updateFilters({ [key]: val, ...extra })}
         onReset={() => updateFilters({
-          source: 'forsale', min_price: null, max_price: null, bedrooms: null,
-          neighborhood: '', sort_by: 'score', sort_order: 'desc',
+          min_price: null, max_price: null, bedrooms: null,
+          sort_by: 'score', sort_order: 'desc',
           mortgage_rate: null, mortgage_term: null, down_payment_pct: null,
         })}
       />
