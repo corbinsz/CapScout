@@ -744,8 +744,10 @@ body {
 .property-card-metrics .pcm-item {
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
   flex: 1;
+}
+.property-card-metrics .pcm-value {
+  margin-top: auto;
 }
 
 .property-card-metrics .pcm-label {
