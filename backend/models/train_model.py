@@ -139,9 +139,9 @@ def train_models(city_key=None):
     models_dir = config.city_models_dir(city_key)
 
     # Save feature metadata (needed by prediction_service)
-    joblib.dump(feature_cols, os.path.join(models_dir, "feature_columns.joblib"))
+    joblib.dump(feature_cols, os.path.join(models_dir, "feature_columns.joblib"), compress=3)
     medians = X.median().to_dict()
-    joblib.dump(medians, os.path.join(models_dir, "feature_medians.joblib"))
+    joblib.dump(medians, os.path.join(models_dir, "feature_medians.joblib"), compress=3)
 
     # Save feature statistics for confidence scoring
     feature_stats = {}
@@ -180,7 +180,7 @@ def train_models(city_key=None):
         'features': feature_stats,
         'targets': target_stats,
         'training_coords': training_coords,
-    }, os.path.join(models_dir, "feature_stats.joblib"))
+    }, os.path.join(models_dir, "feature_stats.joblib"), compress=3)
     print(f"  Saved feature_stats.joblib ({len(feature_stats)} features, {len(X)} samples)")
 
     overall_start = time.time()
@@ -228,9 +228,9 @@ def train_models(city_key=None):
             months=monthly_months)
 
         # Save monthly metadata
-        joblib.dump(monthly_feature_cols, os.path.join(models_dir, "monthly_feature_columns.joblib"))
+        joblib.dump(monthly_feature_cols, os.path.join(models_dir, "monthly_feature_columns.joblib"), compress=3)
         monthly_medians = X_monthly.median().to_dict()
-        joblib.dump(monthly_medians, os.path.join(models_dir, "monthly_feature_medians.joblib"))
+        joblib.dump(monthly_medians, os.path.join(models_dir, "monthly_feature_medians.joblib"), compress=3)
 
     elif "price" in targets:
         print(f"\n  Training on ALL {len(X)} listings")
@@ -246,12 +246,12 @@ def train_models(city_key=None):
 
     if use_monthly:
         best_price = train_target("price", X_monthly, y_price_sm)
-        joblib.dump(best_price, os.path.join(models_dir, "price_model.joblib"))
+        joblib.dump(best_price, os.path.join(models_dir, "price_model.joblib"), compress=3)
         print("  Saved price_model.joblib (month-aware)")
 
     elif "price" in targets:
         best_price = train_target("price", X, y_price_sm)
-        joblib.dump(best_price, os.path.join(models_dir, "price_model.joblib"))
+        joblib.dump(best_price, os.path.join(models_dir, "price_model.joblib"), compress=3)
         print("  Saved price_model.joblib (no seasonality)")
 
     # ---- Occupancy rate ----
@@ -261,12 +261,12 @@ def train_models(city_key=None):
 
     if use_monthly:
         best_occ = train_target("occupancy", X_monthly, y_occ_sm)
-        joblib.dump(best_occ, os.path.join(models_dir, "occupancy_model.joblib"))
+        joblib.dump(best_occ, os.path.join(models_dir, "occupancy_model.joblib"), compress=3)
         print("  Saved occupancy_model.joblib (month-aware)")
 
     elif "occupancy" in targets:
         best_occ = train_target("occupancy", X, y_occ_sm)
-        joblib.dump(best_occ, os.path.join(models_dir, "occupancy_model.joblib"))
+        joblib.dump(best_occ, os.path.join(models_dir, "occupancy_model.joblib"), compress=3)
         print("  Saved occupancy_model.joblib (no seasonality)")
 
     total = time.time() - overall_start

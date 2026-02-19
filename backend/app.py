@@ -1,3 +1,5 @@
+import os
+import sys
 import threading
 from flask import Flask
 from flask_cors import CORS
@@ -36,7 +38,6 @@ def _warmup():
     Only loads the default city to keep memory low on Render free tier (512MB).
     Other cities lazy-load on first request (~400ms one-time).
     """
-    import sys
     try:
         from cities import DEFAULT_CITY
         from services.prediction_service import _load_models, _get_balltree
@@ -50,10 +51,15 @@ def _warmup():
         print(f"[warmup] failed: {e}", file=sys.stderr, flush=True)
 
 
+print("[app] creating flask app ...", flush=True)
 app = create_app()
+print("[app] flask app created", flush=True)
 
-# Warm up caches in background thread so Render health checks pass immediately
-threading.Thread(target=_warmup, daemon=True).start()
+# Skip warmup on Render to keep memory low — models lazy-load on first request
+if not os.environ.get('RENDER'):
+    threading.Thread(target=_warmup, daemon=True).start()
+else:
+    print("[app] Render detected, skipping warmup (lazy-load on demand)", flush=True)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
