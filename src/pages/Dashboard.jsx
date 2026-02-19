@@ -66,8 +66,8 @@ export default function Dashboard() {
         filters={filters}
         onFilterChange={(key, val, extra) => updateFilters({ [key]: val, ...extra })}
         onReset={() => updateFilters({
-          min_price: null, max_price: null, bedrooms: null,
-          sort_by: 'score', sort_order: 'desc',
+          min_price: 150000, max_price: 750000, bedrooms: null,
+          sort_by: 'score', sort_order: 'desc', str_viable: true,
           mortgage_rate: null, mortgage_term: null, down_payment_pct: null,
         })}
       />

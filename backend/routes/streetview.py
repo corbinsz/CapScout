@@ -40,7 +40,7 @@ def serve_streetview(image_hash):
     lat = request.args.get('lat', type=float)
     lng = request.args.get('lng', type=float)
 
-    if not lat or not lng:
+    if lat is None or lng is None:
         abort(404)
 
     # Verify the hash matches so clients can't request arbitrary coordinates

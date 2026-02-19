@@ -53,7 +53,7 @@ def _physical_features(item):
     year = item.get('year_built')
     if year and year > 1800:
         feats['year_built'] = year
-        feats['property_age'] = 2025 - year
+        feats['property_age'] = 2026 - year
     lot = item.get('lot_size')
     if lot and lot > 0:
         feats['lot_sqft'] = lot
@@ -309,7 +309,7 @@ def _airbnb_properties(page, per_page, min_price, max_price, bedrooms,
                        neighborhood, sort_by, sort_order, city_key=None, message=None):
     """Use Inside Airbnb data with ML predictions."""
     city = get_city_or_default(city_key)
-    airbnb_sort = 'price_clean' if sort_by == 'price' else 'price_clean'
+    airbnb_sort = 'price_clean' if sort_by in ('price', 'score') else sort_by
     result = get_all_listings_summary(
         page=page, per_page=per_page,
         min_price=min_price, max_price=max_price,

@@ -185,7 +185,7 @@ def load_and_clean_listings(city_key=None):
         df.loc[df['lot_sqft'] > 500000, 'lot_sqft'] = np.nan
         # Derived features
         df['sqft_per_bedroom'] = df['sqft'] / df['bedrooms'].clip(lower=1)
-        df['property_age'] = 2025 - df['year_built']
+        df['property_age'] = 2026 - df['year_built']
         df['lot_acres'] = df['lot_sqft'] / 43560.0
         n_enriched = df['sqft'].notna().sum()
         print(f'  Assessor enrichment: {n_enriched}/{len(df)} listings with sqft')

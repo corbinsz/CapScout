@@ -175,7 +175,7 @@ def _compute_confidence(base_row, m, city_key=None):
     nearby_5km = 0
 
     tree = _get_balltree(city_key)
-    if tree is not None and lat and lng:
+    if tree is not None and lat is not None and lng is not None:
         point = np.deg2rad([[lat, lng]])
         nearby_5km = tree.query_radius(point, r=5.0 / EARTH_RADIUS_KM, count_only=True)[0]
         nearby_3km = tree.query_radius(point, r=3.0 / EARTH_RADIUS_KM, count_only=True)[0]

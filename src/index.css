@@ -56,6 +56,8 @@
 
   /* Typography */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --bg-hover: #f1f3f7;
+  --accent: #0d9488;
 }
 
 body {
@@ -406,7 +408,7 @@ body {
     position: fixed;
     inset: 0;
     top: 0;
-    z-index: -1;
+    z-index: 999;
   }
 
   .search-bar-wrapper {

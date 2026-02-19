@@ -118,7 +118,7 @@ function PropertyOverview({ property, pred, fin, neighborhood_stats, comparables
     insights.push(`Peak season: ${MONTH_LABELS[best.month - 1]} (${formatCurrency(best.monthly_revenue)})`);
     insights.push(`Slow season: ${MONTH_LABELS[worst.month - 1]} (${formatCurrency(worst.monthly_revenue)})`);
     const totalDays = pred.monthly_breakdown.reduce((s, m) => {
-      const d = new Date(2025, m.month, 0).getDate();
+      const d = new Date(2026, m.month, 0).getDate();
       return s + Math.round(m.occupancy_rate * d);
     }, 0);
     insights.push(`~${totalDays} booked days per year`);
