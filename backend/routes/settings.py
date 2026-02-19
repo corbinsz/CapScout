@@ -89,6 +89,10 @@ def upload_redfin_csv():
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
 
+    # Invalidate scored-batch disk cache since listings changed
+    from routes.properties import invalidate_disk_cache
+    invalidate_disk_cache(city_key)
+
     return jsonify({'ok': True, 'count': count})
 
 

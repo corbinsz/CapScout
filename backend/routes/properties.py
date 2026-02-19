@@ -1,6 +1,10 @@
+import hashlib
+import json
+import os
 import time
 import copy
 from flask import Blueprint, request, jsonify
+import config
 from cities import get_city_or_default
 from services.data_service import get_all_listings_summary, get_comparable_listings, search_listings
 from services.prediction_service import predict_property, models_available
@@ -17,6 +21,51 @@ from services.streetview_service import get_streetview_url
 STREETVIEW_SCORE_THRESHOLD = 30
 _SCORE_CACHE_TTL = 600  # 10 minutes
 _score_cache = {}  # key -> (timestamp, scored_batch, total_available)
+
+# ---------------------------------------------------------------------------
+# Disk-based score cache — survives cold restarts so first load is instant
+# ---------------------------------------------------------------------------
+_DISK_CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'score_cache')
+os.makedirs(_DISK_CACHE_DIR, exist_ok=True)
+
+
+def _disk_cache_path(key):
+    """Stable filename for a cache key tuple."""
+    h = hashlib.md5(str(key).encode()).hexdigest()
+    return os.path.join(_DISK_CACHE_DIR, f'{h}.json')
+
+
+def _load_disk_cache(key):
+    """Load scored batch from disk if it exists."""
+    path = _disk_cache_path(key)
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, 'r') as f:
+            data = json.load(f)
+        return data['batch'], data['total']
+    except Exception:
+        return None
+
+
+def _save_disk_cache(key, batch, total):
+    """Persist scored batch to disk."""
+    path = _disk_cache_path(key)
+    try:
+        with open(path, 'w') as f:
+            json.dump({'batch': batch, 'total': total}, f)
+    except Exception:
+        pass
+
+
+def invalidate_disk_cache(city_key=None):
+    """Remove all disk-cached scores (called after CSV upload or retrain)."""
+    for fname in os.listdir(_DISK_CACHE_DIR):
+        if fname.endswith('.json'):
+            try:
+                os.remove(os.path.join(_DISK_CACHE_DIR, fname))
+            except Exception:
+                pass
 
 # Map for-sale property_type strings to the model's binary is_* flags.
 # Keys are lowercased substrings matched against the listing's property_type.
@@ -220,13 +269,23 @@ def _cache_key(backend, city_key, min_price, max_price, bedrooms, fin_overrides)
 
 
 def _get_scored_batch(backend, city_key, min_price, max_price, bedrooms, fin_overrides):
-    """Return scored batch from cache or compute + cache it."""
+    """Return scored batch from memory cache, disk cache, or compute + cache."""
     key = _cache_key(backend, city_key, min_price, max_price, bedrooms, fin_overrides)
     now = time.time()
+
+    # 1. Memory cache (fastest)
     cached = _score_cache.get(key)
     if cached and (now - cached[0]) < _SCORE_CACHE_TTL:
         return copy.deepcopy(cached[1]), cached[2]
 
+    # 2. Disk cache (survives cold restarts)
+    disk = _load_disk_cache(key)
+    if disk:
+        batch, total = disk
+        _score_cache[key] = (now, copy.deepcopy(batch), total)
+        return batch, total
+
+    # 3. Compute from scratch
     city = get_city_or_default(city_key)
     if backend == 'redfin':
         items = redfin_listings(city_key)
@@ -259,6 +318,7 @@ def _get_scored_batch(backend, city_key, min_price, max_price, bedrooms, fin_ove
         _score_item(item, item.get('price', 0), city_key, fin_overrides)
 
     _score_cache[key] = (now, copy.deepcopy(batch), total_available)
+    _save_disk_cache(key, batch, total_available)
     return batch, total_available
 
 
