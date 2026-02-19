@@ -1,4 +1,5 @@
 import logging
+import threading
 from flask import Flask
 from flask_cors import CORS
 import config
@@ -48,7 +49,8 @@ def create_app():
     def health():
         return {'status': 'ok'}
 
-    _warmup()
+    # Warmup in background so gunicorn worker boots immediately
+    threading.Thread(target=_warmup, daemon=True).start()
 
     return app
 
