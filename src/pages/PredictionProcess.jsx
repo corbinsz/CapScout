@@ -359,8 +359,9 @@ export default function PredictionProcess() {
         </div>
         <div className="section-body" style={{ fontSize: 14, lineHeight: 1.8 }}>
           <p style={{ marginBottom: 16 }}>
-            The predicted revenue feeds into a financial model that calculates five investment
-            metrics. Each is scored on a curve and weighted to produce the final CapScout Score:
+            The score does not measure rental income alone -- it reflects how well the property's
+            predicted STR revenue covers your ownership costs (mortgage, taxes, insurance, and
+            other expenses) as an investment. Five metrics are scored on a curve and weighted:
           </p>
 
           <div className="score-breakdown-bars">
@@ -388,10 +389,10 @@ export default function PredictionProcess() {
           }}>
             <div style={{ fontWeight: 700, marginBottom: 8 }}>Score interpretation</div>
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-              <span><strong style={{ color: 'var(--green)' }}>75+</strong> Excellent</span>
-              <span><strong style={{ color: 'var(--teal)' }}>55-74</strong> Good</span>
-              <span><strong style={{ color: 'var(--yellow)' }}>40-54</strong> Fair</span>
-              <span><strong style={{ color: 'var(--red)' }}>&lt;40</strong> Poor</span>
+              <span><strong style={{ color: '#7c3aed' }}>70+</strong> Excellent</span>
+              <span><strong style={{ color: 'var(--green)' }}>55-69</strong> Good</span>
+              <span><strong style={{ color: 'var(--yellow)' }}>45-54</strong> Fair</span>
+              <span><strong style={{ color: 'var(--red)' }}>&lt;45</strong> Poor</span>
             </div>
             <div style={{ marginTop: 8, color: 'var(--text-muted)' }}>
               Financial modeling assumes 20% down payment, 7% mortgage rate, 30-year term,

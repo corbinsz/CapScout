@@ -49,12 +49,12 @@ export default function Dashboard() {
     <div>
       <div className="hero-section">
         <h1>CapScout Dashboard</h1>
-        <p>{cityDisplay} homes for sale -- scored by short-term rental investment potential.</p>
+        <p>{cityDisplay} homes for sale -- scored by how well predicted STR income covers investment costs.</p>
         <p className="hero-detail">
-          Each property is run through our ML model to predict nightly rate and occupancy,
-          then scored on five financial metrics. Use the filters below to narrow by price,
-          bedrooms, or financing assumptions. Adjust the interest rate, down payment, and
-          loan term to see how different scenarios affect each property's investment score.
+          Each property is run through our ML model to predict nightly rate and occupancy.
+          The score does not measure rental income alone -- it reflects how well that income
+          covers your mortgage, taxes, insurance, and other ownership costs as an investment.
+          Adjust the interest rate, down payment, and loan term to see how financing changes each score.
         </p>
         {summary && (
           <div className="hero-stats">

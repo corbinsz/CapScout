@@ -2689,7 +2689,7 @@ body {
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
   z-index: 2;
 }
-.confidence-dot--high { background: var(--green); }
+.confidence-dot--high { background: #7c3aed; }
 .confidence-dot--medium { background: var(--yellow); }
 .confidence-dot--low { background: var(--red); }
 

@@ -936,7 +936,7 @@ export default function PropertyPage() {
                 <>
                   <div className="metrics-key-item">
                     <span className="metrics-key-term">Investment Score (0-100)</span>
-                    <span className="metrics-key-desc">Composite rating based on industry-standard STR underwriting metrics: Gross Yield (25 pts), Cash-on-Cash ROI (25 pts), Cap Rate (20 pts), DSCR (20 pts), and Occupancy (10 pts). 75+ is excellent, 55-74 is good, 40-54 is fair, below 40 is poor.</span>
+                    <span className="metrics-key-desc">Measures how well this property's predicted STR income covers your ownership costs (mortgage, taxes, insurance) as an investment. It does not score rental income alone -- it reflects overall investment viability. Based on: Gross Yield (25 pts), Cash-on-Cash ROI (25 pts), Cap Rate (20 pts), DSCR (20 pts), and Occupancy (10 pts). 70+ is excellent, 55-69 is good, 45-54 is fair, below 45 is poor.</span>
                   </div>
                   <div className="metrics-key-item">
                     <span className="metrics-key-term">Gross Yield (Revenue / Price)</span>
