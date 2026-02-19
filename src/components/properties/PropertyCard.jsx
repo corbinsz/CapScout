@@ -76,7 +76,7 @@ export default function PropertyCard({ property, compact = false }) {
           {isForSale ? (
             <>
               <div className="pcm-item">
-                <span className="pcm-label">Pred. Nightly</span>
+                <span className="pcm-label">Pred. Nightly Rate</span>
                 <span className="pcm-value">{formatCurrency(predicted?.predicted_nightly_rate)}</span>
               </div>
               <div className="pcm-item">
