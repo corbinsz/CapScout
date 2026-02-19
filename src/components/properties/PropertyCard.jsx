@@ -6,7 +6,7 @@ import { resolveBackendUrl } from '../../services/api';
 export default function PropertyCard({ property, compact = false }) {
   const {
     id, name, neighbourhood, address, photo_url, price, bedrooms, bathrooms,
-    accommodates, occupancy_rate, score, monthly_revenue, predicted, source, url,
+    accommodates, occupancy_rate, score, monthly_revenue, predicted, financials, source, url,
   } = property;
 
   const isForSale = source === 'rentcast' || source === 'realtor' || source === 'redfin';
@@ -80,14 +80,12 @@ export default function PropertyCard({ property, compact = false }) {
                 <span className="pcm-value">{formatCurrency(predicted?.predicted_nightly_rate)}</span>
               </div>
               <div className="pcm-item">
-                <span className="pcm-label">Pred. Revenue</span>
-                <span className="pcm-value">{formatCurrency(predicted?.predicted_monthly_revenue)}</span>
+                <span className="pcm-label">Pred. NOI</span>
+                <span className="pcm-value">{formatCurrency(financials?.noi != null ? financials.noi / 12 : null)}</span>
               </div>
               <div className="pcm-item">
-                <span className="pcm-label">STR Area</span>
-                <span className={`pcm-value str-tag str-${property.str_activity || 'unknown'}`}>
-                  {property.str_activity === 'active' ? 'Active' : property.str_activity === 'low' ? 'Low' : property.str_activity === 'none' ? 'None' : '—'}
-                </span>
+                <span className="pcm-label">Net Cash Flow</span>
+                <span className={`pcm-value${(financials?.monthly_cashflow ?? 0) < 0 ? ' text-negative' : ''}`}>{formatCurrency(financials?.monthly_cashflow)}</span>
               </div>
             </>
           ) : (

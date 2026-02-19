@@ -684,6 +684,7 @@ body {
 
 .property-card-metrics .pcm-item:nth-child(1) .pcm-value { color: var(--primary); }
 .property-card-metrics .pcm-item:nth-child(2) .pcm-value { color: var(--teal); }
+.pcm-value.text-negative { color: var(--red) !important; }
 
 /* ===== COMPACT CARD (Map sidebar) ===== */
 .property-card--compact {
