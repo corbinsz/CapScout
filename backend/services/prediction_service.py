@@ -39,8 +39,16 @@ def _load_models(city_key=None):
 
 
 def models_available(city_key=None):
-    m = _load_models(city_key)
-    return 'price_model' in m and 'occupancy_model' in m
+    """Check if trained models exist on disk (without loading them into memory)."""
+    city_key = city_key or DEFAULT_CITY
+    # Fast path: already loaded
+    if city_key in _models_cache:
+        m = _models_cache[city_key]
+        return 'price_model' in m and 'occupancy_model' in m
+    # Slow path: check files on disk without loading
+    models_dir = config.city_models_dir(city_key)
+    return (os.path.isfile(os.path.join(models_dir, 'price_model.joblib')) and
+            os.path.isfile(os.path.join(models_dir, 'occupancy_model.joblib')))
 
 
 def get_models(city_key=None):
