@@ -44,3 +44,5 @@ backend/.env
 tmp_*
 nul
 *.cookies.txt
+
+.vercel
