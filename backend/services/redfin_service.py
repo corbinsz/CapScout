@@ -191,7 +191,7 @@ def normalize_listing(row):
         'bathrooms': _safe_int(row.get('BATHS')),
         'sqft': _safe_int(row.get('SQUARE FEET')),
         'year_built': _safe_int(row.get('YEAR BUILT')),
-        'lot_size': _safe_int(row.get('LOT SIZE')),
+        'lot_size': _safe_int(row.get('LOT SIZE')) if _safe_int(row.get('LOT SIZE')) <= 217800 else 0,  # cap 5 acres; Redfin shows complex lot for condos
         'days_on_market': _safe_int(row.get('DAYS ON MARKET')),
         'hoa_monthly': _safe_float(row.get('HOA/MONTH')),
         'price_per_sqft': _safe_float(row.get('$/SQUARE FEET')),
