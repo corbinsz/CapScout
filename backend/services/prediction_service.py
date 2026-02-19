@@ -188,7 +188,7 @@ def _compute_confidence(base_row, m, city_key=None):
     else:
         geo_score = max(5, round(nearby_3km / 15 * 50))
 
-    score = min(100, geo_score)
+    score = int(min(100, geo_score))
 
     if score >= 70:
         level = 'high'
@@ -217,7 +217,7 @@ def _compute_confidence(base_row, m, city_key=None):
         'nearby_3km': int(nearby_3km),
         'nearby_5km': int(nearby_5km),
         'radius_km': 3,
-        'n_training': n_training,
+        'n_training': int(n_training),
         'out_of_range_features': out_of_range,
     }
 
