@@ -100,9 +100,9 @@ function PropertyOverview({ property, pred, fin, neighborhood_stats, comparables
     }
   }
   if (pred.confidence) {
-    areaFacts.push({ label: 'STR Nearby (3km)', value: `${pred.confidence.nearby_3km} listings`, color: 'orange' });
-    if (pred.confidence.nearby_1km > 0) {
-      areaFacts.push({ label: 'STR Within 1km', value: `${pred.confidence.nearby_1km} listings`, color: 'teal' });
+    areaFacts.push({ label: 'STR Nearby (5km)', value: `${pred.confidence.nearby_5km} listings`, color: 'orange' });
+    if (pred.confidence.nearby_3km > 0) {
+      areaFacts.push({ label: 'STR Within 3km', value: `${pred.confidence.nearby_3km} listings`, color: 'teal' });
     }
   }
   if (comparables?.length > 0) {
@@ -452,7 +452,7 @@ export default function PropertyPage() {
             <div className="section-body">
               {pred.confidence?.level === 'low' && (
                 <div className="confidence-warning">
-                  Few training listings nearby — only {pred.confidence.nearby_3km} Airbnb listings within 3 km.
+                  Few training listings nearby — only {pred.confidence.nearby_5km} Airbnb listings within 5 km.
                   Predictions in this area may be less reliable.
                   {pred.confidence.out_of_range_features?.map(f => (
                     <span key={f.feature}> {f.detail}</span>
@@ -496,7 +496,7 @@ export default function PropertyPage() {
                   {pred.confidence && (
                     <div className="confidence-footer">
                       Based on {pred.confidence.n_training?.toLocaleString()} training listings ·
-                      {' '}{pred.confidence.nearby_3km} within 3 km · {pred.confidence.nearby_1km} within 1 km
+                      {' '}{pred.confidence.nearby_5km} within 5 km · {pred.confidence.nearby_3km} within 3 km
                     </div>
                   )}
                 </div>
@@ -784,7 +784,7 @@ export default function PropertyPage() {
               )}
               <div className="metrics-key-item">
                 <span className="metrics-key-term">Confidence Level</span>
-                <span className="metrics-key-desc">How reliable our predictions are for this location. Based on the number of nearby Airbnb listings in our training data. High = 20+ listings within 3km, Medium = 5-19, Low = fewer than 5. Low confidence areas may have less accurate predictions.</span>
+                <span className="metrics-key-desc">How reliable our predictions are for this location. Based on the density of nearby Airbnb listings in our training data, weighted by distance (1km, 3km, 5km). More nearby listings means higher confidence. Low confidence areas may have less accurate predictions.</span>
               </div>
               <div className="metrics-key-item">
                 <span className="metrics-key-term">Predicted Occupancy</span>

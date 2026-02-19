@@ -284,10 +284,11 @@ export default function PredictionProcess() {
               Prediction Confidence
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              Confidence is based on how many Airbnb listings are near the property:
-              <strong> High</strong> (50+ within 3km),
-              <strong> Medium</strong> (15-49),
-              <strong> Low</strong> (fewer than 15).
+              Confidence is based on how many Airbnb listings are near the property, weighted by distance
+              (1km counts 3x, 3km counts 2x, 5km counts 1x).
+              <strong> High</strong> means dense nearby training data,
+              <strong> Medium</strong> means moderate coverage,
+              <strong> Low</strong> means sparse data in the area.
               By default, the dashboard hides low-confidence properties.
             </div>
           </div>

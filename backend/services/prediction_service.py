@@ -181,12 +181,14 @@ def _compute_confidence(base_row, m, city_key=None):
         nearby_3km = tree.query_radius(point, r=3.0 / EARTH_RADIUS_KM, count_only=True)[0]
         nearby_1km = tree.query_radius(point, r=1.0 / EARTH_RADIUS_KM, count_only=True)[0]
 
-    if nearby_3km >= 50:
-        geo_score = 90 + min(10, (nearby_3km - 50) // 10)
-    elif nearby_3km >= 15:
-        geo_score = 50 + round((nearby_3km - 15) / 35 * 40)
+    # Blend all three radii: closer listings count more
+    effective = nearby_1km * 3 + nearby_3km * 2 + nearby_5km
+    if effective >= 200:
+        geo_score = 90 + min(10, (effective - 200) // 50)
+    elif effective >= 50:
+        geo_score = 50 + round((effective - 50) / 150 * 40)
     else:
-        geo_score = max(5, round(nearby_3km / 15 * 50))
+        geo_score = max(5, round(effective / 50 * 50))
 
     score = int(min(100, geo_score))
 
@@ -311,7 +313,7 @@ def predict_property(features_dict, month=None, city_key=None, summary_only=Fals
             })
 
     # --- Step 3: Confidence scoring & prediction range ---
-    confidence = _compute_confidence(base_row, m)
+    confidence = _compute_confidence(base_row, m, city_key)
     range_mult = {'high': 0.15, 'medium': 0.30, 'low': 0.50}[confidence['level']]
 
     result = {
