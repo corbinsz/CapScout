@@ -329,10 +329,84 @@ body {
   color: var(--teal);
 }
 
+/* Hamburger button — hidden on desktop */
+.navbar-hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 36px;
+  height: 36px;
+  padding: 6px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  margin-left: auto;
+}
+.navbar-hamburger span {
+  display: block;
+  height: 2px;
+  background: var(--text);
+  border-radius: 2px;
+  transition: transform 0.25s, opacity 0.25s;
+}
+.navbar-hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.navbar-hamburger.open span:nth-child(2) { opacity: 0; }
+.navbar-hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+.navbar-backdrop { display: none; }
+
 @media (max-width: 768px) {
   .navbar {
     height: auto;
     padding: var(--space-sm) 0;
+  }
+
+  .navbar-inner {
+    flex-wrap: wrap;
+    padding: 0 var(--space-md);
+    gap: var(--space-sm);
+  }
+
+  .navbar-hamburger { display: flex; }
+
+  .navbar-links {
+    display: none;
+    flex-direction: column;
+    width: 100%;
+    order: 10;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border);
+    padding: var(--space-xs) 0;
+  }
+  .navbar-links--open { display: flex; }
+
+  .navbar-links a {
+    height: auto;
+    padding: 12px var(--space-md);
+    border-bottom: none;
+    border-left: 3px solid transparent;
+    font-size: 15px;
+  }
+  .navbar-links a.active {
+    border-bottom: none;
+    border-left-color: var(--primary);
+    background: var(--bg-hover);
+  }
+  .navbar-links a:nth-child(2).active {
+    border-bottom: none;
+    border-left-color: var(--teal);
+  }
+  .navbar-links a:nth-child(3).active {
+    border-bottom: none;
+    border-left-color: var(--indigo);
+  }
+
+  .navbar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    top: 0;
+    z-index: -1;
   }
 
   .search-bar-wrapper {
@@ -341,9 +415,7 @@ body {
     width: 100%;
   }
 
-  .navbar-inner {
-    flex-wrap: wrap;
-  }
+  .navbar-brand a { font-size: 17px; }
 }
 
 /* ===== PAGE HEADERS ===== */
