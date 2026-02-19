@@ -4,8 +4,21 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 const api = axios.create({
   baseURL: API_BASE,
-  timeout: 60000,
+  timeout: 120000,
   headers: { 'Content-Type': 'application/json' },
+});
+
+// Retry once on timeout (handles Render cold starts)
+api.interceptors.response.use(null, async (error) => {
+  const config = error.config;
+  if (
+    error.code === 'ECONNABORTED' &&
+    !config._retried
+  ) {
+    config._retried = true;
+    return api(config);
+  }
+  return Promise.reject(error);
 });
 
 /**

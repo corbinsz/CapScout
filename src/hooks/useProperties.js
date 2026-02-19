@@ -55,7 +55,14 @@ export default function useProperties(initialParams = {}) {
         }
       } catch (err) {
         if (err.name === 'CanceledError' || err.name === 'AbortError') return;
-        const msg = err.response?.data?.error || err.message;
+        let msg;
+        if (err.code === 'ECONNABORTED') {
+          msg = 'Server is waking up -- please refresh in a moment.';
+        } else if (err.code === 'ERR_NETWORK') {
+          msg = 'Cannot reach server -- it may be restarting. Try again in 30s.';
+        } else {
+          msg = err.response?.data?.error || err.message;
+        }
         setError(typeof msg === 'string' ? msg : 'Failed to load properties');
       } finally {
         if (!controller.signal.aborted) setLoading(false);
