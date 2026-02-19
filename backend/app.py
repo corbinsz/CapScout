@@ -31,24 +31,23 @@ def create_app():
 
 
 def _warmup():
-    """Preload models, BallTrees, and Redfin CSVs so first request is fast."""
+    """Preload default city models so first request is fast.
+
+    Only loads the default city to keep memory low on Render free tier (512MB).
+    Other cities lazy-load on first request (~400ms one-time).
+    """
     import sys
     try:
-        from cities import CITIES
+        from cities import DEFAULT_CITY
         from services.prediction_service import _load_models, _get_balltree
         from services.redfin_service import get_listings
 
-        for city_key in CITIES:
-            try:
-                _load_models(city_key)
-                _get_balltree(city_key)
-                get_listings(city_key)
-                print(f"[warmup] {city_key} ready", flush=True)
-            except Exception as e:
-                print(f"[warmup] {city_key} failed: {e}", file=sys.stderr, flush=True)
-        print("[warmup] done", flush=True)
+        _load_models(DEFAULT_CITY)
+        _get_balltree(DEFAULT_CITY)
+        get_listings(DEFAULT_CITY)
+        print(f"[warmup] {DEFAULT_CITY} ready", flush=True)
     except Exception as e:
-        print(f"[warmup] fatal: {e}", file=sys.stderr, flush=True)
+        print(f"[warmup] failed: {e}", file=sys.stderr, flush=True)
 
 
 app = create_app()
