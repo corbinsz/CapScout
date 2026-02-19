@@ -242,7 +242,7 @@ def _forsale_properties(backend, page, per_page, min_price, max_price,
     if sort_by == 'score':
         # Score the cheapest properties (best STR candidates).
         # We can't score all listings (3000+) so we score a batch and paginate within it.
-        SCORE_BATCH = 200
+        SCORE_BATCH = 100
         filtered.sort(key=lambda x: x.get('price', 0))
         batch = filtered[:SCORE_BATCH]
         for item in batch:

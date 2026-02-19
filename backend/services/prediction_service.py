@@ -3,12 +3,16 @@ import calendar
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.neighbors import BallTree
 import config
 from cities import DEFAULT_CITY, get_seasonal_factors
 from models.feature_engineering import get_feature_columns, haversine_km
 
 
 _models_cache = {}
+_balltree_cache = {}
+
+EARTH_RADIUS_KM = 6371.0
 
 
 def _load_models(city_key=None):
@@ -126,14 +130,34 @@ def _predict_all_months(base_row, m):
     return rates, occs
 
 
-def _compute_confidence(base_row, m):
+def _get_balltree(city_key):
+    """Build or retrieve a BallTree for fast radius neighbor queries."""
+    if city_key in _balltree_cache:
+        return _balltree_cache[city_key]
+    m = _load_models(city_key)
+    stats = m.get('feature_stats')
+    if not stats:
+        _balltree_cache[city_key] = None
+        return None
+    coords = stats.get('training_coords')
+    if coords is None:
+        _balltree_cache[city_key] = None
+        return None
+    lat = np.array(coords['latitude'])
+    lng = np.array(coords['longitude'])
+    rad = np.deg2rad(np.column_stack([lat, lng]))
+    tree = BallTree(rad, metric='haversine')
+    _balltree_cache[city_key] = tree
+    return tree
+
+
+def _compute_confidence(base_row, m, city_key=None):
     """
     Score prediction confidence primarily on geographic proximity to
     training data — how many Airbnb listings the model actually learned
     from in this property's neighborhood.
 
-    Structural features (bedrooms, bathrooms) are universally applicable
-    and get minimal weight. Location is what matters.
+    Uses a BallTree for fast radius queries instead of brute-force haversine.
     """
     stats = m.get('feature_stats')
     if not stats:
@@ -142,35 +166,27 @@ def _compute_confidence(base_row, m):
 
     target_stats = stats.get('targets', {})
     n_training = target_stats.get('n_training', 0)
-    coords = stats.get('training_coords')
 
     lat = base_row.get('latitude', 0)
     lng = base_row.get('longitude', 0)
 
-    # --- Geographic density: count training listings within radius ---
     nearby_1km = 0
     nearby_3km = 0
     nearby_5km = 0
 
-    if coords is not None and lat and lng:
-        train_lat = coords['latitude']
-        train_lng = coords['longitude']
-        # Vectorized haversine (fast for <20k points)
-        dists = haversine_km(lat, lng, train_lat, train_lng)
-        nearby_1km = int(np.sum(dists <= 1.0))
-        nearby_3km = int(np.sum(dists <= 3.0))
-        nearby_5km = int(np.sum(dists <= 5.0))
+    tree = _get_balltree(city_key)
+    if tree is not None and lat and lng:
+        point = np.deg2rad([[lat, lng]])
+        nearby_5km = tree.query_radius(point, r=5.0 / EARTH_RADIUS_KM, count_only=True)[0]
+        nearby_3km = tree.query_radius(point, r=3.0 / EARTH_RADIUS_KM, count_only=True)[0]
+        nearby_1km = tree.query_radius(point, r=1.0 / EARTH_RADIUS_KM, count_only=True)[0]
 
-    # --- Score: primarily driven by nearby listing density ---
-    # 50+ within 3km = excellent local data → high confidence
-    # 15-49 = decent coverage → medium
-    # <15 = sparse → low
     if nearby_3km >= 50:
-        geo_score = 90 + min(10, (nearby_3km - 50) // 10)  # 90-100
+        geo_score = 90 + min(10, (nearby_3km - 50) // 10)
     elif nearby_3km >= 15:
-        geo_score = 50 + round((nearby_3km - 15) / 35 * 40)  # 50-90
+        geo_score = 50 + round((nearby_3km - 15) / 35 * 40)
     else:
-        geo_score = max(5, round(nearby_3km / 15 * 50))  # 0-50
+        geo_score = max(5, round(nearby_3km / 15 * 50))
 
     score = min(100, geo_score)
 
@@ -181,7 +197,6 @@ def _compute_confidence(base_row, m):
     else:
         level = 'low'
 
-    # --- Flag distance_to_center if extreme (property is far from city) ---
     feat_stats = stats.get('features', {})
     out_of_range = []
     dist = base_row.get('distance_to_center', 0)
@@ -198,9 +213,9 @@ def _compute_confidence(base_row, m):
     return {
         'level': level,
         'score': score,
-        'nearby_1km': nearby_1km,
-        'nearby_3km': nearby_3km,
-        'nearby_5km': nearby_5km,
+        'nearby_1km': int(nearby_1km),
+        'nearby_3km': int(nearby_3km),
+        'nearby_5km': int(nearby_5km),
         'radius_km': 3,
         'n_training': n_training,
         'out_of_range_features': out_of_range,
@@ -260,7 +275,7 @@ def predict_property(features_dict, month=None, city_key=None, summary_only=Fals
 
     # Fast path for list scoring — skip breakdown but keep confidence
     if summary_only:
-        confidence = _compute_confidence(base_row, m)
+        confidence = _compute_confidence(base_row, m, city_key)
         return {
             'predicted_nightly_rate': round(nightly_rate, 2),
             'predicted_occupancy_rate': round(occupancy_rate, 4),
