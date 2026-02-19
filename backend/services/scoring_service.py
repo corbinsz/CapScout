@@ -5,20 +5,25 @@ Based on vetted real estate investment principles from AirDNA, BiggerPockets,
 Mashvisor, and industry-standard STR underwriting metrics.
 
 Components (research-backed weights):
-  - Gross Yield (annual revenue / price)       — 0-25 pts  (#1 quick-screen metric)
-  - Cash-on-cash ROI (cashflow / down payment) — 0-25 pts  (#2 leveraged return metric)
-  - Cap rate (NOI / price)                     — 0-20 pts  (unleveraged profitability)
-  - DSCR (NOI / total debt service)            — 0-20 pts  (debt coverage safety)
-  - Predicted occupancy                        — 0-10 pts  (demand indicator)
+  - Gross Yield (annual revenue / price)       -- 0-25 pts  (#1 quick-screen metric)
+  - Cash-on-cash ROI (cashflow / down payment) -- 0-25 pts  (#2 leveraged return metric)
+  - Cap rate (NOI / price)                     -- 0-20 pts  (unleveraged profitability)
+  - DSCR (NOI / total debt service)            -- 0-20 pts  (debt coverage safety)
+  - Predicted occupancy                        -- 0-10 pts  (demand indicator)
 
 Score interpretation:
-  75+ = Excellent (strong returns, solid debt coverage)
-  55-74 = Good (profitable or near breakeven with upside)
-  40-54 = Fair (marginal deal, watch closely)
-  <40 = Poor (unlikely to perform as STR investment)
+  70+ = Excellent (strong returns, solid debt coverage)
+  55-69 = Good (profitable or near breakeven with upside)
+  45-54 = Fair (marginal deal, watch closely)
+  <45 = Poor (unlikely to perform as STR investment)
 
-Thresholds calibrated for 7%+ interest rate environment per 2024-2025
-STR investor community standards (BiggerPockets, AirDNA, Rabbu).
+Expense model: Itemized by category instead of a flat percentage.
+  - Platform fees (3% of revenue)
+  - Cleaning costs (per-turnover, city-specific)
+  - Supplies & consumables (per-turnover)
+  - Utilities (city-specific, partly occupancy-driven)
+  - Maintenance reserve (1% of property value)
+  - WiFi + miscellaneous (fixed monthly)
 """
 from cities import get_city_or_default
 
@@ -27,11 +32,23 @@ from cities import get_city_or_default
 MORTGAGE_RATE = 0.07          # 7% annual interest
 MORTGAGE_TERM_YEARS = 30
 DOWN_PAYMENT_PCT = 0.20       # 20% down
+
 # Fallbacks if city config is missing a field
 DEFAULT_PROPERTY_TAX_RATE = 0.018
 DEFAULT_INSURANCE_RATE = 0.005
-DEFAULT_EXPENSE_RATIO = 0.35
 DEFAULT_STR_PERMIT_ANNUAL = 0
+
+# Itemized expense constants (same for all cities)
+PLATFORM_FEE_RATE = 0.03       # Airbnb host-only fee (3% of revenue)
+SUPPLIES_PER_TURNOVER = 25     # Toiletries, coffee, linens per stay
+MAINTENANCE_RATE = 0.01        # 1% of property value annually (industry standard)
+WIFI_MONTHLY = 75              # Internet service
+MISC_MONTHLY = 50              # Pest control, software, misc subscriptions
+
+# Fallbacks for city expense fields
+DEFAULT_CLEANING_PER_TURNOVER = 120
+DEFAULT_AVG_STAY_NIGHTS = 3.2
+DEFAULT_BASE_UTILITIES_MONTHLY = 250
 
 
 def calculate_annual_mortgage(loan_amount, rate=MORTGAGE_RATE, years=MORTGAGE_TERM_YEARS):
@@ -41,6 +58,53 @@ def calculate_annual_mortgage(loan_amount, rate=MORTGAGE_RATE, years=MORTGAGE_TE
         return loan_amount / n_payments * 12
     monthly = loan_amount * (monthly_rate * (1 + monthly_rate)**n_payments) / ((1 + monthly_rate)**n_payments - 1)
     return monthly * 12
+
+
+def calculate_operating_expenses(gross_revenue, predicted_occupancy, purchase_price, city):
+    """Calculate itemized operating expenses.
+
+    Returns (total_opex, breakdown_dict).
+    """
+    cleaning_cost = city.get('cleaning_per_turnover', DEFAULT_CLEANING_PER_TURNOVER)
+    avg_stay = city.get('avg_stay_nights', DEFAULT_AVG_STAY_NIGHTS)
+    base_util = city.get('base_utilities_monthly', DEFAULT_BASE_UTILITIES_MONTHLY)
+
+    # Turnovers per year: occupied nights / avg stay length
+    occupied_nights = predicted_occupancy * 365
+    turnovers = occupied_nights / avg_stay if avg_stay > 0 else 0
+
+    # Revenue-based
+    platform_fees = gross_revenue * PLATFORM_FEE_RATE
+
+    # Per-turnover (scales with occupancy)
+    cleaning = turnovers * cleaning_cost
+    supplies = turnovers * SUPPLIES_PER_TURNOVER
+
+    # Utilities: base (60%) always on + variable (40%) scales with occupancy
+    annual_utilities = base_util * 12 * (0.6 + 0.4 * predicted_occupancy)
+
+    # Fixed monthly
+    annual_fixed = (WIFI_MONTHLY + MISC_MONTHLY) * 12
+
+    # Property-value based
+    maintenance = purchase_price * MAINTENANCE_RATE
+
+    total = platform_fees + cleaning + supplies + annual_utilities + annual_fixed + maintenance
+
+    breakdown = {
+        'platform_fees': round(platform_fees, 2),
+        'cleaning': round(cleaning, 2),
+        'supplies': round(supplies, 2),
+        'utilities': round(annual_utilities, 2),
+        'fixed_costs': round(annual_fixed, 2),
+        'maintenance': round(maintenance, 2),
+        'turnovers': round(turnovers, 1),
+        'cleaning_per_turnover': cleaning_cost,
+        'avg_stay_nights': avg_stay,
+        'base_utilities_monthly': base_util,
+    }
+
+    return round(total, 2), breakdown
 
 
 def score_property(purchase_price, predicted_annual_revenue, predicted_occupancy,
@@ -60,7 +124,6 @@ def score_property(purchase_price, predicted_annual_revenue, predicted_occupancy
     city = get_city_or_default(city_key)
     tax_rate = city.get('property_tax_rate', DEFAULT_PROPERTY_TAX_RATE)
     insurance_rate = city.get('insurance_rate', DEFAULT_INSURANCE_RATE)
-    expense_ratio = city.get('expense_ratio', DEFAULT_EXPENSE_RATIO)
     str_permit = city.get('str_permit_annual', DEFAULT_STR_PERMIT_ANNUAL)
 
     # Use overrides if provided, else fall back to module constants
@@ -71,7 +134,11 @@ def score_property(purchase_price, predicted_annual_revenue, predicted_occupancy
 
     # Financial calculations
     gross_revenue = predicted_annual_revenue
-    operating_expenses = gross_revenue * expense_ratio
+
+    # Itemized operating expenses
+    operating_expenses, opex_breakdown = calculate_operating_expenses(
+        gross_revenue, predicted_occupancy, purchase_price, city)
+
     noi = gross_revenue - operating_expenses
 
     down_payment = purchase_price * eff_down_pct
@@ -91,39 +158,28 @@ def score_property(purchase_price, predicted_annual_revenue, predicted_occupancy
     dscr = noi / total_debt_service if total_debt_service > 0 else 0
 
     # =====================================================================
-    # SCORING COMPONENTS — thresholds from industry research
+    # SCORING COMPONENTS -- thresholds from industry research
     # =====================================================================
 
     # 1. Gross Yield / Revenue-to-Price (0-25 pts)
-    # THE #1 quick-screen metric per BiggerPockets & AirDNA.
-    # 10% = market baseline (listed homes), 15% = good deal, 20%+ = excellent.
     yield_score = min(25, max(0, (gross_yield / 0.20) * 25))
 
     # 2. Cash-on-Cash ROI (0-25 pts)
-    # The primary "deal or no deal" metric for leveraged investors.
-    # 8% = good, 15% = excellent, 20%+ = exceptional.
-    # Negative ROI still gets partial credit (property may appreciate).
     if roi >= 0:
         roi_score = min(25, 5 + (roi / 0.20) * 20)
     else:
-        # -10% or worse = 0 pts, 0% = 5 pts
         roi_score = max(0, 5 + (roi / 0.10) * 5)
 
     # 3. Cap Rate (0-20 pts)
-    # STR cap rates run 1.5-2x higher than LTR.
-    # 5% = decent, 8% = good, 10%+ = excellent.
     cap_rate_score = min(20, max(0, (cap_rate / 0.10) * 20))
 
-    # 4. DSCR — Debt Service Coverage Ratio (0-20 pts)
-    # Critical for leveraged purchases. Lenders want 1.25+.
-    # <0.75 = 0 pts, 1.0 = breakeven (10 pts), 1.25 = strong (16 pts), 1.5+ = 20 pts.
+    # 4. DSCR (0-20 pts)
     if dscr >= 1.0:
         dscr_score = min(20, 10 + ((dscr - 1.0) / 0.5) * 10)
     else:
         dscr_score = max(0, (dscr / 1.0) * 10)
 
     # 5. Occupancy (0-10 pts)
-    # National avg ~55%. Good = 55-65%, strong = 65-75%.
     occ_score = min(10, max(0, (predicted_occupancy / 0.75) * 10))
 
     total_score = yield_score + roi_score + cap_rate_score + dscr_score + occ_score
@@ -143,7 +199,7 @@ def score_property(purchase_price, predicted_annual_revenue, predicted_occupancy
             'down_payment': round(down_payment, 2),
             'annual_revenue': round(gross_revenue, 2),
             'operating_expenses': round(operating_expenses, 2),
-            'expense_ratio': round(expense_ratio * 100, 1),
+            'opex': opex_breakdown,
             'noi': round(noi, 2),
             'annual_mortgage': round(annual_mortgage, 2),
             'annual_taxes': round(annual_taxes, 2),

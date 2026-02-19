@@ -20,6 +20,7 @@ from services.streetview_service import get_streetview_url
 
 STREETVIEW_SCORE_THRESHOLD = 30
 _SCORE_CACHE_TTL = 600  # 10 minutes
+_SCORE_CACHE_VERSION = 2  # Bump when scoring formula changes to invalidate disk cache
 _score_cache = {}  # key -> (timestamp, scored_batch, total_available)
 
 # ---------------------------------------------------------------------------
@@ -267,7 +268,7 @@ def _score_item(item, purchase_price, city_key=None, fin_overrides=None):
 def _cache_key(backend, city_key, min_price, max_price, bedrooms, fin_overrides, property_type=None):
     """Build a hashable cache key for scored batches."""
     fin = tuple(sorted((fin_overrides or {}).items()))
-    return (backend, city_key, min_price, max_price, bedrooms, property_type, fin)
+    return (_SCORE_CACHE_VERSION, backend, city_key, min_price, max_price, bedrooms, property_type, fin)
 
 
 def _get_scored_batch(backend, city_key, min_price, max_price, bedrooms, fin_overrides, property_type=None):

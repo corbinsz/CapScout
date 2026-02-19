@@ -332,6 +332,7 @@ function SensitivityAnalysis({ property, fin, pred }) {
     const adjMortgageRate = baseMortgageRate + intAdj / 100;
     const adjAnnualRev = adjNightly * adjOcc * 365;
 
+    const opex = fin.opex || {};
     return clientScore({
       purchasePrice: property.price,
       annualRevenue: adjAnnualRev,
@@ -341,9 +342,13 @@ function SensitivityAnalysis({ property, fin, pred }) {
       downPaymentPct: (fin.down_payment_pct || 20) / 100,
       taxRate: (fin.tax_rate || 1.8) / 100,
       insuranceRate: (fin.insurance_rate || 0.5) / 100,
-      expenseRatio: (fin.expense_ratio || 35) / 100,
       hoaAnnual: fin.hoa_annual || 0,
       strPermitAnnual: fin.str_permit_annual || 0,
+      cityExpenses: {
+        cleaningPerTurnover: opex.cleaning_per_turnover || 120,
+        avgStayNights: opex.avg_stay_nights || 3.2,
+        baseUtilitiesMonthly: opex.base_utilities_monthly || 250,
+      },
     });
   }, [occAdj, rateAdj, intAdj, baseOcc, baseNightly, baseMortgageRate, property.price, fin]);
 
@@ -697,40 +702,48 @@ export default function PropertyPage() {
                     <td className="is-monthly">{formatCurrency(fin.annual_revenue / 12)}/mo</td>
                   </tr>
 
-                  {/* --- Operating Expenses (research-backed splits of total OpEx) --- */}
+                  {/* --- Itemized Operating Expenses --- */}
                   <tr className="is-section-header"><td colSpan="3">Operating Expenses</td></tr>
+                  {fin.opex ? (<>
                   <tr>
-                    <td className="is-label">Cleaning &amp; Turnover</td>
-                    <td className="is-annual is-negative">({formatCurrency(fin.operating_expenses * 0.30)})</td>
-                    <td className="is-monthly is-negative">({formatCurrency(fin.operating_expenses * 0.30 / 12)})/mo</td>
+                    <td className="is-label">Cleaning ({fin.opex.turnovers} turnovers x ${fin.opex.cleaning_per_turnover})</td>
+                    <td className="is-annual is-negative">({formatCurrency(fin.opex.cleaning)})</td>
+                    <td className="is-monthly is-negative">({formatCurrency(fin.opex.cleaning / 12)})/mo</td>
                   </tr>
                   <tr>
-                    <td className="is-label">Utilities (Electric, Water, Internet)</td>
-                    <td className="is-annual is-negative">({formatCurrency(fin.operating_expenses * 0.20)})</td>
-                    <td className="is-monthly is-negative">({formatCurrency(fin.operating_expenses * 0.20 / 12)})/mo</td>
+                    <td className="is-label">Platform Fees (3% of revenue)</td>
+                    <td className="is-annual is-negative">({formatCurrency(fin.opex.platform_fees)})</td>
+                    <td className="is-monthly is-negative">({formatCurrency(fin.opex.platform_fees / 12)})/mo</td>
                   </tr>
                   <tr>
-                    <td className="is-label">Maintenance &amp; Repairs</td>
-                    <td className="is-annual is-negative">({formatCurrency(fin.operating_expenses * 0.18)})</td>
-                    <td className="is-monthly is-negative">({formatCurrency(fin.operating_expenses * 0.18 / 12)})/mo</td>
+                    <td className="is-label">Utilities (${fin.opex.base_utilities_monthly}/mo base)</td>
+                    <td className="is-annual is-negative">({formatCurrency(fin.opex.utilities)})</td>
+                    <td className="is-monthly is-negative">({formatCurrency(fin.opex.utilities / 12)})/mo</td>
                   </tr>
                   <tr>
-                    <td className="is-label">Supplies, Linens &amp; Consumables</td>
-                    <td className="is-annual is-negative">({formatCurrency(fin.operating_expenses * 0.12)})</td>
-                    <td className="is-monthly is-negative">({formatCurrency(fin.operating_expenses * 0.12 / 12)})/mo</td>
+                    <td className="is-label">Maintenance Reserve (1% of price)</td>
+                    <td className="is-annual is-negative">({formatCurrency(fin.opex.maintenance)})</td>
+                    <td className="is-monthly is-negative">({formatCurrency(fin.opex.maintenance / 12)})/mo</td>
                   </tr>
                   <tr>
-                    <td className="is-label">Platform Fees &amp; Software (~3% of rev)</td>
-                    <td className="is-annual is-negative">({formatCurrency(fin.operating_expenses * 0.12)})</td>
-                    <td className="is-monthly is-negative">({formatCurrency(fin.operating_expenses * 0.12 / 12)})/mo</td>
+                    <td className="is-label">Supplies &amp; Consumables ({fin.opex.turnovers} stays x $25)</td>
+                    <td className="is-annual is-negative">({formatCurrency(fin.opex.supplies)})</td>
+                    <td className="is-monthly is-negative">({formatCurrency(fin.opex.supplies / 12)})/mo</td>
                   </tr>
                   <tr>
-                    <td className="is-label">Misc &amp; Reserves</td>
-                    <td className="is-annual is-negative">({formatCurrency(fin.operating_expenses * 0.08)})</td>
-                    <td className="is-monthly is-negative">({formatCurrency(fin.operating_expenses * 0.08 / 12)})/mo</td>
+                    <td className="is-label">WiFi + Misc ($125/mo)</td>
+                    <td className="is-annual is-negative">({formatCurrency(fin.opex.fixed_costs)})</td>
+                    <td className="is-monthly is-negative">({formatCurrency(fin.opex.fixed_costs / 12)})/mo</td>
                   </tr>
+                  </>) : (
+                  <tr>
+                    <td className="is-label">Operating Expenses</td>
+                    <td className="is-annual is-negative">({formatCurrency(fin.operating_expenses)})</td>
+                    <td className="is-monthly is-negative">({formatCurrency(fin.operating_expenses / 12)})/mo</td>
+                  </tr>
+                  )}
                   <tr className="is-subtotal-row">
-                    <td className="is-label">Total Operating Expenses ({fin.expense_ratio}%)</td>
+                    <td className="is-label">Total Operating Expenses</td>
                     <td className="is-annual is-negative">({formatCurrency(fin.operating_expenses)})</td>
                     <td className="is-monthly is-negative">({formatCurrency(fin.operating_expenses / 12)})/mo</td>
                   </tr>
@@ -956,11 +969,11 @@ export default function PropertyPage() {
                   </div>
                   <div className="metrics-key-item">
                     <span className="metrics-key-term">NOI (Net Operating Income)</span>
-                    <span className="metrics-key-desc">Annual rental revenue minus operating expenses (cleaning, maintenance, supplies, management, platform fees). Does not include mortgage, taxes, insurance, or HOA.</span>
+                    <span className="metrics-key-desc">Annual rental revenue minus operating expenses (cleaning, maintenance, supplies, platform fees, utilities). Does not include mortgage, taxes, insurance, or HOA.</span>
                   </div>
                   <div className="metrics-key-item">
                     <span className="metrics-key-term">Operating Expenses</span>
-                    <span className="metrics-key-desc">Estimated at {fin.expense_ratio || 35}% of gross revenue for a self-managed STR. Breakdown based on industry data (AirDNA, BiggerPockets): cleaning & turnover (~30%), utilities (~20%), maintenance & repairs (~18%), supplies & linens (~12%), platform fees & software (~12%), misc & reserves (~8%). Professionally managed properties run 40-50%+.</span>
+                    <span className="metrics-key-desc">Itemized by category using city-specific costs: cleaning per turnover (varies by local COL), Airbnb platform fees (3% of revenue), utilities (base + occupancy-driven), maintenance reserve (1% of property value), supplies per guest stay, and fixed monthly costs (WiFi, pest control, software). Higher occupancy means more turnovers and higher variable costs.</span>
                   </div>
                 </>
               )}

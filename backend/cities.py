@@ -13,8 +13,10 @@ CITIES = {
         'default_zoom': 11,
         'property_tax_rate': 0.018,       # TX has no income tax but high property tax
         'insurance_rate': 0.007,          # TX highest in US — storms, hail, wind
-        'expense_ratio': 0.35,            # moderate COL
         'str_permit_annual': 0,           # Austin Type 2 STR permit is one-time, no annual fee
+        'cleaning_per_turnover': 125,     # mid-COL Texas
+        'avg_stay_nights': 3.2,           # urban tourism + events
+        'base_utilities_monthly': 275,    # hot summers, AC heavy
         'ia_state': 'tx',
         'ia_city': 'austin',
         'ia_date': '2025-06-13',
@@ -34,8 +36,10 @@ CITIES = {
         'default_zoom': 11,
         'property_tax_rate': 0.0115,
         'insurance_rate': 0.005,          # TN moderate — some storm risk
-        'expense_ratio': 0.33,            # lower COL
         'str_permit_annual': 350,         # Nashville STR permit ~$313-350/yr
+        'cleaning_per_turnover': 100,     # lower COL
+        'avg_stay_nights': 3.0,           # weekend tourism
+        'base_utilities_monthly': 225,    # moderate climate
         'ia_state': 'tn',
         'ia_city': 'nashville',
         'ia_date': '2025-06-19',  # calendar from 2024-06-22
@@ -51,8 +55,10 @@ CITIES = {
         'default_zoom': 11,
         'property_tax_rate': 0.0076,      # CA Prop 13 caps at ~1% + local
         'insurance_rate': 0.004,          # CA moderate, fire zones vary
-        'expense_ratio': 0.40,            # high COL — cleaning, maintenance, mgmt all pricier
         'str_permit_annual': 1000,        # SD TOT registration + compliance costs
+        'cleaning_per_turnover': 150,     # high COL California
+        'avg_stay_nights': 4.0,           # beach vacation
+        'base_utilities_monthly': 200,    # mild climate, minimal HVAC
         'ia_state': 'ca',
         'ia_city': 'san-diego',
         'ia_date': '2025-03-16',
@@ -68,8 +74,10 @@ CITIES = {
         'default_zoom': 11,
         'property_tax_rate': 0.018,       # TX high property tax
         'insurance_rate': 0.007,          # TX highest — storms, hail, tornado
-        'expense_ratio': 0.34,            # moderate COL
         'str_permit_annual': 0,           # Dallas no STR permit required
+        'cleaning_per_turnover': 100,     # mid-low COL
+        'avg_stay_nights': 2.5,           # business travel market
+        'base_utilities_monthly': 275,    # hot summers, AC heavy
         'ia_state': 'tx',
         'ia_city': 'dallas',
         'ia_date': '2025-11-23',  # upgraded: real calendar data now available
@@ -89,8 +97,10 @@ CITIES = {
         'default_zoom': 12,
         'property_tax_rate': 0.0063,      # NC relatively low
         'insurance_rate': 0.004,          # NC moderate, inland = lower
-        'expense_ratio': 0.32,            # low COL
         'str_permit_annual': 200,         # Buncombe County STR permit
+        'cleaning_per_turnover': 90,      # low COL
+        'avg_stay_nights': 3.5,           # mountain getaway
+        'base_utilities_monthly': 200,    # moderate climate
         'ia_state': 'nc',
         'ia_city': 'asheville',
         'ia_date': '2023-12-18',
@@ -106,8 +116,10 @@ CITIES = {
         'default_zoom': 11,
         'property_tax_rate': 0.009,
         'insurance_rate': 0.003,          # WA low risk — no hurricanes, minimal quake coverage
-        'expense_ratio': 0.40,            # high COL — expensive labor market
         'str_permit_annual': 75,          # Seattle STR operator license
+        'cleaning_per_turnover': 160,     # high COL PNW
+        'avg_stay_nights': 3.0,           # urban tourism
+        'base_utilities_monthly': 225,    # mild summers, some heating
         'ia_state': 'wa',
         'ia_city': 'seattle',
         'ia_date': '2025-03-16',
@@ -128,8 +140,10 @@ CITIES = {
         'default_zoom': 11,
         'property_tax_rate': 0.005,       # CO relatively low
         'insurance_rate': 0.004,          # CO moderate — hail risk
-        'expense_ratio': 0.37,            # moderate-high COL
         'str_permit_annual': 200,         # Denver STR license ~$200/yr
+        'cleaning_per_turnover': 130,     # mid-high COL
+        'avg_stay_nights': 3.5,           # ski + outdoor
+        'base_utilities_monthly': 250,    # cold winters, heating
         'ia_state': 'co',
         'ia_city': 'denver',
         'ia_date': '2025-09-29',
@@ -145,8 +159,10 @@ CITIES = {
         'default_zoom': 12,
         'property_tax_rate': 0.011,       # LA moderate
         'insurance_rate': 0.008,          # LA high — hurricane risk
-        'expense_ratio': 0.33,            # lower COL
         'str_permit_annual': 500,         # NOLA strict STR regulation
+        'cleaning_per_turnover': 110,     # lower COL
+        'avg_stay_nights': 3.5,           # tourism / festivals
+        'base_utilities_monthly': 275,    # hot, humid, AC heavy
         'ia_state': 'la',
         'ia_city': 'new-orleans',
         'ia_date': '2025-09-11',
@@ -163,8 +179,10 @@ CITIES = {
         'default_zoom': 12,
         'property_tax_rate': 0.0085,      # DC moderate
         'insurance_rate': 0.004,          # DC low-moderate
-        'expense_ratio': 0.40,            # very high COL
         'str_permit_annual': 100,         # DC STR license
+        'cleaning_per_turnover': 175,     # very high COL
+        'avg_stay_nights': 3.0,           # government + tourism
+        'base_utilities_monthly': 250,    # hot summers, cold winters
         'ia_state': 'dc',
         'ia_city': 'washington-dc',
         'ia_date': '2025-09-22',
@@ -180,8 +198,10 @@ CITIES = {
         'default_zoom': 12,
         'property_tax_rate': 0.0106,      # MA moderate-high
         'insurance_rate': 0.005,          # MA moderate — nor'easters
-        'expense_ratio': 0.40,            # very high COL
         'str_permit_annual': 200,         # Boston STR registration
+        'cleaning_per_turnover': 165,     # very high COL
+        'avg_stay_nights': 3.0,           # university + tourism
+        'base_utilities_monthly': 275,    # cold winters, heating heavy
         'ia_state': 'ma',
         'ia_city': 'boston',
         'ia_date': '2025-09-23',
@@ -198,8 +218,10 @@ CITIES = {
         'default_zoom': 11,
         'property_tax_rate': 0.006,       # NV low — no state income tax
         'insurance_rate': 0.003,          # NV very low risk
-        'expense_ratio': 0.35,            # moderate COL
         'str_permit_annual': 1000,        # Clark County STR business license
+        'cleaning_per_turnover': 120,     # mid COL
+        'avg_stay_nights': 3.0,           # entertainment weekend
+        'base_utilities_monthly': 300,    # extreme heat, AC very heavy
         'ia_state': 'nv',
         'ia_city': 'clark-county-nv',
         'ia_date': '2025-09-23',
@@ -215,8 +237,10 @@ CITIES = {
         'default_zoom': 12,
         'property_tax_rate': 0.011,       # FL moderate
         'insurance_rate': 0.008,          # FL high — hurricane risk
-        'expense_ratio': 0.35,            # moderate COL
         'str_permit_annual': 250,         # Broward County STR license
+        'cleaning_per_turnover': 130,     # mid COL Florida
+        'avg_stay_nights': 5.0,           # beach / snowbird
+        'base_utilities_monthly': 275,    # hot, humid, AC heavy
         'ia_state': 'fl',
         'ia_city': 'broward-county',
         'ia_date': '2025-09-26',
@@ -232,8 +256,10 @@ CITIES = {
         'default_zoom': 11,
         'property_tax_rate': 0.018,       # TX high property tax
         'insurance_rate': 0.007,          # TX highest — storms, hail
-        'expense_ratio': 0.34,            # moderate COL
         'str_permit_annual': 0,           # Fort Worth no STR permit required
+        'cleaning_per_turnover': 95,      # low COL
+        'avg_stay_nights': 2.5,           # business / stockyards
+        'base_utilities_monthly': 275,    # hot summers
         'ia_state': 'tx',
         'ia_city': 'fort-worth',
         'ia_date': '2025-09-16',
@@ -249,8 +275,10 @@ CITIES = {
         'default_zoom': 12,
         'property_tax_rate': 0.003,       # HI very low property tax
         'insurance_rate': 0.004,          # HI moderate — hurricane + flood
-        'expense_ratio': 0.40,            # very high COL — island premium
         'str_permit_annual': 500,         # Honolulu NUC permit
+        'cleaning_per_turnover': 175,     # island premium, high COL
+        'avg_stay_nights': 5.5,           # beach vacation
+        'base_utilities_monthly': 250,    # moderate climate, some AC
         'ia_state': 'hi',
         'ia_city': 'hawaii',
         'ia_date': '2025-09-16',

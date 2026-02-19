@@ -1,7 +1,17 @@
 /**
  * Client-side port of backend/services/scoring_service.py
- * Used for sensitivity analysis — no API calls needed.
+ * Used for sensitivity analysis -- no API calls needed.
+ *
+ * Itemized expense model: platform fees, cleaning per turnover,
+ * supplies, utilities (occupancy-driven), maintenance, fixed costs.
  */
+
+// Constants matching backend
+const PLATFORM_FEE_RATE = 0.03;
+const SUPPLIES_PER_TURNOVER = 25;
+const MAINTENANCE_RATE = 0.01;
+const WIFI_MONTHLY = 75;
+const MISC_MONTHLY = 50;
 
 function calculateAnnualMortgage(loanAmount, rate = 0.07, years = 30) {
   const monthlyRate = rate / 12;
@@ -9,6 +19,24 @@ function calculateAnnualMortgage(loanAmount, rate = 0.07, years = 30) {
   if (monthlyRate === 0) return (loanAmount / n) * 12;
   const monthly = loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, n)) / (Math.pow(1 + monthlyRate, n) - 1);
   return monthly * 12;
+}
+
+function calculateOperatingExpenses(grossRevenue, occupancy, purchasePrice, cityExpenses) {
+  const cleaningCost = cityExpenses.cleaningPerTurnover || 120;
+  const avgStay = cityExpenses.avgStayNights || 3.2;
+  const baseUtil = cityExpenses.baseUtilitiesMonthly || 250;
+
+  const occupiedNights = occupancy * 365;
+  const turnovers = avgStay > 0 ? occupiedNights / avgStay : 0;
+
+  const platformFees = grossRevenue * PLATFORM_FEE_RATE;
+  const cleaning = turnovers * cleaningCost;
+  const supplies = turnovers * SUPPLIES_PER_TURNOVER;
+  const utilities = baseUtil * 12 * (0.6 + 0.4 * occupancy);
+  const fixedCosts = (WIFI_MONTHLY + MISC_MONTHLY) * 12;
+  const maintenance = purchasePrice * MAINTENANCE_RATE;
+
+  return platformFees + cleaning + supplies + utilities + fixedCosts + maintenance;
 }
 
 /**
@@ -23,9 +51,9 @@ function calculateAnnualMortgage(loanAmount, rate = 0.07, years = 30) {
  * @param {number} params.downPaymentPct - decimal (e.g. 0.20)
  * @param {number} params.taxRate - decimal
  * @param {number} params.insuranceRate - decimal
- * @param {number} params.expenseRatio - decimal
  * @param {number} params.hoaAnnual
  * @param {number} params.strPermitAnnual
+ * @param {object} params.cityExpenses - { cleaningPerTurnover, avgStayNights, baseUtilitiesMonthly }
  */
 export function scoreProperty({
   purchasePrice,
@@ -36,14 +64,14 @@ export function scoreProperty({
   downPaymentPct = 0.20,
   taxRate = 0.018,
   insuranceRate = 0.005,
-  expenseRatio = 0.35,
   hoaAnnual = 0,
   strPermitAnnual = 0,
+  cityExpenses = {},
 }) {
   if (purchasePrice <= 0) return { score: 0, financials: {} };
 
   const grossRevenue = annualRevenue;
-  const operatingExpenses = grossRevenue * expenseRatio;
+  const operatingExpenses = calculateOperatingExpenses(grossRevenue, occupancy, purchasePrice, cityExpenses);
   const noi = grossRevenue - operatingExpenses;
 
   const downPayment = purchasePrice * downPaymentPct;
