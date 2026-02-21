@@ -29,7 +29,6 @@ import config
 from models.feature_engineering import (
     load_and_clean_listings,
     prepare_features,
-    load_calendar_monthly,
     prepare_monthly_data,
     smooth_targets,
 )
@@ -185,20 +184,22 @@ def train_models(city_key=None):
 
     overall_start = time.time()
 
-    # ---- Load calendar data for monthly models ----
-    print("\nLoading calendar data for monthly models...")
-    calendar_monthly = load_calendar_monthly(city_key=city_key)
+    # ---- Build monthly training data ----
+    # Always use synthetic monthly data.  Inside Airbnb calendar occupancy is
+    # contaminated by the booking-horizon artifact: "not available" can mean
+    # booked OR host-blocked, and far-future months are almost all blocked,
+    # creating fake 0% / 100% occupancy swings.  Synthetic data uses each
+    # listing's availability_365 as base occupancy scaled by city-specific
+    # seasonal factors -- reliable and consistent across all cities.
+    print("\nBuilding synthetic monthly data...")
+    from models.feature_engineering import synthesize_calendar_monthly
+    calendar_monthly = synthesize_calendar_monthly(df, city_key=city_key)
     use_monthly = False
     X_monthly = None
 
     MIN_MONTHLY_ROWS = 500
     monthly_listing_ids = None
     monthly_months = None
-
-    if calendar_monthly is None:
-        print("  No calendar data found -- generating synthetic monthly data...")
-        from models.feature_engineering import synthesize_calendar_monthly
-        calendar_monthly = synthesize_calendar_monthly(df, city_key=city_key)
 
     if calendar_monthly is not None:
         print(f"  Calendar data loaded: {len(calendar_monthly)} listing-month rows")

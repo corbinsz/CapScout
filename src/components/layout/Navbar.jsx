@@ -32,8 +32,6 @@ export default function Navbar() {
           <NavLink to="/map" onClick={() => setMenuOpen(false)}>Map</NavLink>
           <NavLink to="/favorites" onClick={() => setMenuOpen(false)}>Favorites</NavLink>
           <NavLink to="/analytics" onClick={() => setMenuOpen(false)}>Analytics</NavLink>
-          <NavLink to="/prediction-process" onClick={() => setMenuOpen(false)}>Prediction Process</NavLink>
-          <NavLink to="/training-data" onClick={() => setMenuOpen(false)}>Training Data</NavLink>
           <NavLink to="/settings" onClick={() => setMenuOpen(false)}>Settings</NavLink>
         </div>
       </div>
