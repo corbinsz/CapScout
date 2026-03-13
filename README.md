@@ -1,6 +1,6 @@
-# CapScout - Short-Term Rental Investment Analyzer
+# CapScout — Real Estate Investment Analyzer
 
-CapScout is a full-stack web application that helps real estate investors evaluate for-sale properties across 14 U.S. cities. It predicts short-term rental income using machine learning, then scores each property on **how well that income covers ownership costs** (mortgage, taxes, insurance) -- not on rental income alone. The result is a single **CapScout Score (0-100)** measuring overall investment viability.
+A full-stack ML application that predicts short-term rental income and scores properties across 14 U.S. cities. City-specific XGBoost models trained with area-median targeting achieve R-squared values of 0.70–0.86 for price and occupancy prediction across geographic clusters, using Inside Airbnb and Redfin data. Each property gets a **CapScout Score (0–100)** based on cap rate, cash-on-cash ROI, gross yield, DSCR, and predicted occupancy — measuring overall investment viability, not rental income alone.
 
 ## Supported Cities (14)
 
@@ -19,7 +19,7 @@ CapScout is a full-stack web application that helps real estate investors evalua
 | Las Vegas, NV | 0.6% | Free | Year-round tourism |
 | Fort Lauderdale, FL | 0.9% | Free | Snowbird winter peak |
 | Fort Worth, TX | 1.8% | Free | Stockyards tourism |
-| Honolulu, HI | 0.35% | Free | Year-round beach demand |
+| Hawaii | 0.35% | Free | Year-round beach demand |
 
 Switch between cities using the dropdown in the navbar. Each city has its own trained ML models, property tax rates, seasonal factors, and market data.
 
@@ -133,20 +133,20 @@ Training reports two R-squared metrics per target:
 
 | City | Price CV R-squared | Occ CV R-squared | Notes |
 |------|:----------:|:---------:|-------|
-| San Diego | 0.995 | 0.965 | |
-| Honolulu | 0.993 | 0.985 | Best overall |
-| Asheville | 0.985 | 0.977 | |
-| Fort Lauderdale | 0.983 | 0.952 | |
-| Las Vegas | 0.982 | 0.960 | |
-| Nashville | 0.980 | 0.900 | |
-| Seattle | 0.973 | 0.926 | Assessor enriched |
-| Dallas | 0.974 | 0.824 | Assessor enriched |
-| Austin | 0.972 | 0.919 | Assessor enriched |
-| Denver | 0.966 | 0.821 | |
-| New Orleans | 0.964 | 0.905 | |
-| Washington DC | 0.962 | 0.852 | |
-| Boston | 0.944 | 0.878 | |
-| Fort Worth | 0.890 | 0.567 | Smallest dataset |
+| San Diego | 0.995 | 0.973 | |
+| Asheville | 0.985 | 0.987 | |
+| Fort Lauderdale | 0.983 | 0.937 | |
+| Las Vegas | 0.982 | 0.959 | |
+| Seattle | 0.980 | 0.901 | Assessor enriched |
+| Dallas | 0.974 | 0.890 | Assessor enriched |
+| New Orleans | 0.973 | 0.905 | |
+| Austin | 0.972 | 0.941 | Assessor enriched |
+| Denver | 0.966 | 0.883 | |
+| Nashville | 0.964 | 0.931 | |
+| Washington DC | 0.962 | 0.908 | |
+| Boston | 0.944 | 0.909 | |
+| Fort Worth | 0.890 | 0.634 | Smallest dataset |
+| Hawaii | -- | -- | Retraining |
 
 ### How Predictions Work
 
