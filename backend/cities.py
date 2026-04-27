@@ -266,13 +266,13 @@ CITIES = {
         'redfin_region_id': 30827,
         'assessor': None,
     },
-    'honolulu': {
-        'name': 'Honolulu',
+    'hawaii': {
+        'name': 'Hawaii',
         'state': 'HI',
-        'display': 'Honolulu, HI',
+        'display': 'Hawaii',
         'latitude': 21.3069,
         'longitude': -157.8583,
-        'default_zoom': 12,
+        'default_zoom': 8,
         'property_tax_rate': 0.003,       # HI very low property tax
         'insurance_rate': 0.004,          # HI moderate — hurricane + flood
         'str_permit_annual': 500,         # Honolulu NUC permit
@@ -358,7 +358,7 @@ SEASONAL_FACTORS = {
         'price':     [0.90, 0.92, 1.08, 1.10, 1.06, 1.00, 0.92, 0.90, 0.96, 1.12, 1.05, 0.99],
         'occupancy': [0.88, 0.90, 1.05, 1.08, 1.05, 1.02, 0.95, 0.92, 0.98, 1.10, 1.02, 1.05],
     },
-    'honolulu': {
+    'hawaii': {
         # Winter escape (Dec-Mar) peak; slight summer dip but always strong
         'price':     [1.15, 1.12, 1.10, 1.00, 0.92, 0.88, 0.90, 0.92, 0.88, 0.95, 1.05, 1.13],
         'occupancy': [1.12, 1.10, 1.08, 1.00, 0.92, 0.90, 0.92, 0.95, 0.90, 0.95, 1.05, 1.11],

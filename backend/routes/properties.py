@@ -20,7 +20,7 @@ from services.streetview_service import get_streetview_url
 
 STREETVIEW_SCORE_THRESHOLD = 30
 _SCORE_CACHE_TTL = 600  # 10 minutes
-_SCORE_CACHE_VERSION = 2  # Bump when scoring formula changes to invalidate disk cache
+_SCORE_CACHE_VERSION = 3  # Bump when scoring formula changes to invalidate disk cache
 _score_cache = {}  # key -> (timestamp, scored_batch, total_available)
 
 # ---------------------------------------------------------------------------

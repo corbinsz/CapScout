@@ -334,12 +334,22 @@ def synthesize_calendar_monthly(df, city_key=None):
     base = base.dropna(subset=['price_clean'])
     base = base[base['price_clean'] > 0]
 
-    # Estimate base occupancy from availability fields
-    if 'availability_365' in df.columns:
+    # Estimate base occupancy from near-term availability.
+    # availability_30 is the most reliable proxy: hosts actively manage
+    # near-term dates and guests book within this window.  availability_365
+    # is contaminated -- far-future "available" dates just mean no bookings
+    # yet, not low demand.  Prefer 30 > 60 > 90 > 365.
+    if 'availability_30' in df.columns:
+        avail = df.loc[base.index, 'availability_30'].fillna(15)
+        base['base_occ'] = (1.0 - avail / 30.0).clip(0.05, 0.95)
+    elif 'availability_60' in df.columns:
+        avail = df.loc[base.index, 'availability_60'].fillna(30)
+        base['base_occ'] = (1.0 - avail / 60.0).clip(0.05, 0.95)
+    elif 'availability_365' in df.columns:
         avail = df.loc[base.index, 'availability_365'].fillna(180)
         base['base_occ'] = (1.0 - avail / 365.0).clip(0.05, 0.95)
     else:
-        base['base_occ'] = 0.50  # default 50% if no availability data
+        base['base_occ'] = 0.50
 
     rows = []
     for month in range(1, 13):

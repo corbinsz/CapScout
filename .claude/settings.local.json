@@ -1,28 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dir:*)",
-      "WebFetch(domain:insideairbnb.com)",
+      "Bash(*)",
+      "Edit(*)",
+      "Write(*)",
+      "WebFetch(*)",
       "WebSearch",
-      "WebFetch(domain:developers.rentcast.io)",
-      "WebFetch(domain:github.com)",
-      "Bash(npm install:*)",
-      "Bash(npx vite:*)",
-      "Bash(py:*)",
-      "Bash(python:*)",
-      "Bash(.venv/Scripts/pip install:*)",
-      "Bash(.venv/Scripts/python.exe -m pip:*)",
-      "Bash(.venv/Scripts/python:*)",
-      "Bash(FLASK_APP=app.py .venv/Scripts/python:*)",
-      "Bash(python3:*)",
-      "Bash(where:*)",
-      "Bash(findstr:*)",
-      "WebFetch(domain:rapidapi.com)",
-      "WebFetch(domain:medium.com)",
-      "Bash(curl:*)",
-      "Bash(tasklist:*)",
-      "Bash(wmic process:*)",
-      "Bash(git add:*)"
+      "WebFetch(domain:stevesie.com)",
+      "Bash(# Try the production domain curl -sI \"\"https://capscout.vercel.app\"\")",
+      "Bash(xargs -0 -I {} git ls-tree -r --long HEAD -- {})",
+      "Bash(sort:*)"
     ]
   }
 }
