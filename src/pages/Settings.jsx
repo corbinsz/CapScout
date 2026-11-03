@@ -112,7 +112,7 @@ export default function Settings() {
         <div className="section-body legal-copy">
           <p>
             Active source: <strong>{sourceLabel}</strong>
-            {keyStatus.listing_licensed ? ' (licensed)' : keyStatus.listing_source ? ' (development fallback)' : ''}
+            {keyStatus.listing_licensed ? ' (licensed)' : keyStatus.listing_source === 'demo' ? ' (saved sample)' : keyStatus.listing_source ? ' (development fallback)' : ''}
           </p>
           <p>
             For-sale homes are meant to come from RentCast. Put <code>RENTCAST_API_KEY</code> in the

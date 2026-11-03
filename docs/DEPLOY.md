@@ -36,11 +36,14 @@ Framework preset Vite. Build command `npm run build`. Output `dist`. `vercel.jso
 
 A pull-request preview uses that same file, so the new pages load and API calls go to whatever is deployed on Render. Deal behavior changes only after Render is running this branch.
 
+The site works with no API. The Vercel preview reads `public/demo/austin.json` in the browser. Leave the live flags unset there.
+
 Optional build-time variables:
 
 | Name | Effect |
 | --- | --- |
-| `VITE_API_URL` | Override the API prefix. Leave unset to use `/api` and the rewrite. |
+| `VITE_USE_LIVE_API` | Set to `1` to call the Python server instead of the Austin sample. |
+| `VITE_API_URL` | Required with the flag above. Example: `https://capscout.onrender.com/api`. A cold start is retried once, and the message says the server is waking up. |
 | `VITE_ANALYTICS` | `1` to send page and click counts. Also set `ANALYTICS_ENABLED` on the API. |
 | `VITE_ERROR_REPORTING` | `1` to send short error messages. Also set `CLIENT_ERROR_LOG` on the API. |
 
