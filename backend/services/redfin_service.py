@@ -188,7 +188,7 @@ def normalize_listing(row):
         'photo_url': _property_image_url(lat, lng, full_address),
         'price': _safe_float(row.get('PRICE')),
         'bedrooms': _safe_int(row.get('BEDS')),
-        'bathrooms': _safe_int(row.get('BATHS')),
+        'bathrooms': _safe_float(row.get('BATHS')),
         'sqft': _safe_int(row.get('SQUARE FEET')),
         'year_built': _safe_int(row.get('YEAR BUILT')),
         'lot_size': _safe_int(row.get('LOT SIZE')) if _safe_int(row.get('LOT SIZE')) <= 217800 else 0,  # cap 5 acres; Redfin shows complex lot for condos

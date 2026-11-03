@@ -1,17 +1,58 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useProperties from '../hooks/useProperties';
 import { useCity } from '../contexts/CityContext';
+import { useAuth } from '../contexts/AuthContext';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import FilterPanel from '../components/filters/FilterPanel';
 import PropertyList from '../components/properties/PropertyList';
 import { formatCurrency, formatPercent, formatNumber } from '../utils/formatters';
+import api from '../services/api';
 
 export default function Dashboard() {
   const { properties, total, totalAvailable, page, setPage, loading, error, filters, updateFilters, reload, message } = useProperties();
   const { cityMeta, currentCity } = useCity();
+  const { user, isPro, openAuth, openPaywall } = useAuth();
   const navigate = useNavigate();
+  const [metrics, setMetrics] = useState(null);
+  const [reportError, setReportError] = useState('');
+
+  useEffect(() => {
+    api.get('/model-metrics', { params: { city: currentCity } })
+      .then(res => setMetrics(res.data?.available ? res.data : null))
+      .catch(() => setMetrics(null));
+  }, [currentCity]);
+
+  const downloadReport = async () => {
+    setReportError('');
+    if (!user) {
+      openAuth();
+      return;
+    }
+    if (!isPro) {
+      openPaywall();
+      return;
+    }
+    try {
+      const res = await api.get('/reports/top-deals', {
+        params: { city: currentCity },
+        responseType: 'blob',
+      });
+      const blob = new Blob([res.data], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `capscout-top-deals-${currentCity}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      const status = err.response?.status;
+      if (status === 401) openAuth();
+      else if (status === 402) openPaywall();
+      else setReportError('The report could not be downloaded.');
+    }
+  };
   const [compareIds, setCompareIds] = useState(new Set());
 
   const handleCompareToggle = useCallback((id) => {
@@ -48,14 +89,33 @@ export default function Dashboard() {
   return (
     <div>
       <div className="hero-section">
-        <h1>CapScout Dashboard</h1>
-        <p>{cityDisplay} homes for sale -- scored by how well predicted STR income covers investment costs.</p>
+        <p className="eyebrow">Short-term rental screener · {cityDisplay}</p>
+        <h1>Which homes can the rent actually carry?</h1>
         <p className="hero-detail">
-          Each property is run through our ML model to predict nightly rate and occupancy.
-          The score does not measure rental income alone -- it reflects how well that income
-          covers your mortgage, taxes, insurance, and other ownership costs as an investment.
-          Adjust the interest rate, down payment, and loan term to see how financing changes each score.
+          CapScout estimates a nightly rate and occupancy, then scores how that income covers a
+          mortgage, taxes, insurance, and operating costs. 70+ is excellent, 55 is good, 45 is fair,
+          and anything lower is weak under the loan assumptions in the filters.
         </p>
+        <div className="legend-row" aria-label="Score legend">
+          <span className="legend-chip legend-excellent">70+ Excellent</span>
+          <span className="legend-chip legend-good">55 Good</span>
+          <span className="legend-chip legend-fair">45 Fair</span>
+          <span className="legend-chip legend-weak">Below 45 Weak</span>
+        </div>
+        {message && <p className="source-note">{message}</p>}
+        {metrics?.holdout?.price_raw?.mae != null && (
+          <p className="source-note">
+            On homes held out of training, a typical nightly-rate miss in {cityDisplay} is about {formatCurrency(metrics.holdout.price_raw.mae)}.
+            Occupancy is harder: the calendar cannot tell a booking from a host block.
+          </p>
+        )}
+        <div className="hero-actions">
+          <button className="btn btn-primary" type="button" onClick={downloadReport}>
+            Top deals in {cityMeta?.name || 'this city'}
+          </button>
+          <span className="hero-action-note">{isPro ? 'Pro download' : 'Free to browse · Pro report'}</span>
+        </div>
+        {reportError && <p className="form-error">{reportError}</p>}
         {summary && (
           <div className="hero-stats">
             <div className="hero-stat">
@@ -102,7 +162,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {message && <div className="fallback-banner">{message}</div>}
       {error && <ErrorMessage message={error} onRetry={reload} />}
       {!error && (
         <div className={`property-results${loading ? ' results-loading' : ''}`}>

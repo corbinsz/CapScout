@@ -219,3 +219,39 @@ def score_property(purchase_price, predicted_annual_revenue, predicted_occupancy
             'down_payment_pct': round(eff_down_pct * 100, 2),
         }
     }
+
+
+def explain_deal(score, financials, confidence_level=None):
+    """One plain-English sentence a buyer can read without a spreadsheet."""
+    if score is None or not financials:
+        return 'This home is not scored yet. A trained model and a list price are both required.'
+    if score >= 70:
+        label = 'Excellent'
+    elif score >= 55:
+        label = 'Good'
+    elif score >= 45:
+        label = 'Fair'
+    else:
+        label = 'Weak'
+    cashflow = financials.get('monthly_cashflow') or 0
+    if cashflow >= 0:
+        cash = f'about ${cashflow:,.0f} a month left after the mortgage, taxes, insurance, and operating costs'
+    else:
+        cash = f'about ${abs(cashflow):,.0f} a month short of covering the mortgage, taxes, insurance, and operating costs'
+    cap = financials.get('cap_rate')
+    dscr = financials.get('dscr')
+    extras = []
+    if cap is not None:
+        extras.append(f'{cap}% cap rate')
+    if dscr is not None:
+        extras.append(f'debt coverage {dscr}')
+    extra = f" ({', '.join(extras)})" if extras else ''
+    confidence = ''
+    if confidence_level == 'low':
+        confidence = ' Confidence is low because few short-term rentals in the training data sit nearby.'
+    elif confidence_level == 'high':
+        confidence = ' Confidence is higher because many short-term rentals nearby were in the training data.'
+    return (
+        f'{label} under the loan assumptions on this page: {cash}{extra}.{confidence} '
+        'This is a model estimate, not financial advice.'
+    )

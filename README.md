@@ -38,7 +38,7 @@ Switch between cities using the dropdown in the navbar. Each city has its own tr
 
 The enrichment pipeline (`scripts/enrich_listings.py`) downloads assessor CSVs, queries county ArcGIS services for parcel coordinates, performs spatial matching, and outputs an `assessor_enrichment.csv` per city that the training pipeline automatically picks up.
 
-**For-sale listings** are fetched from Redfin's GIS API (`scripts/download_redfin.py`), which provides up to 10,000 active listings per city. The pipeline filters out vacant land, commercial properties, multi-family 5+ units, and listings without a valid price.
+**For-sale listings** come from the RentCast API when `RENTCAST_API_KEY` is set. RentCast is a licensed property-data feed. Redfin's unofficial map endpoint is not used for the commercial product. A saved Redfin CSV can be read only when `ALLOW_REDFIN_FALLBACK=1` on a development machine. The live Redfin download script refuses to run unless `ALLOW_REDFIN_DOWNLOAD=1`.
 
 **Street View photos** are fetched from the Google Maps Static API for properties scoring above 30. Images are cached permanently to disk so each location is only fetched once. A monthly counter enforces the free-tier limit (~25,000 requests/month). The API key stays server-side -- the frontend loads images through a proxy route.
 
@@ -63,7 +63,7 @@ Inside Airbnb data (listings + calendar)
 
 **Data cleaning notes:** Calendar prices are capped at P95 (95th percentile) rather than P99 because some cities (notably Nashville) have tens of thousands of entries at $9,999 -- hosts use placeholder pricing to block dates. P95 removes this garbage while keeping legitimately expensive listings.
 
-**No hold-out split.** The model trains on 100% of Airbnb data. Cross-validation folds handle evaluation during hyperparameter search, and the final model is retrained on all data with the best parameters. The real "test set" is Redfin for-sale properties -- data the model has never seen and that comes from a completely different distribution.
+**Holdout.** Training reports error on a 20% holdout of whole listings the model did not fit, and on a later-in-time slice of listings with a `last_review` date. The production file is then refit on all rows. The published error is the holdout, not the refit. See `docs/ml_benchmark.json`.
 
 ### Prediction Strategy: Area Median Targeting
 
@@ -125,11 +125,15 @@ Hyperparameters are tuned via **RandomizedSearchCV** (50 random combinations, 5-
 | `reg_lambda` | 0.5-2.0 | L2 regularization |
 | `min_child_weight` | 1-10 | Min leaf weight |
 
-### Model Accuracy
+### Model accuracy
 
-Training reports two R-squared metrics per target:
-- **Train R-squared** -- predict on all training data with the final refitted model. Measures how well the model fits the data.
-- **CV R-squared** -- average R-squared across the 5 held-out CV folds. Measures generalization to unseen data.
+Older write-ups quoted cross-validated R-squared near 0.97. That number was fit on area-median targets after the model had already seen those rows. It is not the error on a home held out of training.
+
+Current models are XGBoost regressors on log nightly price and on occupancy, checked with a 20% holdout of whole listings and a time split on `last_review`. See `docs/ml_benchmark.json` for before-and-after error. A typical nightly-rate miss is on the order of $40–$120 depending on the city. Occupancy error stays large because a host-blocked night looks like a booking in Inside Airbnb.
+
+The historical table below is the old claim, kept so it is not quietly rewritten. Do not quote it.
+
+### Historical in-sample R-squared (do not quote)
 
 | City | Price CV R-squared | Occ CV R-squared | Notes |
 |------|:----------:|:---------:|-------|
@@ -221,8 +225,8 @@ EOF
 # Download Inside Airbnb data for a city
 python -m scripts.download_data austin
 
-# Download Redfin for-sale listings
-python -m scripts.download_redfin austin
+# For-sale homes: set RENTCAST_API_KEY, or for local dev only:
+# ALLOW_REDFIN_FALLBACK=1 uses a CSV already saved under data/cities/<city>/
 
 # (Optional) Enrich training data with county assessor records
 python -m scripts.enrich_listings
@@ -249,6 +253,10 @@ The frontend runs on `http://localhost:5173` and the backend API on `http://loca
 | Variable | Source | Purpose |
 |----------|--------|---------|
 | `GOOGLE_MAPS_API_KEY` | [Google Cloud Console](https://console.cloud.google.com/) | Street View property photos |
+| `RENTCAST_API_KEY` | [RentCast](https://developers.rentcast.io/) | Licensed for-sale listings |
+| `SECRET_KEY` | generate a long random string | Signs login cookies |
+| `ALLOW_REDFIN_FALLBACK` | `1` only on a dev machine | Read a saved Redfin CSV |
+| `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID` | Stripe dashboard | Paid report checkout. Leave unset to keep the stub |
 
 The API key is optional. Without it, the app works fully -- Street View photos just won't appear.
 

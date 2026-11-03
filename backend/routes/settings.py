@@ -10,6 +10,8 @@ from services.rentcast_service import has_api_key as rentcast_has_key
 from services.realtor_service import has_api_key as rapidapi_has_key
 from services.redfin_service import has_data as redfin_has_data, save_csv as redfin_save_csv, row_count as redfin_row_count
 from services.prediction_service import models_available
+from services.providers.registry import provider_status
+from security import city_or_400, rate_limit
 
 settings_bp = Blueprint('settings', __name__)
 
@@ -38,43 +40,56 @@ def _write_env(env):
 
 @settings_bp.route('/settings/keys', methods=['GET'])
 def get_keys_status():
-    """Return which API keys are configured (not the keys themselves)."""
-    city_key = request.args.get('city', 'austin')
+    """Return which providers are configured. Never returns the key itself."""
+    city_key, error = city_or_400(request.args.get('city'))
+    if error:
+        return error
+    status = provider_status()
     return jsonify({
         'rentcast': rentcast_has_key(),
         'rapidapi': rapidapi_has_key(),
-        'redfin': redfin_has_data(city_key),
+        'redfin_fallback_enabled': config.ALLOW_REDFIN_FALLBACK,
+        'redfin': config.ALLOW_REDFIN_FALLBACK and redfin_has_data(city_key),
         'redfin_count': redfin_row_count(city_key) if redfin_has_data(city_key) else 0,
+        'key_write_enabled': config.CAPSCOUT_ALLOW_KEY_WRITE,
+        'listing_source': status['source'],
+        'listing_label': status['label'],
+        'listing_licensed': status['licensed'],
     })
 
 
 @settings_bp.route('/settings/keys', methods=['POST'])
+@rate_limit('key-write', limit=5, window=600)
 def save_keys():
-    """Save API keys to .env and reload config."""
-    body = request.get_json(force=True)
+    """Dev-only. Production keys belong in the host's environment, not a POST body."""
+    if not config.CAPSCOUT_ALLOW_KEY_WRITE:
+        return jsonify({
+            'error': 'API keys are read from server environment variables and cannot be set from the browser.',
+        }), 403
+    body = request.get_json(silent=True) or {}
     env = _read_env()
-
-    if 'rentcast_key' in body and body['rentcast_key']:
-        env['RENTCAST_API_KEY'] = body['rentcast_key']
-    if 'rapidapi_key' in body and body['rapidapi_key']:
-        env['RAPIDAPI_KEY'] = body['rapidapi_key']
-
+    if body.get('rentcast_key'):
+        env['RENTCAST_API_KEY'] = str(body['rentcast_key'])[:200]
+    if body.get('rapidapi_key'):
+        env['RAPIDAPI_KEY'] = str(body['rapidapi_key'])[:200]
     _write_env(env)
-
-    # Reload config values
     config.RENTCAST_API_KEY = env.get('RENTCAST_API_KEY', '')
     config.RAPIDAPI_KEY = env.get('RAPIDAPI_KEY', '')
-
     return jsonify({
         'ok': True,
-        'rentcast': bool(config.RENTCAST_API_KEY) and config.RENTCAST_API_KEY != 'your_api_key_here',
-        'rapidapi': bool(config.RAPIDAPI_KEY) and config.RAPIDAPI_KEY != 'your_api_key_here',
+        'rentcast': rentcast_has_key(),
+        'rapidapi': rapidapi_has_key(),
     })
 
 
 @settings_bp.route('/settings/redfin-upload', methods=['POST'])
+@rate_limit('redfin-upload', limit=5, window=600)
 def upload_redfin_csv():
-    """Accept a Redfin CSV upload (multipart/form-data)."""
+    """Accept a Redfin CSV only when the dev fallback is explicitly enabled."""
+    if not config.ALLOW_REDFIN_FALLBACK:
+        return jsonify({
+            'error': 'Redfin uploads are disabled. Set ALLOW_REDFIN_FALLBACK=1 for local development only.',
+        }), 403
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
 
@@ -82,7 +97,15 @@ def upload_redfin_csv():
     if not file.filename or not file.filename.lower().endswith('.csv'):
         return jsonify({'error': 'Please upload a .csv file'}), 400
 
-    city_key = request.form.get('city', 'austin')
+    file.seek(0, os.SEEK_END)
+    size = file.tell()
+    file.seek(0)
+    if size > 20 * 1024 * 1024:
+        return jsonify({'error': 'File is larger than 20 MB.'}), 413
+
+    city_key, error = city_or_400(request.form.get('city'))
+    if error:
+        return error
 
     try:
         count = redfin_save_csv(file, city_key=city_key)

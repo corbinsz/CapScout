@@ -15,11 +15,6 @@ const FavoritesContext = createContext(null);
 export function FavoritesProvider({ children }) {
   const [favorites, setFavorites] = useState(loadFavorites);
 
-  const persist = (next) => {
-    setFavorites(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  };
-
   const toggleFavorite = useCallback((property) => {
     setFavorites(prev => {
       const next = { ...prev };

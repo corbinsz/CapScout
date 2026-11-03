@@ -10,8 +10,8 @@ export function getScoreLabel(score) {
   if (score == null) return 'N/A';
   if (score >= 70) return 'Excellent';
   if (score >= 55) return 'Good';
-  if (score >= 45) return 'Average';
-  if (score >= 30) return 'Below Avg';
+  if (score >= 45) return 'Fair';
+  if (score >= 30) return 'Weak';
   return 'Poor';
 }
 

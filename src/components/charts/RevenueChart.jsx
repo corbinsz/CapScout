@@ -1,5 +1,4 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { formatCurrency, formatPercent } from '../../utils/formatters';
 
 export default function RevenueChart({ neighborhoods = [] }) {
   const data = neighborhoods.slice(0, 10).map(n => ({

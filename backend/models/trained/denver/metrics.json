@@ -1,0 +1,128 @@
+{
+  "approach": "xgboost",
+  "target": "raw listing price and occupancy",
+  "features": [
+    "bedrooms",
+    "bathrooms_clean",
+    "accommodates",
+    "latitude",
+    "longitude",
+    "distance_to_center",
+    "is_home",
+    "is_condo",
+    "is_townhouse",
+    "is_cabin",
+    "is_cottage",
+    "sqft",
+    "year_built",
+    "lot_sqft",
+    "sqft_per_bedroom",
+    "property_age",
+    "lot_acres"
+  ],
+  "price_transform": "log1p",
+  "seasonality": "Applied at prediction time from city seasonal factors. The model itself predicts the annual typical rate.",
+  "occupancy_target": "1 - availability_30/30. Host blocks look like bookings, so occupancy error stays large.",
+  "holdout": {
+    "price_raw": {
+      "n": 704,
+      "mae": 43.8639,
+      "rmse": 65.5697,
+      "r2": 0.5047,
+      "mape_pct": 27.01
+    },
+    "price_area": {
+      "n": 704,
+      "mae": 26.6525,
+      "rmse": 39.0653,
+      "r2": 0.597,
+      "mape_pct": 17.43
+    },
+    "occupancy_raw": {
+      "n": 704,
+      "mae": 0.2971,
+      "rmse": 0.3612,
+      "r2": -0.0605,
+      "mape_pct": 29.71
+    },
+    "baseline_price_mae": 64.919,
+    "baseline_area_mae": 42.1101,
+    "baseline_occ_mae": 0.3009,
+    "ratios": {
+      "area": 0.6329241678362197,
+      "raw": 0.6756712210600904,
+      "occ": 0.9873712196743103
+    }
+  },
+  "time_split": {
+    "price_raw": {
+      "n": 621,
+      "mae": 36.7558,
+      "rmse": 55.1872,
+      "r2": 0.6085,
+      "mape_pct": 21.82
+    },
+    "price_area": {
+      "n": 621,
+      "mae": 25.1427,
+      "rmse": 39.4785,
+      "r2": 0.6504,
+      "mape_pct": 16.49
+    },
+    "occupancy_raw": {
+      "n": 621,
+      "mae": 0.1974,
+      "rmse": 0.2465,
+      "r2": -0.2607,
+      "mape_pct": 19.74
+    },
+    "baseline_price_mae": 60.752,
+    "baseline_area_mae": 44.1836,
+    "baseline_occ_mae": 0.1812,
+    "ratios": {
+      "area": 0.5690505074280956,
+      "raw": 0.6050138267052937,
+      "occ": 1.0894039735099337
+    },
+    "n_test": 621
+  },
+  "score": 0.7395,
+  "n_train": 2816,
+  "n_test": 704,
+  "before": {
+    "holdout": {
+      "price_raw": {
+        "n": 704,
+        "mae": 70.526,
+        "rmse": 97.2747,
+        "r2": -0.0901,
+        "mape_pct": 48.49
+      },
+      "price_area": {
+        "n": 704,
+        "mae": 51.849,
+        "rmse": 67.8156,
+        "r2": -0.2146,
+        "mape_pct": 36.32
+      },
+      "occupancy_raw": {
+        "n": 704,
+        "mae": 0.3013,
+        "rmse": 0.3557,
+        "r2": -0.0289,
+        "mape_pct": 30.13
+      },
+      "baseline_price_mae": 64.919,
+      "baseline_area_mae": 42.1101,
+      "baseline_occ_mae": 0.3009,
+      "ratios": {
+        "area": 1.2312723075936651,
+        "raw": 1.086369167732097,
+        "occ": 1.001329345297441
+      }
+    },
+    "score": 1.1345,
+    "n_test": 704,
+    "note": "Saved model scored on listings it was not asked to hold out. It was originally fit on all rows, so this number is slightly optimistic versus a model that never saw these homes."
+  }
+}
