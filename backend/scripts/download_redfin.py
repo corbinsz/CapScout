@@ -98,7 +98,18 @@ def _parse_home(home):
 
 
 def download_city(city_key):
-    """Download all Redfin for-sale listings for a city."""
+    """Download all Redfin for-sale listings for a city.
+
+    Refused unless ALLOW_REDFIN_DOWNLOAD=1. Redfin does not offer this
+    unofficial map endpoint for commercial products.
+    """
+    if not config.ALLOW_REDFIN_DOWNLOAD:
+        print(
+            'Refusing to call Redfin. This unofficial endpoint is not licensed '
+            'for commercial use. Set ALLOW_REDFIN_DOWNLOAD=1 only on a machine '
+            'you use for local development, or use RentCast instead.'
+        )
+        return 0
     city = CITIES.get(city_key)
     if not city:
         print(f'Unknown city: {city_key}')
@@ -170,6 +181,13 @@ def download_city(city_key):
 
 
 def main():
+    if not config.ALLOW_REDFIN_DOWNLOAD:
+        print(
+            'Refusing to call Redfin. This unofficial endpoint is not licensed '
+            'for commercial use. Set ALLOW_REDFIN_DOWNLOAD=1 only for local '
+            'development, or configure RENTCAST_API_KEY instead.'
+        )
+        sys.exit(2)
     args = [a for a in sys.argv[1:] if not a.startswith('-')]
     cities_to_download = args if args else list(CITIES.keys())
 

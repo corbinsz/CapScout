@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Map, { Marker, Popup as MapPopup, NavigationControl } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -11,6 +11,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { formatCurrency, formatPercent } from '../utils/formatters';
 import { getScoreColor } from '../utils/scoreHelpers';
+import { track } from '../analytics';
 import { scoreProperty as clientScore } from '../utils/scoringEngine';
 
 const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -74,7 +75,7 @@ function ScoreBreakdownBars({ breakdown }) {
   );
 }
 
-function PropertyOverview({ property, pred, fin, neighborhood_stats, comparables, isForSale }) {
+function PropertyOverview({ property, pred, neighborhood_stats, comparables, isForSale }) {
   // --- Property Features ---
   const features = [];
   if (property.property_type) features.push({ label: 'Type', value: property.property_type, color: 'orange' });
@@ -437,29 +438,40 @@ function SensitivityAnalysis({ property, fin, pred }) {
 
 export default function PropertyPage() {
   const { id } = useParams();
-  const { currentCity } = useCity();
+  const [params] = useSearchParams();
+  const { currentCity, switchCity } = useCity();
   const navigate = useNavigate();
-  const initialCity = useRef(currentCity);
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const urlCity = params.get('city');
+  const initialCity = useRef(null);
+  const [loaded, setLoaded] = useState(null);
   const [assumptions, setAssumptions] = useState(DEFAULT_ASSUMPTIONS);
   const debounceRef = useRef(null);
 
-  // If user switches cities while viewing a property, go back to dashboard
+  // Honor a shared ?city= link, then leave the page if the visitor picks a different city.
   useEffect(() => {
+    if (urlCity && urlCity !== currentCity) {
+      initialCity.current = urlCity;
+      switchCity(urlCity);
+      return;
+    }
+    if (initialCity.current === null) {
+      initialCity.current = currentCity;
+      return;
+    }
     if (currentCity !== initialCity.current) {
       navigate('/');
     }
-  }, [currentCity, navigate]);
+  }, [currentCity, urlCity, switchCity, navigate]);
 
-  // Initial fetch
+  const fetchCity = urlCity || currentCity;
+  const requestKey = `${id}:${fetchCity}`;
+
   useEffect(() => {
-    setLoading(true);
-    fetchProperty(id, initialCity.current)
+    let cancelled = false;
+    fetchProperty(id, fetchCity)
       .then(d => {
-        setData(d);
-        // Initialize assumptions from returned financials if available
+        if (cancelled) return;
+        setLoaded({ key: `${id}:${fetchCity}`, data: d, error: null });
         const fin = d?.property?.financials;
         if (fin) {
           setAssumptions({
@@ -469,32 +481,43 @@ export default function PropertyPage() {
           });
         }
       })
-      .catch(err => setError(err.response?.data?.error || err.message))
-      .finally(() => setLoading(false));
-  }, [id]);
+      .catch(err => {
+        if (!cancelled) setLoaded({ key: `${id}:${fetchCity}`, data: null, error: err.response?.data?.error || err.message });
+      });
+    return () => { cancelled = true; };
+  }, [id, fetchCity]);
+
+  const ready = loaded?.key === requestKey;
+  const data = ready ? loaded.data : null;
+  const error = ready ? loaded.error : null;
+  const loading = !ready;
 
   // Debounced re-fetch when assumptions change from initial
   const handleAssumptionsChange = useCallback((newAssumptions) => {
     setAssumptions(newAssumptions);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      fetchProperty(id, initialCity.current, {
+      fetchProperty(id, fetchCity, {
         mortgage_rate: newAssumptions.mortgage_rate,
         mortgage_term: newAssumptions.mortgage_term,
         down_payment_pct: newAssumptions.down_payment_pct,
       }).then(d => {
-        setData(prev => ({
-          ...prev,
-          property: {
-            ...prev.property,
-            financials: d.property.financials,
-            score: d.property.score,
-            score_breakdown: d.property.score_breakdown,
+        setLoaded(prev => ({
+          key: prev?.key,
+          error: null,
+          data: {
+            ...prev?.data,
+            property: {
+              ...prev?.data?.property,
+              financials: d.property.financials,
+              score: d.property.score,
+              score_breakdown: d.property.score_breakdown,
+            },
           },
         }));
       }).catch(() => { /* keep existing data on error */ });
     }, 500);
-  }, [id]);
+  }, [id, fetchCity]);
 
   if (loading) return <LoadingSpinner message="Loading property..." />;
   if (error) return <ErrorMessage message={error} />;
@@ -509,11 +532,9 @@ export default function PropertyPage() {
     <div>
       {/* Breadcrumb */}
       <div className="breadcrumb">
-        <Link to="/">Dashboard</Link>
+        <Link to="/deals">Deals</Link>
         <span className="breadcrumb-sep">/</span>
-        <span>{property.address || property.neighbourhood || 'Property'}</span>
-        <span className="breadcrumb-sep">/</span>
-        <span>{property.name || `#${property.id}`}</span>
+        <span>{property.address || property.name || 'Property'}</span>
       </div>
 
       {/* Hero Card */}
@@ -546,6 +567,24 @@ export default function PropertyPage() {
           {isForSale && (
             <div className="property-hero-score">
               <ScoreBadge score={property.score} variant="bar" />
+              {property.insight && <p className="insight-line">{property.insight}</p>}
+              {property.explanation && <p className="why-line why-line--hero">{property.explanation}</p>}
+              <button
+                className="btn btn-ghost"
+                type="button"
+                onClick={async () => {
+                  const url = window.location.href
+                  try {
+                    if (navigator.share) await navigator.share({ title: document.title, url })
+                    else await navigator.clipboard.writeText(url)
+                    track('deal_shared')
+                  } catch {
+                    /* dismissed share sheet */
+                  }
+                }}
+              >
+                Share this deal
+              </button>
             </div>
           )}
         </div>
@@ -605,7 +644,6 @@ export default function PropertyPage() {
             <PropertyOverview
               property={property}
               pred={pred}
-              fin={fin}
               neighborhood_stats={neighborhood_stats}
               comparables={comparables}
               isForSale={isForSale}
@@ -683,7 +721,7 @@ export default function PropertyPage() {
 
         {/* Feature Importance — lazy-loads on click */}
         {isForSale && (
-          <FeatureImportance propertyId={property.id} cityKey={initialCity.current} />
+          <FeatureImportance propertyId={property.id} cityKey={fetchCity} />
         )}
 
         {/* Financial Analysis — only for properties with a real purchase price */}

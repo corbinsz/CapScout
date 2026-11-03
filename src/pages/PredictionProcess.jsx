@@ -212,16 +212,15 @@ export default function PredictionProcess() {
             </div>
           </div>
           <p style={{ marginBottom: 12 }}>
-            Hyperparameters are tuned via <strong>RandomizedSearchCV</strong> (50 random
-            combinations, 5-fold cross-validation). The best parameters are used to retrain
-            on <strong>100% of the data</strong> &mdash; there is no hold-out split. The real
-            "test set" is Redfin for-sale properties, which come from a completely different
-            distribution than the training data.
+            The numbers below are an old in-sample fit on area-median prices. They are not
+            the accuracy of a prediction on a home the model has not seen. Current models are
+            XGBoost models checked on a 20% holdout of whole listings, plus a split by review
+            date. A typical nightly-rate miss is tens of dollars, not a 0.97 R-squared.
+            Occupancy is weaker because a blocked calendar looks like a booking.
           </p>
           <p>
-            Training reports both <strong>Train R2</strong> (how well the model fits) and{' '}
-            <strong>CV R2</strong> (how well it generalizes to unseen data). A small gap
-            between them means the model generalizes well.
+            The table is kept so the old claim is visible and not quietly deleted. Do not
+            quote it to a buyer.
           </p>
 
           <div style={{ overflowX: 'auto', marginTop: 16 }}>
@@ -373,7 +372,7 @@ export default function PredictionProcess() {
               { label: 'Occupancy', max: 10, color: 'var(--indigo)', desc: 'Predicted booking rate' },
             ].map(({ label, max, color, desc }) => (
               <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span className="sb-label">{label}</span>
+                <span className="sb-label">{label}<br /><span style={{ fontWeight: 500, color: 'var(--text-muted)' }}>{desc}</span></span>
                 <div className="sb-track" style={{ flex: 1 }}>
                   <div className="sb-fill" style={{ width: `${max}%`, background: color }} />
                 </div>

@@ -6,21 +6,17 @@ import copy
 from flask import Blueprint, request, jsonify
 import config
 from cities import get_city_or_default
-from services.data_service import get_all_listings_summary, get_comparable_listings, search_listings
-from services.prediction_service import predict_property, models_available
-from services.scoring_service import score_property
-from services.rentcast_service import get_listings_for_sale as rentcast_for_sale, has_api_key as rentcast_has_key
-from services.realtor_service import (
-    get_listings_for_sale as realtor_for_sale,
-    normalize_listing as normalize_realtor,
-    has_api_key as rapidapi_has_key,
-)
-from services.redfin_service import get_listings as redfin_listings, has_data as redfin_has_data, _property_image_url
+from services.data_service import get_all_listings_summary, search_listings
+from services.prediction_service import predict_property, predict_batch, models_available
+from services.scoring_service import explain_deal, score_property
+from services.providers.registry import active_provider, provider_status
 from services.streetview_service import get_streetview_url
+from security import bounded_float, bounded_int, city_or_400, clean_text, rate_limit
 
 STREETVIEW_SCORE_THRESHOLD = 30
-_SCORE_CACHE_TTL = 600  # 10 minutes
-_SCORE_CACHE_VERSION = 3  # Bump when scoring formula changes to invalidate disk cache
+_SCORE_CACHE_TTL = 600  # 10 minutes in memory
+_DISK_CACHE_TTL = 6 * 3600
+_SCORE_CACHE_VERSION = 5  # Bump when scoring, insight copy, or listing shape changes
 _score_cache = {}  # key -> (timestamp, scored_batch, total_available)
 
 # ---------------------------------------------------------------------------
@@ -44,6 +40,9 @@ def _load_disk_cache(key):
     try:
         with open(path, 'r') as f:
             data = json.load(f)
+        saved_at = data.get('saved_at')
+        if saved_at is None or (time.time() - float(saved_at)) > _DISK_CACHE_TTL:
+            return None
         return data['batch'], data['total']
     except Exception:
         return None
@@ -54,7 +53,7 @@ def _save_disk_cache(key, batch, total):
     path = _disk_cache_path(key)
     try:
         with open(path, 'w') as f:
-            json.dump({'batch': batch, 'total': total}, f)
+            json.dump({'saved_at': time.time(), 'batch': batch, 'total': total}, f)
     except Exception:
         pass
 
@@ -118,23 +117,24 @@ properties_bp = Blueprint('properties', __name__)
 
 
 @properties_bp.route('/search')
+@rate_limit('search', limit=60, window=60)
 def search_properties():
     """GET /api/search?q=<query>&city=<city_key>
-    Search properties by address/name across Redfin and Airbnb data.
-    Returns up to 10 results from each source.
+    Search the active for-sale provider and Inside Airbnb comps.
     """
-    query = request.args.get('q', '').strip()
-    city_key = request.args.get('city', 'austin')
+    query = clean_text(request.args.get('q', ''), 80)
+    city_key, error = city_or_400(request.args.get('city'))
+    if error:
+        return error
 
     if len(query) < 2:
         return jsonify({'results': []})
 
     results = []
-
-    # Search Redfin listings (by address)
-    if redfin_has_data(city_key):
+    provider = active_provider()
+    if provider is not None:
         q_lower = query.lower()
-        for item in redfin_listings(city_key):
+        for item in provider.listings(city_key):
             addr = (item.get('address') or item.get('name') or '').lower()
             if q_lower in addr:
                 results.append({
@@ -144,43 +144,37 @@ def search_properties():
                     'price': item.get('price', 0),
                     'bedrooms': item.get('bedrooms', 0),
                     'bathrooms': item.get('bathrooms', 0),
-                    'source': 'redfin',
+                    'source': item.get('source') or provider.name,
                 })
-                if len(results) >= 10:
+                if len([row for row in results if row.get('source') != 'airbnb']) >= 10:
                     break
 
-    # Search Airbnb listings (by name/neighborhood)
-    airbnb_results = search_listings(query, city_key=city_key, limit=10)
-    results.extend(airbnb_results)
-
+    results.extend(search_listings(query, city_key=city_key, limit=10))
     return jsonify({'results': results[:20]})
 
 
-@properties_bp.route('/properties')
-def list_properties():
-    """
-    GET /api/properties
-    Paginated, filtered, sorted property list with STR investment scores.
-    source: 'forsale' (default) | 'redfin' | 'rentcast' | 'realtor' | 'airbnb'
-    'forsale' tries Redfin CSV first, then RentCast, then RapidAPI Realtor, falls back to airbnb.
-    """
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
-    min_price = request.args.get('min_price', type=float)
-    max_price = request.args.get('max_price', type=float)
-    bedrooms = request.args.get('bedrooms', type=int)
-    neighborhood = request.args.get('neighborhood', type=str)
-    sort_by = request.args.get('sort_by', 'score')
-    sort_order = request.args.get('sort_order', 'desc')
-    source = request.args.get('source', 'forsale')
-    city_key = request.args.get('city', 'austin')
-    str_viable = request.args.get('str_viable', '').lower() in ('true', '1', 'yes')
-    property_type = request.args.get('property_type', type=str)
+def _parse_listing_filters():
+    """Shared, bounded query params for the list and the paid report."""
+    try:
+        page = bounded_int(request.args.get('page'), 1, 10000) or 1
+        per_page = bounded_int(request.args.get('per_page'), 1, 50) or 20
+        min_price = bounded_float(request.args.get('min_price'), 0, 100_000_000)
+        max_price = bounded_float(request.args.get('max_price'), 0, 100_000_000)
+        bedrooms = bounded_int(request.args.get('bedrooms'), 0, 20)
+        mortgage_rate_pct = bounded_float(request.args.get('mortgage_rate'), 0, 25)
+        mortgage_term = bounded_int(request.args.get('mortgage_term'), 1, 40)
+        down_payment_pct_val = bounded_float(request.args.get('down_payment_pct'), 0, 100)
+    except ValueError:
+        return None, (jsonify({'error': 'A filter value is out of range.'}), 400)
 
-    # Parse optional financial assumption overrides
-    mortgage_rate_pct = request.args.get('mortgage_rate', type=float)
-    mortgage_term = request.args.get('mortgage_term', type=int)
-    down_payment_pct_val = request.args.get('down_payment_pct', type=float)
+    sort_by = request.args.get('sort_by', 'score')
+    if sort_by not in {'score', 'price'}:
+        sort_by = 'score'
+    sort_order = request.args.get('sort_order', 'desc')
+    if sort_order not in {'asc', 'desc'}:
+        sort_order = 'desc'
+    property_type = clean_text(request.args.get('property_type'), 40) or None
+    neighborhood = clean_text(request.args.get('neighborhood'), 80) or None
     fin_overrides = {}
     if mortgage_rate_pct is not None:
         fin_overrides['mortgage_rate'] = mortgage_rate_pct / 100
@@ -188,64 +182,105 @@ def list_properties():
         fin_overrides['mortgage_term'] = mortgage_term
     if down_payment_pct_val is not None:
         fin_overrides['down_payment_pct'] = down_payment_pct_val / 100
-
-    fs_args = dict(min_price=min_price, max_price=max_price, bedrooms=bedrooms,
-                   property_type=property_type,
-                   sort_by=sort_by, sort_order=sort_order, city_key=city_key,
-                   str_viable=str_viable, fin_overrides=fin_overrides)
-
-    # --- For-sale cascade: Redfin CSV -> RentCast -> RapidAPI -> Airbnb fallback ---
-    if source == 'forsale':
-        if redfin_has_data(city_key):
-            result = _forsale_properties('redfin', page, per_page, **fs_args)
-            if result['total'] > 0:
-                return jsonify(result)
-        if rentcast_has_key():
-            result = _forsale_properties('rentcast', page, per_page, **fs_args)
-            if result['total'] > 0:
-                return jsonify(result)
-        if rapidapi_has_key():
-            result = _forsale_properties('realtor', page, per_page, **fs_args)
-            if result['total'] > 0:
-                return jsonify(result)
-        # Fallback to airbnb with a message
-        return _airbnb_properties(page, per_page, min_price, max_price, bedrooms,
-                                  neighborhood, sort_by, sort_order, city_key,
-                                  message='No for-sale API keys configured. Showing Airbnb data as fallback.')
-
-    if source == 'redfin' and redfin_has_data(city_key):
-        return jsonify(_forsale_properties('redfin', page, per_page, **fs_args))
-
-    if source == 'rentcast' and rentcast_has_key():
-        return jsonify(_forsale_properties('rentcast', page, per_page, **fs_args))
-
-    if source == 'realtor' and rapidapi_has_key():
-        return jsonify(_forsale_properties('realtor', page, per_page, **fs_args))
-
-    # Default: Airbnb
-    return _airbnb_properties(page, per_page, min_price, max_price, bedrooms,
-                              neighborhood, sort_by, sort_order, city_key)
+    return {
+        'page': page,
+        'per_page': per_page,
+        'min_price': min_price,
+        'max_price': max_price,
+        'bedrooms': bedrooms,
+        'neighborhood': neighborhood,
+        'sort_by': sort_by,
+        'sort_order': sort_order,
+        'property_type': property_type,
+        'str_viable': request.args.get('str_viable', '').lower() in ('true', '1', 'yes'),
+        'source': request.args.get('source', 'forsale'),
+        'fin_overrides': fin_overrides,
+    }, None
 
 
-def _score_item(item, purchase_price, city_key=None, fin_overrides=None):
-    """Add ML predictions and investment score to an item dict."""
-    if not models_available(city_key):
+@properties_bp.route('/properties')
+@rate_limit('properties', limit=90, window=60)
+def list_properties():
+    """GET /api/properties — scored for-sale homes from the active provider."""
+    city_key, error = city_or_400(request.args.get('city'))
+    if error:
+        return error
+    filters, error = _parse_listing_filters()
+    if error:
+        return error
+
+    status = provider_status()
+    source = filters.pop('source')
+    if source == 'airbnb':
+        result = _airbnb_properties(city_key=city_key, **filters)
+        result['data_source'] = 'inside_airbnb'
+        result['data_source_label'] = 'Inside Airbnb'
+        return jsonify(result)
+
+    if status['source'] is None:
+        result = _airbnb_properties(
+            city_key=city_key,
+            message=status['message'],
+            **filters,
+        )
+        result['data_source'] = None
+        result['data_source_label'] = None
+        return jsonify(result)
+
+    payload = _forsale_properties(city_key=city_key, **filters)
+    payload['data_source'] = status['source']
+    payload['data_source_label'] = status['label']
+    payload['data_licensed'] = status['licensed']
+    if payload['total'] == 0:
+        payload['message'] = active_provider().empty_message(city_key)
+    else:
+        payload['message'] = status['message']
+    return jsonify(payload)
+
+
+def _model_token(city_key):
+    stamps = []
+    for name in ('price_model.joblib', 'occupancy_model.joblib'):
+        path = os.path.join(config.city_models_dir(city_key), name)
+        try:
+            stamps.append(int(os.path.getmtime(path)))
+        except OSError:
+            stamps.append(0)
+    return tuple(stamps)
+
+
+def _features_for(item, city):
+    bedrooms = item.get('bedrooms') or 2
+    return {
+        'bedrooms': bedrooms,
+        'bathrooms_clean': item.get('bathrooms') or 1,
+        'accommodates': item.get('accommodates') or bedrooms * 2,
+        'latitude': item.get('latitude') or city['latitude'],
+        'longitude': item.get('longitude') or city['longitude'],
+        **_physical_features(item),
+        **_property_type_flags(item),
+    }
+
+
+def _attach_scores(items, city_key, fin_overrides):
+    """Score every listing in one model call so rank is not biased to cheap homes."""
+    if not items or not models_available(city_key):
         return
     city = get_city_or_default(city_key)
     try:
-        features = {
-            'bedrooms': item.get('bedrooms', 2),
-            'bathrooms_clean': item.get('bathrooms', 1),
-            'accommodates': item.get('bedrooms', 2) * 2,
-            'latitude': item.get('latitude', city['latitude']),
-            'longitude': item.get('longitude', city['longitude']),
-            **_physical_features(item),
-            **_property_type_flags(item),
-        }
-        prediction = predict_property(features, city_key=city_key, summary_only=True)
+        predictions = predict_batch([_features_for(item, city) for item in items], city_key=city_key)
+    except Exception:
+        for item in items:
+            item['score'] = None
+            item['predicted'] = None
+            item['financials'] = None
+            item['confidence_level'] = 'low'
+            item['explanation'] = explain_deal(None, None)
+        return
+    for item, prediction in zip(items, predictions):
         hoa_annual = (item.get('hoa_monthly') or 0) * 12
         scoring = score_property(
-            purchase_price,
+            item.get('price') or 0,
             prediction['predicted_annual_revenue'],
             prediction['predicted_occupancy_rate'],
             city_key=city_key,
@@ -256,53 +291,24 @@ def _score_item(item, purchase_price, city_key=None, fin_overrides=None):
         item['predicted'] = prediction
         item['financials'] = scoring['financials']
         item['score_breakdown'] = scoring.get('breakdown')
-        conf = prediction.get('confidence') or {}
-        item['confidence_level'] = conf.get('level', 'medium')
-    except Exception:
-        item['score'] = None
-        item['predicted'] = None
-        item['financials'] = None
-        item['confidence_level'] = 'low'
+        level = (prediction.get('confidence') or {}).get('level', 'medium')
+        item['confidence_level'] = level
+        item['explanation'] = explain_deal(scoring['score'], scoring['financials'], level)
 
 
-def _cache_key(backend, city_key, min_price, max_price, bedrooms, fin_overrides, property_type=None):
-    """Build a hashable cache key for scored batches."""
+def _cache_key(source, city_key, min_price, max_price, bedrooms, fin_overrides, property_type=None):
     fin = tuple(sorted((fin_overrides or {}).items()))
-    return (_SCORE_CACHE_VERSION, backend, city_key, min_price, max_price, bedrooms, property_type, fin)
+    return (
+        _SCORE_CACHE_VERSION, source, city_key, min_price, max_price,
+        bedrooms, property_type, fin, _model_token(city_key),
+    )
 
 
-def _get_scored_batch(backend, city_key, min_price, max_price, bedrooms, fin_overrides, property_type=None):
-    """Return scored batch from memory cache, disk cache, or compute + cache."""
-    key = _cache_key(backend, city_key, min_price, max_price, bedrooms, fin_overrides, property_type)
-    now = time.time()
-
-    # 1. Memory cache (fastest)
-    cached = _score_cache.get(key)
-    if cached and (now - cached[0]) < _SCORE_CACHE_TTL:
-        return copy.deepcopy(cached[1]), cached[2]
-
-    # 2. Disk cache (survives cold restarts)
-    disk = _load_disk_cache(key)
-    if disk:
-        batch, total = disk
-        _score_cache[key] = (now, copy.deepcopy(batch), total)
-        return batch, total
-
-    # 3. Compute from scratch
-    city = get_city_or_default(city_key)
-    if backend == 'redfin':
-        items = redfin_listings(city_key)
-    elif backend == 'rentcast':
-        raw = rentcast_for_sale(city=city['name'], state=city['state'], limit=50)
-        items = _normalize_rentcast_list(raw or [])
-    else:
-        raw = realtor_for_sale(city=city['name'], state_code=city['state'], limit=50)
-        items = [normalize_realtor(p) for p in (raw or [])]
-
+def _filter_listings(items, min_price, max_price, bedrooms, property_type):
     filtered = []
     for item in items:
-        price = item.get('price', 0)
-        if not price or price <= 0:
+        price = item.get('price') or 0
+        if price <= 0:
             continue
         if bedrooms and item.get('bedrooms') != bedrooms:
             continue
@@ -313,51 +319,61 @@ def _get_scored_batch(backend, city_key, min_price, max_price, bedrooms, fin_ove
         if max_price is not None and price > max_price:
             continue
         filtered.append(item)
-
-    total_available = len(filtered)
-
-    SCORE_BATCH = 100
-    filtered.sort(key=lambda x: x.get('price', 0))
-    batch = filtered[:SCORE_BATCH]
-    for item in batch:
-        _score_item(item, item.get('price', 0), city_key, fin_overrides)
-
-    _score_cache[key] = (now, copy.deepcopy(batch), total_available)
-    _save_disk_cache(key, batch, total_available)
-    return batch, total_available
+    return filtered
 
 
-def _forsale_properties(backend, page, per_page, min_price, max_price,
-                        bedrooms, sort_by, sort_order, city_key=None,
-                        str_viable=False, fin_overrides=None, property_type=None):
-    """Build unified property list from a for-sale backend."""
-    if sort_by == 'score':
-        batch, total_available = _get_scored_batch(
-            backend, city_key, min_price, max_price, bedrooms, fin_overrides, property_type)
-        if str_viable:
-            batch = [it for it in batch if it.get('confidence_level') != 'low']
-        batch.sort(key=lambda x: x.get('score') or 0, reverse=(sort_order == 'desc'))
-        start = (page - 1) * per_page
-        page_items = batch[start:start + per_page]
-        total = len(batch)
+def score_city_listings(city_key, min_price=None, max_price=None, bedrooms=None,
+                        property_type=None, fin_overrides=None):
+    """Score the active provider's listings. Shared by the list API and the report."""
+    provider = active_provider()
+    status = provider_status()
+    if provider is None:
+        return [], status
+    key = _cache_key(provider.name, city_key, min_price, max_price, bedrooms, fin_overrides, property_type)
+    now = time.time()
+    cached = _score_cache.get(key)
+    if cached and (now - cached[0]) < _SCORE_CACHE_TTL:
+        return copy.deepcopy(cached[1]), status
+    disk = _load_disk_cache(key)
+    if disk:
+        batch, _total = disk
+        _score_cache[key] = (now, copy.deepcopy(batch), len(batch))
+        return batch, status
+
+    filtered = _filter_listings(
+        provider.listings(city_key), min_price, max_price, bedrooms, property_type,
+    )
+    _attach_scores(filtered, city_key, fin_overrides)
+    _score_cache[key] = (now, copy.deepcopy(filtered), len(filtered))
+    _save_disk_cache(key, filtered, len(filtered))
+    return filtered, status
+
+
+def _forsale_properties(page, per_page, min_price, max_price, bedrooms, sort_by,
+                        sort_order, city_key=None, str_viable=False, fin_overrides=None,
+                        property_type=None, neighborhood=None):
+    """Rank every filtered home, then paginate. Confidence filter happens first."""
+    del neighborhood  # for-sale rows have no Inside Airbnb neighbourhood field
+    batch, _status = score_city_listings(
+        city_key, min_price, max_price, bedrooms, property_type, fin_overrides,
+    )
+    total_available = len(batch)
+    if str_viable:
+        batch = [item for item in batch if item.get('confidence_level') != 'low']
+    if sort_by == 'price':
+        batch.sort(key=lambda item: item.get('price') or 0, reverse=(sort_order == 'desc'))
     else:
-        # Price sort: paginate first, then score just the page
-        batch, total_available = _get_scored_batch(
-            backend, city_key, min_price, max_price, bedrooms, fin_overrides, property_type)
-        batch.sort(key=lambda x: x.get('price', 0), reverse=(sort_order == 'desc'))
-        total = len(batch)
-        start = (page - 1) * per_page
-        page_items = batch[start:start + per_page]
-        if str_viable:
-            page_items = [it for it in page_items if it.get('confidence_level') != 'low']
-
-    # Upgrade photo_url to Street View for high-scoring properties
+        batch.sort(key=lambda item: item.get('score') if item.get('score') is not None else -1,
+                   reverse=(sort_order == 'desc'))
+    total = len(batch)
+    _annotate_rank(batch)
+    start = (page - 1) * per_page
+    page_items = batch[start:start + per_page]
     for item in page_items:
         if (item.get('score') or 0) >= STREETVIEW_SCORE_THRESHOLD:
             sv_url = get_streetview_url(item.get('latitude'), item.get('longitude'))
             if sv_url:
                 item['photo_url'] = sv_url
-
     return {
         'items': page_items,
         'total': total,
@@ -367,35 +383,34 @@ def _forsale_properties(backend, page, per_page, min_price, max_price,
     }
 
 
-def _normalize_rentcast_list(raw):
-    """Normalize RentCast listings to unified shape."""
-    if not isinstance(raw, list):
-        return []
-    items = []
-    for prop in raw:
-        items.append({
-            'id': prop.get('id', prop.get('formattedAddress', '')),
-            'name': prop.get('formattedAddress', ''),
-            'address': prop.get('formattedAddress', ''),
-            'photo_url': _property_image_url(
-                prop.get('latitude'), prop.get('longitude'),
-                prop.get('formattedAddress', '')),
-            'price': prop.get('price', 0),
-            'bedrooms': prop.get('bedrooms', 0),
-            'bathrooms': prop.get('bathrooms', 0),
-            'sqft': prop.get('squareFootage', 0),
-            'latitude': prop.get('latitude', 0),
-            'longitude': prop.get('longitude', 0),
-            'property_type': prop.get('propertyType', ''),
-            'source': 'rentcast',
-        })
-    return items
+def _annotate_rank(batch):
+    """Say how a home compares with the other homes in this search."""
+    ranked = sorted(
+        [item for item in batch if item.get('score') is not None],
+        key=lambda item: item['score'],
+        reverse=True,
+    )
+    total = len(ranked)
+    if total < 5:
+        return
+    for index, item in enumerate(ranked):
+        beats = min(99, int(round(100 * (total - index - 1) / total)))
+        item['beats_percent'] = beats
+        score = item.get('score') or 0
+        if beats >= 90 and score >= 55:
+            item['insight'] = f'Beats about {beats}% of the homes in this search.'
+        elif beats >= 90:
+            item['insight'] = (
+                f'Higher than about {beats}% of this search, and still short of covering a typical mortgage.'
+            )
+        elif beats >= 80 and score >= 55:
+            item['insight'] = f'Stronger than about {beats}% of the homes in this search.'
 
 
 def _airbnb_properties(page, per_page, min_price, max_price, bedrooms,
-                       neighborhood, sort_by, sort_order, city_key=None, message=None):
-    """Use Inside Airbnb data with ML predictions."""
-    city = get_city_or_default(city_key)
+                       neighborhood, sort_by, sort_order, city_key=None, message=None,
+                       **_ignored):
+    """Inside Airbnb comps. These are active rentals, not homes for sale."""
     airbnb_sort = 'price_clean' if sort_by in ('price', 'score') else sort_by
     result = get_all_listings_summary(
         page=page, per_page=per_page,
@@ -404,36 +419,39 @@ def _airbnb_properties(page, per_page, min_price, max_price, bedrooms,
         sort_by=airbnb_sort, sort_order=sort_order,
         city_key=city_key,
     )
-
-    # Airbnb listings show actual performance — no fake investment scoring
     if sort_by == 'score':
-        # Default sort for Airbnb: by monthly revenue descending
         result['items'].sort(key=lambda x: x.get('monthly_revenue') or 0, reverse=(sort_order == 'desc'))
-
-    # Add source marker and normalize fields for airbnb items
     for item in result['items']:
         item['source'] = 'airbnb'
         item.setdefault('address', '')
         item.setdefault('photo_url', None)
-
+        item['explanation'] = 'Active short-term rental from Inside Airbnb, not a home for sale.'
     if message:
         result['message'] = message
-
-    return jsonify(result)
+    return result
 
 
 @properties_bp.route('/properties/<property_id>')
+@rate_limit('property', limit=120, window=60)
 def get_property(property_id):
     """GET /api/properties/:id — full detail + comparables + neighborhood stats."""
     from services.data_service import get_listing_by_id, get_comparable_listings, get_neighborhood_stats
+    from security import valid_property_id
 
-    city_key = request.args.get('city', 'austin')
+    if not valid_property_id(property_id):
+        return jsonify({'error': 'Property not found'}), 404
+
+    city_key, error = city_or_400(request.args.get('city'))
+    if error:
+        return error
     city = get_city_or_default(city_key)
 
-    # Parse optional financial assumption overrides
-    mortgage_rate_pct = request.args.get('mortgage_rate', type=float)
-    mortgage_term = request.args.get('mortgage_term', type=int)
-    down_payment_pct_val = request.args.get('down_payment_pct', type=float)
+    try:
+        mortgage_rate_pct = bounded_float(request.args.get('mortgage_rate'), 0, 25)
+        mortgage_term = bounded_int(request.args.get('mortgage_term'), 1, 40)
+        down_payment_pct_val = bounded_float(request.args.get('down_payment_pct'), 0, 100)
+    except ValueError:
+        return jsonify({'error': 'A financing value is out of range.'}), 400
     # Convert from user-friendly % to decimal (e.g. 7 -> 0.07)
     fin_overrides = {}
     if mortgage_rate_pct is not None:
@@ -443,11 +461,10 @@ def get_property(property_id):
     if down_payment_pct_val is not None:
         fin_overrides['down_payment_pct'] = down_payment_pct_val / 100
 
-    # Check Redfin listings first if the ID looks like a Redfin ID
     target = None
-    if property_id.startswith('redfin-'):
-        listings = redfin_listings(city_key)
-        target = next((l for l in listings if l['id'] == property_id), None)
+    provider = active_provider()
+    if provider is not None:
+        target = provider.get(city_key, property_id)
 
     if not target:
         target = get_listing_by_id(property_id, city_key=city_key)
@@ -480,6 +497,9 @@ def get_property(property_id):
                 target['score'] = scoring['score']
                 target['score_breakdown'] = scoring['breakdown']
                 target['financials'] = scoring['financials']
+                level = (prediction.get('confidence') or {}).get('level')
+                target['confidence_level'] = level
+                target['explanation'] = explain_deal(scoring['score'], scoring['financials'], level)
         except Exception:
             pass
 

@@ -92,15 +92,30 @@ def _build_base_row(features_dict, m, city_key=None):
         row['accommodates'] = features_dict['bedrooms'] * 2
 
     # Compute distance_to_center if not provided
-    if 'distance_to_center' not in features_dict and 'latitude' in features_dict:
+    if 'distance_to_center' not in features_dict and 'latitude' in row:
         from cities import get_city_or_default
         city = get_city_or_default(city_key)
         row['distance_to_center'] = float(haversine_km(
-            features_dict['latitude'], features_dict.get('longitude', city['longitude']),
+            row['latitude'], row.get('longitude', city['longitude']),
             city['latitude'], city['longitude'],
         ))
 
+    if 'dist_sq' in feature_cols and 'dist_sq' not in features_dict:
+        row['dist_sq'] = float(row.get('distance_to_center') or 0) ** 2
+    if 'lat_x_lng' in feature_cols and 'lat_x_lng' not in features_dict:
+        row['lat_x_lng'] = float(row.get('latitude') or 0) * float(row.get('longitude') or 0)
+    if 'density_3km' in feature_cols and 'density_3km' not in features_dict:
+        row['density_3km'] = _nearby_count(row.get('latitude'), row.get('longitude'), city_key, 3.0)
+
     return row
+
+
+def _nearby_count(lat, lng, city_key, radius_km):
+    tree = _get_balltree(city_key)
+    if tree is None or lat is None or lng is None:
+        return 0
+    point = np.deg2rad([[lat, lng]])
+    return int(tree.query_radius(point, r=radius_km / EARTH_RADIUS_KM, count_only=True)[0])
 
 
 def _build_monthly_row(base_row, month, m):
@@ -235,6 +250,61 @@ def _compute_confidence(base_row, m, city_key=None):
         'n_training': int(n_training),
         'out_of_range_features': out_of_range,
     }
+
+
+def _days_by_month():
+    return np.array([calendar.monthrange(2025, month)[1] for month in range(1, 13)], dtype=float)
+
+
+def predict_batch(features_list, city_key=None):
+    """Score many homes in one model call.
+
+    Returns one summary dict per input, in the same order. Used by the
+    listing page so the ranking sees every home, not a handful of the cheapest.
+    """
+    if not features_list:
+        return []
+    m = _load_models(city_key)
+    if 'price_model' not in m or 'occupancy_model' not in m:
+        raise RuntimeError('Models not trained. Run train_model.py first.')
+
+    rows = [_build_base_row(features, m, city_key) for features in features_list]
+    days = _days_by_month()
+    if _is_monthly_model(m):
+        monthly_cols = _get_monthly_cols(m)
+        expanded = []
+        for row in rows:
+            for month in range(1, 13):
+                expanded.append(_build_monthly_row(row, month, m))
+        frame = pd.DataFrame(expanded, columns=monthly_cols)
+        rates = np.asarray(m['price_model'].predict(frame), dtype=float).reshape(len(rows), 12)
+        occs = np.clip(np.asarray(m['occupancy_model'].predict(frame), dtype=float), 0.05, 0.95)
+        occs = occs.reshape(len(rows), 12)
+    else:
+        feature_cols = m['feature_columns']
+        frame = pd.DataFrame(rows, columns=feature_cols)
+        base_rate = np.asarray(m['price_model'].predict(frame), dtype=float)
+        base_occ = np.clip(np.asarray(m['occupancy_model'].predict(frame), dtype=float), 0, 1)
+        seasonal = get_seasonal_factors(city_key)
+        rates = base_rate[:, None] * np.asarray(seasonal['price'], dtype=float)
+        occs = np.clip(base_occ[:, None] * np.asarray(seasonal['occupancy'], dtype=float), 0, 1)
+
+    annual = (rates * occs * days).sum(axis=1)
+    nightly = rates.mean(axis=1)
+    occupancy = occs.mean(axis=1)
+    results = []
+    for index, row in enumerate(rows):
+        confidence = _compute_confidence(row, m, city_key)
+        results.append({
+            'predicted_nightly_rate': round(float(nightly[index]), 2),
+            'predicted_occupancy_rate': round(float(occupancy[index]), 4),
+            'predicted_monthly_revenue': round(float(annual[index] / 12), 2),
+            'predicted_annual_revenue': round(float(annual[index]), 2),
+            'monthly_breakdown': None,
+            'confidence': confidence,
+            'prediction_range': None,
+        })
+    return results
 
 
 def predict_property(features_dict, month=None, city_key=None, summary_only=False):

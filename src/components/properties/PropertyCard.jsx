@@ -3,9 +3,12 @@ import { Link } from 'react-router-dom';
 import ScoreBadge from './ScoreBadge';
 import FavoriteButton from './FavoriteButton';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
+import { getScoreLabel } from '../../utils/scoreHelpers';
 import { resolveBackendUrl } from '../../services/api';
+import { useCity } from '../../contexts/CityContext';
 
 export default memo(function PropertyCard({ property, compact = false, compareSelected = false, onCompareToggle }) {
+  const { currentCity } = useCity();
   const {
     id, name, neighbourhood, address, photo_url, price, bedrooms, bathrooms,
     accommodates, occupancy_rate, score, monthly_revenue, predicted, financials, source, url,
@@ -23,11 +26,14 @@ export default memo(function PropertyCard({ property, compact = false, compareSe
   };
 
   return (
-    <Link to={`/property/${id}`} className={`property-card${compact ? ' property-card--compact' : ''}`}>
+    <Link to={`/property/${id}?city=${currentCity}`} className={`property-card${compact ? ' property-card--compact' : ''}`}>
       {!compact && (
         <div className="property-card-image">
           {photo_url ? (
-            <img src={resolveBackendUrl(photo_url)} alt={name || 'Property'} loading="lazy" width={320} height={170} />
+            <>
+              <img src={resolveBackendUrl(photo_url)} alt={photo_url.includes('openstreetmap') ? `Map preview near ${name || 'this home'}` : (name || 'Property')} loading="lazy" width={320} height={170} />
+              {photo_url.includes('openstreetmap') && <span className="photo-caption">Map, not a photo</span>}
+            </>
           ) : (
             <div className="property-card-placeholder">
               <span className="placeholder-icon">&#127968;</span>
@@ -49,8 +55,8 @@ export default memo(function PropertyCard({ property, compact = false, compareSe
             </button>
           )}
           {url && (
-            <button className="external-link-btn" onClick={handleExternalClick} title="View on Redfin">
-              Redfin &#8599;
+            <button className="external-link-btn" onClick={handleExternalClick} title="Open listing">
+              Listing &#8599;
             </button>
           )}
         </div>
@@ -60,7 +66,16 @@ export default memo(function PropertyCard({ property, compact = false, compareSe
         <div className="property-card-price">
           {formatCurrency(price)}
           {isForSale ? null : <span> / night</span>}
+          {isForSale && score != null && (
+            <span className="score-word">{getScoreLabel(score)}</span>
+          )}
         </div>
+        {isForSale && property.insight && (
+          <p className="insight-line">{property.insight}</p>
+        )}
+        {isForSale && property.explanation && (
+          <p className="why-line">{property.explanation}</p>
+        )}
         {locationText && (
           <div className="property-card-address">{locationText}</div>
         )}

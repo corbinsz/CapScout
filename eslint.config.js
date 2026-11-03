@@ -26,4 +26,11 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
+  {
+    files: ['src/contexts/**/*.{js,jsx}'],
+    rules: {
+      // Providers and their hooks live together. That is the normal React context shape.
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

@@ -8,7 +8,7 @@ import PropertyList from '../components/properties/PropertyList';
 import { formatCurrency, formatPercent, formatNumber } from '../utils/formatters';
 
 export default function TrainingData() {
-  const { properties, total, page, setPage, loading, error, filters, updateFilters, reload } = useProperties({
+  const { properties, total, page, setPage, loading, error, filters, reload } = useProperties({
     source: 'airbnb',
     min_price: null,
     max_price: null,

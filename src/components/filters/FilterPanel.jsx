@@ -74,6 +74,8 @@ export default function FilterPanel({ filters, onFilterChange, onReset }) {
       <div className="filter-chip">
         <button
           className={`filter-chip-btn${open === 'price' || hasActiveFilter('price') ? ' active' : ''}`}
+          type="button"
+          aria-expanded={open === 'price'}
           onClick={() => toggle('price')}
         >
           {chipLabel('price')}
@@ -123,6 +125,8 @@ export default function FilterPanel({ filters, onFilterChange, onReset }) {
       <div className="filter-chip">
         <button
           className={`filter-chip-btn${open === 'bedrooms' || hasActiveFilter('bedrooms') ? ' active' : ''}`}
+          type="button"
+          aria-expanded={open === 'bedrooms'}
           onClick={() => toggle('bedrooms')}
         >
           {chipLabel('bedrooms')}
@@ -152,6 +156,8 @@ export default function FilterPanel({ filters, onFilterChange, onReset }) {
       <div className="filter-chip">
         <button
           className={`filter-chip-btn${open === 'property_type' || hasActiveFilter('property_type') ? ' active' : ''}`}
+          type="button"
+          aria-expanded={open === 'property_type'}
           onClick={() => toggle('property_type')}
         >
           {chipLabel('property_type')}
@@ -181,6 +187,8 @@ export default function FilterPanel({ filters, onFilterChange, onReset }) {
       <div className="filter-chip">
         <button
           className={`filter-chip-btn${open === 'sort' || hasActiveFilter('sort') ? ' active' : ''}`}
+          type="button"
+          aria-expanded={open === 'sort'}
           onClick={() => toggle('sort')}
         >
           {chipLabel('sort')}
@@ -212,6 +220,8 @@ export default function FilterPanel({ filters, onFilterChange, onReset }) {
       <div className="filter-chip">
           <button
             className={`filter-chip-btn${open === 'financing' || hasActiveFilter('financing') ? ' active' : ''}`}
+            type="button"
+            aria-expanded={open === 'financing'}
             onClick={() => toggle('financing')}
           >
             {chipLabel('financing')}

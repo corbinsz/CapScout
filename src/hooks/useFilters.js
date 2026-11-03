@@ -27,7 +27,7 @@ export default function useFilters(defaults = {}) {
       sort_order: 'desc',
       ...defaults,
     });
-  }, []);
+  }, [defaults]);
 
   // Build query params (strip nulls/empty)
   const queryParams = Object.fromEntries(

@@ -8,20 +8,28 @@ import { formatCurrency, formatPercent } from '../utils/formatters';
 
 export default function Compare() {
   const [searchParams] = useSearchParams();
-  const ids = (searchParams.get('ids') || '').split(',').filter(Boolean);
+  const idsParam = searchParams.get('ids') || '';
   const city = searchParams.get('city') || 'austin';
-  const [properties, setProperties] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [loaded, setLoaded] = useState(null);
 
   useEffect(() => {
-    if (!ids.length) { setLoading(false); return; }
-    setLoading(true);
-    Promise.all(ids.map(id => fetchProperty(id, city)))
-      .then(results => setProperties(results.map(r => r.property).filter(Boolean)))
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [searchParams]);
+    if (!idsParam) return undefined;
+    const requested = idsParam.split(',').filter(Boolean);
+    let cancelled = false;
+    Promise.all(requested.map(id => fetchProperty(id, city)))
+      .then(results => {
+        if (!cancelled) setLoaded({ key: `${city}:${idsParam}`, properties: results.map(r => r.property).filter(Boolean), error: null });
+      })
+      .catch(err => {
+        if (!cancelled) setLoaded({ key: `${city}:${idsParam}`, properties: [], error: err.message });
+      });
+    return () => { cancelled = true; };
+  }, [idsParam, city]);
+
+  const ready = !idsParam || (loaded && loaded.key === `${city}:${idsParam}`);
+  const properties = ready && loaded ? loaded.properties : [];
+  const error = ready && loaded ? loaded.error : null;
+  const loading = Boolean(idsParam) && !ready;
 
   if (loading) return <LoadingSpinner message="Loading comparison..." />;
   if (error) return <ErrorMessage message={error} />;
@@ -29,7 +37,7 @@ export default function Compare() {
     <div className="empty-state">
       <span className="empty-state-icon">&#8644;</span>
       <h3>No properties to compare</h3>
-      <p>Select 2-3 properties from the <Link to="/">Dashboard</Link> to compare them side by side.</p>
+      <p>Select 2-3 properties from the <Link to="/deals">deal list</Link> to compare them side by side.</p>
     </div>
   );
 
@@ -56,7 +64,7 @@ export default function Compare() {
   return (
     <div>
       <div className="breadcrumb">
-        <Link to="/">Dashboard</Link>
+        <Link to="/deals">Deals</Link>
         <span className="breadcrumb-sep">/</span>
         <span>Compare</span>
       </div>

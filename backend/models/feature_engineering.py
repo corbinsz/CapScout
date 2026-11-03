@@ -98,10 +98,13 @@ def load_and_clean_listings(city_key=None):
     # Parse bathrooms
     df['bathrooms_clean'] = df.apply(parse_bathrooms, axis=1)
 
-    # Derive occupancy from availability_30
+    # Calendar occupancy treats a blocked night as a booked night. Keep it
+    # for comparison. The training target is the review-based rate below.
     if 'availability_30' in df.columns:
-        df['occupancy_rate'] = 1 - (df['availability_30'] / 30.0)
-        df['occupancy_rate'] = df['occupancy_rate'].clip(0, 1)
+        df['occupancy_calendar'] = 1 - (pd.to_numeric(df['availability_30'], errors='coerce') / 30.0)
+        df['occupancy_calendar'] = df['occupancy_calendar'].clip(0, 1)
+    else:
+        df['occupancy_calendar'] = np.nan
 
     # Fill missing numeric columns
     for col in ['bedrooms', 'accommodates']:
@@ -154,6 +157,18 @@ def load_and_clean_listings(city_key=None):
         df['reviews_per_month_clean'] = pd.to_numeric(df['reviews_per_month'], errors='coerce').fillna(0)
     if 'number_of_reviews_ltm' in df.columns:
         df['reviews_ltm'] = pd.to_numeric(df['number_of_reviews_ltm'], errors='coerce').fillna(0)
+
+    from models.occupancy import san_francisco_occupancy
+    from cities import get_city_or_default
+    city_stay = get_city_or_default(city_key).get('avg_stay_nights', 3.0)
+    if 'reviews_ltm' not in df.columns:
+        df['reviews_ltm'] = 0
+    if 'min_nights' not in df.columns:
+        df['min_nights'] = 1
+    df['occupancy_rate'] = [
+        san_francisco_occupancy(rev, nights, city_stay)
+        for rev, nights in zip(df['reviews_ltm'], df['min_nights'])
+    ]
 
     # Availability
     if 'availability_365' in df.columns:
