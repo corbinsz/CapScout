@@ -21,7 +21,7 @@ The API is a Flask app in `backend/`. Render starts it with gunicorn. It scores 
 
 Each city has two XGBoost models: nightly rate and occupancy. Price is trained on the log of the rate and turned back into dollars when it is loaded (`backend/models/estimators.py`). Seasonality is applied when predicting, from the factors in `cities.py`. The model file itself is the annual pattern, not twelve copies of the same home.
 
-Training data is Inside Airbnb, cleaned in `backend/models/feature_engineering.py`. Entire homes only. Extreme prices are cut. Occupancy is `1 - availability_30 / 30`. A host who blocks a date looks like a booking, so occupancy error stays large. That limit is stated in the product.
+Training data is Inside Airbnb, cleaned in `backend/models/feature_engineering.py`. Entire homes only. Extreme prices are cut. Occupancy uses the San Francisco review model in `backend/models/occupancy.py`: reviews in the last year divided by a 50% review rate, times the stay length, divided by 365, and capped at 70%. A minimum stay longer than the city average is used, up to 14 nights. A full calendar with no reviews is not treated as booked. The comparison is in `docs/occupancy_benchmark.json`. The calendar correlation with that review estimate is about 0.05, which is why the old target barely moved.
 
 Evaluation is in `backend/models/benchmark.py` and `docs/ml_benchmark.json`. The selection score is mostly raw nightly-rate error on a 20% holdout of whole listings, plus a time split using `last_review`. An area-median model won an earlier score that rewarded predicting the area median. It was worse on real prices, so it was not kept.
 

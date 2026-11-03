@@ -1,5 +1,18 @@
 # What changed, and why
 
+## Second pass
+
+- `backend/models/occupancy.py` — San Francisco review model. Reviews in the last year divided by 0.5, times the stay (city average, or the listing minimum up to 14 nights), divided by 365, capped at 70%. A full calendar with no reviews is not a booking.
+- `backend/models/feature_engineering.py` — training occupancy now uses that model. The old calendar rate is kept as `occupancy_calendar` for the comparison.
+- `backend/models/occupancy_benchmark.py` and `docs/occupancy_benchmark.json` — holdout on four cities. The review target is more learnable (error ratio 0.89 vs 0.96). Calendar and review occupancy correlate at about 0.05. Occupancy models for all 14 cities were retrained. Price models were not.
+- `docs/OCCUPANCY.md` — the plain-language writeup.
+- `docs/UTAH.md` — Salt Lake City and Park City are not on Inside Airbnb’s public list. The path to add them is a funded Inside Airbnb region request, or a licensed AirROI extract. The market was not faked.
+- `backend/tests/test_scoring_math.py` — cap rate, cash-on-cash, and DSCR checked against a hand-worked Austin deal, plus a case where debt coverage is below 1.
+- `backend/tests/test_occupancy.py` — the review formula, the 14-night cap, the 70% cap, and a blocked calendar.
+- Deal cards now say a home can rank at the top of a search and still be short of covering the mortgage. Map tiles are labeled so they are not mistaken for photos. Saved homes has an empty state that points back to deals. Repeated “Unit G2 Unit G2” addresses are cleaned up for display without changing the link id.
+
+## First pass
+
 Grouped by area. Model binaries are listed once: every city under `backend/models/trained/` was retrained and the old monthly feature files were removed.
 
 ## Data providers

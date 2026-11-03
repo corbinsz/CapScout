@@ -106,7 +106,7 @@ export default function Dashboard() {
         {metrics?.holdout?.price_raw?.mae != null && (
           <p className="source-note">
             On homes held out of training, a typical nightly-rate miss in {cityDisplay} is about {formatCurrency(metrics.holdout.price_raw.mae)}.
-            Occupancy is harder: the calendar cannot tell a booking from a host block.
+            Occupancy comes from guest reviews, not from a calendar that counts a blocked night as a booking. It is still the less certain of the two predictions.
           </p>
         )}
         <div className="hero-actions">

@@ -22,7 +22,7 @@
   ],
   "price_transform": "log1p",
   "seasonality": "Applied at prediction time from city seasonal factors. The model itself predicts the annual typical rate.",
-  "occupancy_target": "1 - availability_30/30. Host blocks look like bookings, so occupancy error stays large.",
+  "occupancy_target": "San Francisco review model: reviews in the last year / 0.5, times the city stay or the listing minimum (capped at 14 nights), divided by 365, capped at 70%. A full calendar with no reviews is not treated as booked.",
   "holdout": {
     "price_raw": {
       "n": 1705,
@@ -124,5 +124,22 @@
     "score": 1.0921,
     "n_test": 1705,
     "note": "Saved model scored on listings it was not asked to hold out. It was originally fit on all rows, so this number is slightly optimistic versus a model that never saw these homes."
+  },
+  "occupancy_holdout": {
+    "model": {
+      "n": 1705,
+      "mae": 0.1751,
+      "rmse": 0.2182,
+      "r2": 0.1964,
+      "mape_pct": 17.51
+    },
+    "baseline_median": {
+      "n": 1705,
+      "mae": 0.2072,
+      "rmse": 0.2567,
+      "r2": -0.1121,
+      "mape_pct": 20.72
+    },
+    "mae_ratio": 0.8451
   }
 }

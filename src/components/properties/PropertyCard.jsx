@@ -32,7 +32,7 @@ export default memo(function PropertyCard({ property, compact = false, compareSe
           {photo_url ? (
             <>
               <img src={resolveBackendUrl(photo_url)} alt={photo_url.includes('openstreetmap') ? `Map preview near ${name || 'this home'}` : (name || 'Property')} loading="lazy" width={320} height={170} />
-              {photo_url.includes('openstreetmap') && <span className="photo-caption">Map preview, not a photo</span>}
+              {photo_url.includes('openstreetmap') && <span className="photo-caption">Map, not a photo</span>}
             </>
           ) : (
             <div className="property-card-placeholder">

@@ -13,9 +13,8 @@ class RedfinProvider:
     label = 'Redfin CSV (dev fallback)'
     licensed = False
     notice = (
-        'Development fallback reading a saved Redfin CSV from disk. '
-        'Redfin does not license this feed for a commercial product. '
-        'Set RENTCAST_API_KEY to switch to the licensed provider.'
+        'These homes come from a saved file on this server, not a live licensed feed. '
+        'The scores use the same model either way. A RentCast key switches the list to live listings.'
     )
 
     def empty_message(self, city_key):

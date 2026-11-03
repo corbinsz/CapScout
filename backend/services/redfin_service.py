@@ -166,6 +166,12 @@ def _property_image_url(lat, lng, address):
     return None
 
 
+def _collapse_repeated_unit(address):
+    """Redfin sometimes appends the unit twice: 'Unit G2 Unit G2'."""
+    import re
+    return re.sub(r'(\bUnit\s+\S+)(?:\s+\1\b)+', r'\1', address, flags=re.IGNORECASE)
+
+
 def normalize_listing(row):
     """Map a Redfin CSV row to the unified property dict."""
     address = (row.get('ADDRESS') or '').strip()
@@ -173,10 +179,12 @@ def normalize_listing(row):
     state = (row.get('STATE OR PROVINCE') or '').strip()
     zipcode = (row.get('ZIP OR POSTAL CODE') or '').strip()
 
-    full_address = ', '.join(part for part in [address, city, state, zipcode] if part)
+    # Id stays tied to the raw address so a display cleanup does not reshuffle links.
+    raw_full = ', '.join(part for part in [address, city, state, zipcode] if part)
+    display_address = _collapse_repeated_unit(address)
+    full_address = ', '.join(part for part in [display_address, city, state, zipcode] if part)
 
-    # Deterministic id from address
-    row_id = hashlib.md5(full_address.encode()).hexdigest()[:12]
+    row_id = hashlib.md5(raw_full.encode()).hexdigest()[:12]
 
     lat = _safe_float(row.get('LATITUDE'))
     lng = _safe_float(row.get('LONGITUDE'))

@@ -1,0 +1,248 @@
+{
+  "cities": {
+    "austin": {
+      "n_test": 1745,
+      "occupancy_calendar": {
+        "model": {
+          "n": 1745,
+          "mae": 0.2604,
+          "rmse": 0.3125,
+          "r2": 0.0413,
+          "mape_pct": 26.04
+        },
+        "baseline": {
+          "n": 1745,
+          "mae": 0.2714,
+          "rmse": 0.3207,
+          "r2": -0.0094,
+          "mape_pct": 27.14
+        },
+        "mae_ratio": 0.9595
+      },
+      "occupancy_rate": {
+        "model": {
+          "n": 1745,
+          "mae": 0.1815,
+          "rmse": 0.2235,
+          "r2": 0.0962,
+          "mape_pct": 18.15
+        },
+        "baseline": {
+          "n": 1745,
+          "mae": 0.1903,
+          "rmse": 0.247,
+          "r2": -0.1034,
+          "mape_pct": 19.03
+        },
+        "mae_ratio": 0.9538
+      },
+      "share_full_calendar_and_no_reviews": 0.0492,
+      "correlation_calendar_vs_reviews": 0.0482,
+      "share_minimum_nights_28_or_more": 0.1336,
+      "share_year_open_month_closed_no_reviews": 0.0283
+    },
+    "seattle": {
+      "n_test": 959,
+      "occupancy_calendar": {
+        "model": {
+          "n": 959,
+          "mae": 0.2857,
+          "rmse": 0.341,
+          "r2": 0.0301,
+          "mape_pct": 28.57
+        },
+        "baseline": {
+          "n": 959,
+          "mae": 0.2974,
+          "rmse": 0.3465,
+          "r2": -0.0013,
+          "mape_pct": 29.74
+        },
+        "mae_ratio": 0.9607
+      },
+      "occupancy_rate": {
+        "model": {
+          "n": 959,
+          "mae": 0.2055,
+          "rmse": 0.2441,
+          "r2": 0.1419,
+          "mape_pct": 20.55
+        },
+        "baseline": {
+          "n": 959,
+          "mae": 0.235,
+          "rmse": 0.2674,
+          "r2": -0.0299,
+          "mape_pct": 23.5
+        },
+        "mae_ratio": 0.8745
+      },
+      "share_full_calendar_and_no_reviews": 0.0578,
+      "correlation_calendar_vs_reviews": 0.0963,
+      "share_minimum_nights_28_or_more": 0.2673,
+      "share_year_open_month_closed_no_reviews": 0.0334
+    },
+    "asheville": {
+      "n_test": 531,
+      "occupancy_calendar": {
+        "model": {
+          "n": 531,
+          "mae": 0.3021,
+          "rmse": 0.3555,
+          "r2": -0.0878,
+          "mape_pct": 30.21
+        },
+        "baseline": {
+          "n": 531,
+          "mae": 0.3096,
+          "rmse": 0.341,
+          "r2": -0.0005,
+          "mape_pct": 30.96
+        },
+        "mae_ratio": 0.9758
+      },
+      "occupancy_rate": {
+        "model": {
+          "n": 531,
+          "mae": 0.206,
+          "rmse": 0.2465,
+          "r2": 0.0882,
+          "mape_pct": 20.6
+        },
+        "baseline": {
+          "n": 531,
+          "mae": 0.2317,
+          "rmse": 0.2634,
+          "r2": -0.0413,
+          "mape_pct": 23.17
+        },
+        "mae_ratio": 0.8891
+      },
+      "share_full_calendar_and_no_reviews": 0.0362,
+      "correlation_calendar_vs_reviews": 0.1534,
+      "share_minimum_nights_28_or_more": 0.1083,
+      "share_year_open_month_closed_no_reviews": 0.0102
+    },
+    "nashville": {
+      "n_test": 1203,
+      "occupancy_calendar": {
+        "model": {
+          "n": 1203,
+          "mae": 0.2253,
+          "rmse": 0.2805,
+          "r2": 0.0473,
+          "mape_pct": 22.53
+        },
+        "baseline": {
+          "n": 1203,
+          "mae": 0.2359,
+          "rmse": 0.2898,
+          "r2": -0.0165,
+          "mape_pct": 23.59
+        },
+        "mae_ratio": 0.9551
+      },
+      "occupancy_rate": {
+        "model": {
+          "n": 1203,
+          "mae": 0.1781,
+          "rmse": 0.2153,
+          "r2": 0.205,
+          "mape_pct": 17.81
+        },
+        "baseline": {
+          "n": 1203,
+          "mae": 0.2085,
+          "rmse": 0.2423,
+          "r2": -0.0072,
+          "mape_pct": 20.85
+        },
+        "mae_ratio": 0.8542
+      },
+      "share_full_calendar_and_no_reviews": 0.0284,
+      "correlation_calendar_vs_reviews": 0.0208,
+      "share_minimum_nights_28_or_more": 0.1063,
+      "share_year_open_month_closed_no_reviews": 0.0181
+    }
+  },
+  "notes": "mae_ratio below 1 beats predicting the training median. occupancy_calendar is 1 - availability_30/30. occupancy_rate is the San Francisco review model. Raw calendar files are not in this repo. availability_30 and availability_365 are the calendar summaries Inside Airbnb publishes on each listing.",
+  "mean_mae_ratio": {
+    "occupancy_calendar": 0.9628,
+    "occupancy_rate": 0.8929
+  },
+  "more_learnable": "occupancy_rate",
+  "winner": "occupancy_rate",
+  "why": "The production target is the review model even if the calendar target is slightly easier to fit. A full calendar with no reviews is not a booking, so fitting the calendar well does not answer the investor question.",
+  "retrained": {
+    "austin": {
+      "mae": 0.1815,
+      "r2": 0.0962,
+      "mae_ratio": 0.9538
+    },
+    "nashville": {
+      "mae": 0.1781,
+      "r2": 0.205,
+      "mae_ratio": 0.8542
+    },
+    "san-diego": {
+      "mae": 0.22,
+      "r2": 0.1379,
+      "mae_ratio": 0.9013
+    },
+    "dallas": {
+      "mae": 0.1673,
+      "r2": 0.1096,
+      "mae_ratio": 0.9388
+    },
+    "asheville": {
+      "mae": 0.206,
+      "r2": 0.0882,
+      "mae_ratio": 0.8891
+    },
+    "seattle": {
+      "mae": 0.2055,
+      "r2": 0.1419,
+      "mae_ratio": 0.8745
+    },
+    "denver": {
+      "mae": 0.1973,
+      "r2": 0.1105,
+      "mae_ratio": 0.922
+    },
+    "new-orleans": {
+      "mae": 0.2144,
+      "r2": 0.0869,
+      "mae_ratio": 0.9005
+    },
+    "washington-dc": {
+      "mae": 0.2006,
+      "r2": 0.1699,
+      "mae_ratio": 0.8569
+    },
+    "boston": {
+      "mae": 0.1836,
+      "r2": 0.1872,
+      "mae_ratio": 0.843
+    },
+    "las-vegas": {
+      "mae": 0.1751,
+      "r2": 0.1964,
+      "mae_ratio": 0.8451
+    },
+    "fort-lauderdale": {
+      "mae": 0.1966,
+      "r2": 0.2489,
+      "mae_ratio": 0.8188
+    },
+    "fort-worth": {
+      "mae": 0.1635,
+      "r2": 0.1016,
+      "mae_ratio": 0.8964
+    },
+    "hawaii": {
+      "mae": 0.175,
+      "r2": 0.2898,
+      "mae_ratio": 0.8587
+    }
+  }
+}

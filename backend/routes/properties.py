@@ -16,7 +16,7 @@ from security import bounded_float, bounded_int, city_or_400, clean_text, rate_l
 STREETVIEW_SCORE_THRESHOLD = 30
 _SCORE_CACHE_TTL = 600  # 10 minutes in memory
 _DISK_CACHE_TTL = 6 * 3600
-_SCORE_CACHE_VERSION = 4  # Bump when scoring or listing shape changes
+_SCORE_CACHE_VERSION = 5  # Bump when scoring, insight copy, or listing shape changes
 _score_cache = {}  # key -> (timestamp, scored_batch, total_available)
 
 # ---------------------------------------------------------------------------
@@ -239,11 +239,14 @@ def list_properties():
 
 
 def _model_token(city_key):
-    path = os.path.join(config.city_models_dir(city_key), 'price_model.joblib')
-    try:
-        return int(os.path.getmtime(path))
-    except OSError:
-        return 0
+    stamps = []
+    for name in ('price_model.joblib', 'occupancy_model.joblib'):
+        path = os.path.join(config.city_models_dir(city_key), name)
+        try:
+            stamps.append(int(os.path.getmtime(path)))
+        except OSError:
+            stamps.append(0)
+    return tuple(stamps)
 
 
 def _features_for(item, city):
@@ -393,9 +396,14 @@ def _annotate_rank(batch):
     for index, item in enumerate(ranked):
         beats = min(99, int(round(100 * (total - index - 1) / total)))
         item['beats_percent'] = beats
-        if beats >= 95:
+        score = item.get('score') or 0
+        if beats >= 90 and score >= 55:
             item['insight'] = f'Beats about {beats}% of the homes in this search.'
-        elif beats >= 80:
+        elif beats >= 90:
+            item['insight'] = (
+                f'Higher than about {beats}% of this search, and still short of covering a typical mortgage.'
+            )
+        elif beats >= 80 and score >= 55:
             item['insight'] = f'Stronger than about {beats}% of the homes in this search.'
 
 
