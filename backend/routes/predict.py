@@ -1,12 +1,13 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, jsonify, request
+
 from cities import get_city_or_default
-from services.prediction_service import predict_property, models_available
+from services.prediction_service import models_available, predict_property
 from services.scoring_service import score_property
 
-predict_bp = Blueprint('predict', __name__)
+predict_bp = Blueprint("predict", __name__)
 
 
-@predict_bp.route('/predict', methods=['POST'])
+@predict_bp.route("/predict", methods=["POST"])
 def predict():
     """
     POST /api/predict
@@ -26,53 +27,60 @@ def predict():
     """
     data = request.get_json()
     if not data:
-        return jsonify({'error': 'JSON body required'}), 400
+        return jsonify({"error": "JSON body required"}), 400
 
-    city_key = data.get('city', 'austin')
+    city_key = data.get("city", "austin")
     city = get_city_or_default(city_key)
 
     if not models_available(city_key):
-        return jsonify({'error': f'Models not trained for {city["display"]}. Run train_model.py first.'}), 503
+        return (
+            jsonify(
+                {
+                    "error": f'No model for {city["display"]}. From the repo root: python -m evaluation.run_eval'
+                }
+            ),
+            503,
+        )
 
-    purchase_price = data.get('purchase_price', 0)
+    purchase_price = data.get("purchase_price", 0)
     if not purchase_price or purchase_price <= 0:
-        return jsonify({'error': 'purchase_price is required and must be > 0'}), 400
+        return jsonify({"error": "purchase_price is required and must be > 0"}), 400
 
     features = {
-        'bedrooms': data.get('bedrooms', 2),
-        'bathrooms_clean': data.get('bathrooms', 1),
-        'accommodates': data.get('accommodates', data.get('bedrooms', 2) * 2),
-        'latitude': data.get('latitude', city['latitude']),
-        'longitude': data.get('longitude', city['longitude']),
+        "bedrooms": data.get("bedrooms", 2),
+        "bathrooms_clean": data.get("bathrooms", 1),
+        "accommodates": data.get("accommodates", data.get("bedrooms", 2) * 2),
+        "latitude": data.get("latitude", city["latitude"]),
+        "longitude": data.get("longitude", city["longitude"]),
     }
 
-    if 'amenity_count' in data:
-        features['amenity_count'] = data['amenity_count']
+    if "amenity_count" in data:
+        features["amenity_count"] = data["amenity_count"]
 
     # Optional month for seasonal occupancy prediction (1-12)
-    month = data.get('month')
+    month = data.get("month")
     if month is not None:
         month = int(month)
         if month < 1 or month > 12:
-            return jsonify({'error': 'month must be 1-12'}), 400
+            return jsonify({"error": "month must be 1-12"}), 400
 
     try:
         prediction = predict_property(features, month=month, city_key=city_key)
         scoring = score_property(
             purchase_price,
-            prediction['predicted_annual_revenue'],
-            prediction['predicted_occupancy_rate'],
+            prediction["predicted_annual_revenue"],
+            prediction["predicted_occupancy_rate"],
             city_key=city_key,
         )
 
         response = {
-            'prediction': prediction,
-            'score': scoring['score'],
-            'score_breakdown': scoring['breakdown'],
-            'financials': scoring['financials'],
+            "prediction": prediction,
+            "score": scoring["score"],
+            "score_breakdown": scoring["breakdown"],
+            "financials": scoring["financials"],
         }
-        if 'monthly_breakdown' in prediction:
-            response['monthly_breakdown'] = prediction['monthly_breakdown']
+        if "monthly_breakdown" in prediction:
+            response["monthly_breakdown"] = prediction["monthly_breakdown"]
         return jsonify(response)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500

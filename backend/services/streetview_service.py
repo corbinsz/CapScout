@@ -4,6 +4,7 @@ Google Street View image fetching with disk caching and monthly rate limiting.
 Images are cached permanently to disk. A monthly counter prevents exceeding
 the Google Maps free tier (~28,500 requests/month at $7/1000).
 """
+
 import hashlib
 import json
 import os
@@ -14,7 +15,7 @@ import requests
 import config
 
 MONTHLY_LIMIT = 25000
-STREETVIEW_API_URL = 'https://maps.googleapis.com/maps/api/streetview'
+STREETVIEW_API_URL = "https://maps.googleapis.com/maps/api/streetview"
 
 
 def _cache_dir():
@@ -22,20 +23,20 @@ def _cache_dir():
 
 
 def _counter_path():
-    return os.path.join(_cache_dir(), 'counter.json')
+    return os.path.join(_cache_dir(), "counter.json")
 
 
 def _image_path(image_hash):
-    return os.path.join(_cache_dir(), f'{image_hash}.jpg')
+    return os.path.join(_cache_dir(), f"{image_hash}.jpg")
 
 
 def _noimage_path(image_hash):
-    return os.path.join(_cache_dir(), f'{image_hash}.noimage')
+    return os.path.join(_cache_dir(), f"{image_hash}.noimage")
 
 
 def _make_hash(lat, lng):
     """Deterministic hash from lat/lng for cache key."""
-    key = f'{lat:.6f},{lng:.6f}'
+    key = f"{lat:.6f},{lng:.6f}"
     return hashlib.md5(key.encode()).hexdigest()[:12]
 
 
@@ -43,37 +44,37 @@ def _load_counter():
     """Load the monthly request counter from disk."""
     path = _counter_path()
     if not os.path.isfile(path):
-        return {'month': '', 'count': 0}
+        return {"month": "", "count": 0}
     try:
-        with open(path, 'r') as f:
+        with open(path) as f:
             return json.load(f)
     except (json.JSONDecodeError, OSError):
-        return {'month': '', 'count': 0}
+        return {"month": "", "count": 0}
 
 
 def _save_counter(data):
-    with open(_counter_path(), 'w') as f:
+    with open(_counter_path(), "w") as f:
         json.dump(data, f)
 
 
 def _current_month():
-    return datetime.now().strftime('%Y-%m')
+    return datetime.now().strftime("%Y-%m")
 
 
 def _is_under_limit():
     counter = _load_counter()
     month = _current_month()
-    if counter.get('month') != month:
+    if counter.get("month") != month:
         return True
-    return counter.get('count', 0) < MONTHLY_LIMIT
+    return counter.get("count", 0) < MONTHLY_LIMIT
 
 
 def _increment_counter():
     counter = _load_counter()
     month = _current_month()
-    if counter.get('month') != month:
-        counter = {'month': month, 'count': 0}
-    counter['count'] = counter.get('count', 0) + 1
+    if counter.get("month") != month:
+        counter = {"month": month, "count": 0}
+    counter["count"] = counter.get("count", 0) + 1
     _save_counter(counter)
 
 
@@ -106,24 +107,28 @@ def get_streetview_image(lat, lng):
 
     # Fetch from Google Street View Static API
     try:
-        resp = requests.get(STREETVIEW_API_URL, params={
-            'size': '600x400',
-            'location': f'{lat},{lng}',
-            'key': api_key,
-            'return_error_codes': 'true',
-        }, timeout=10)
+        resp = requests.get(
+            STREETVIEW_API_URL,
+            params={
+                "size": "600x400",
+                "location": f"{lat},{lng}",
+                "key": api_key,
+                "return_error_codes": "true",
+            },
+            timeout=10,
+        )
 
         _increment_counter()
 
         # Google returns 404 or very small images for no-coverage locations
         if resp.status_code != 200 or len(resp.content) < 5000:
             # Save marker so we don't re-request
-            with open(_noimage_path(image_hash), 'w') as f:
+            with open(_noimage_path(image_hash), "w") as f:
                 pass
             return None
 
         # Save image to cache
-        with open(cached, 'wb') as f:
+        with open(cached, "wb") as f:
             f.write(resp.content)
         return cached
 
@@ -148,4 +153,4 @@ def get_streetview_url(lat, lng):
     if os.path.isfile(_noimage_path(image_hash)):
         return None
     # Include lat/lng so the route can fetch on first request
-    return f'/api/streetview/{image_hash}.jpg?lat={lat:.6f}&lng={lng:.6f}'
+    return f"/api/streetview/{image_hash}.jpg?lat={lat:.6f}&lng={lng:.6f}"
