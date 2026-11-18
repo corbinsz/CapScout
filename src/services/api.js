@@ -8,7 +8,6 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Retry once on timeout (handles Render cold starts)
 api.interceptors.response.use(null, async (error) => {
   const config = error.config;
   if (
@@ -21,13 +20,9 @@ api.interceptors.response.use(null, async (error) => {
   return Promise.reject(error);
 });
 
-/**
- * Resolve a backend-relative URL (e.g. /api/streetview/...) to an absolute
- * URL when the frontend and backend are on different domains.
- */
+/** Resolve a backend-relative URL when the API base is absolute. */
 export function resolveBackendUrl(path) {
   if (!path || !path.startsWith('/api/')) return path;
-  // API_BASE is e.g. "https://capscout.onrender.com/api" or "/api"
   const origin = API_BASE.replace(/\/api\/?$/, '');
   return origin ? `${origin}${path}` : path;
 }

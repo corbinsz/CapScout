@@ -1,4 +1,5 @@
 """Checks for the CapScout score math in services/scoring_service.py."""
+
 import pytest
 
 from services.scoring_service import (
@@ -18,8 +19,10 @@ def test_mortgage_payment_matches_standard_formula():
     years = 30
     monthly_rate = annual_rate / 12
     n_payments = years * 12
-    monthly = loan * (monthly_rate * (1 + monthly_rate) ** n_payments) / (
-        (1 + monthly_rate) ** n_payments - 1
+    monthly = (
+        loan
+        * (monthly_rate * (1 + monthly_rate) ** n_payments)
+        / ((1 + monthly_rate) ** n_payments - 1)
     )
     assert calculate_annual_mortgage(loan, annual_rate, years) == pytest.approx(monthly * 12)
     assert calculate_annual_mortgage(loan, 0.08, years) > calculate_annual_mortgage(

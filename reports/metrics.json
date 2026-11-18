@@ -1,0 +1,901 @@
+{
+  "study_cities": [
+    "austin",
+    "san-diego",
+    "seattle"
+  ],
+  "rationale": "Austin, San Diego, and Seattle are the study markets. Each is one metro (latitude standard deviation about 0.05\u20130.07, not an archipelago), the Inside Airbnb snapshot is from 2025, and bedrooms are almost complete. Austin has 10,323 listings inside the $25\u2013$2,000 window and only 16 missing prices. San Diego has 11,613 and Seattle 6,004; Seattle has almost no listings above the $2,000 cap, so the tail does not dominate. Hawaii is many islands in one file. Las Vegas, Fort Lauderdale, and Nashville are missing a nightly price on roughly 30% of rows. Asheville's bedrooms column is essentially empty. The other snapshots stay on disk and are not in the headline results.",
+  "protocol": {
+    "test_seed": 42,
+    "inner_seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "chosen_feature_set": "plus_location",
+    "feature_set_why": {
+      "size_and_room": "How big the place is and whether it is a whole home, a room, or a shared room.",
+      "plus_location": "Where it sits: coordinates, distance to the city center, and distance to the airport.",
+      "plus_property_type": "What kind of building: house, condo, cabin, cottage, townhouse, or guest unit.",
+      "plus_interactions": "Interactions a single column cannot express: capacity priced differently for a private room, distance priced differently for a house than a condo, neighbourhood and neighbourhood-by-bedroom log-price levels, and the median log price of the 40 nearest other training listings.",
+      "plus_listing_quality": "How the current listing is equipped and reviewed: amenities, minimum nights, review score and volume, superhost, host portfolio size, instant book. These describe an existing ad, not a house that has never been listed."
+    },
+    "feature_set_development_mae": {
+      "size_and_room": 70.04049017407492,
+      "plus_location": 68.02086042994914,
+      "plus_property_type": 67.78216256177959,
+      "plus_interactions": 75.76348868876134,
+      "plus_listing_quality": 67.51133412189897
+    },
+    "chosen_depth": 4,
+    "depth_development_mae": {
+      "4": 68.12898363263837,
+      "6": 68.02086042994914,
+      "8": 68.16376157598151
+    },
+    "xgboost_development_mae": 68.12898363263837,
+    "lightgbm_development_mae": 67.48697856569262,
+    "library": "xgboost",
+    "use_spatial": false,
+    "columns": [
+      "bedrooms",
+      "bathrooms",
+      "accommodates",
+      "is_private_room",
+      "is_shared_room",
+      "is_hotel_room",
+      "latitude",
+      "longitude",
+      "distance_to_center_km",
+      "distance_to_airport_km"
+    ],
+    "selection_rule": "Prefixes are cumulative. The simplest prefix within 1% mean development MAE of the best prefix is kept. Shallower trees win the same way. LightGBM is used only if its development MAE is under 98% of XGBoost."
+  },
+  "cities": {
+    "austin": {
+      "display": "Austin, TX",
+      "snapshot": "2025-06-13",
+      "cleaning": {
+        "city": "austin",
+        "snapshot": "2025-06-13",
+        "rows_raw": 10533,
+        "entire_home_only": false,
+        "min_price": 25.0,
+        "max_price": 2000.0,
+        "dropped_not_entire_home": 0,
+        "dropped_missing_or_nonpositive_price": 16,
+        "dropped_below_min_price": 72,
+        "dropped_above_max_price": 122,
+        "dropped_missing_coordinates": 0,
+        "dropped_missing_bedrooms": 13,
+        "dropped_bedroom_range": 14,
+        "dropped_missing_room_type": 0,
+        "rows_final": 10296,
+        "occupancy_observed": 8757,
+        "room_type_counts": {
+          "Entire home/apt": 8972,
+          "Private room": 1285,
+          "Hotel room": 32,
+          "Shared room": 7
+        },
+        "n_hosts": 5498
+      },
+      "split": {
+        "train_before": 8209,
+        "removed_host": 1360,
+        "removed_buffer": 1546,
+        "train_after": 5303,
+        "n_rows": 10296,
+        "n_groups": 152,
+        "n_test": 2087,
+        "test_fraction_of_rows": 0.2027000777000777
+      },
+      "locked_test": {
+        "gbm": {
+          "r2": 0.4260800609443234,
+          "mae": 95.60768641496823,
+          "rmse": 164.78123950616904,
+          "n": 2087
+        },
+        "ridge": {
+          "r2": 0.025965415404757164,
+          "mae": 110.99881659984185,
+          "rmse": 214.6689823354951,
+          "n": 2087
+        },
+        "baseline_room": {
+          "r2": -0.6878643693976494,
+          "mae": 152.46406324868232,
+          "rmse": 282.5861557713626,
+          "n": 2087
+        },
+        "baseline_room_bed": {
+          "r2": -0.3951666744874347,
+          "mae": 138.46717776712984,
+          "rmse": 256.9183686606444,
+          "n": 2087
+        }
+      },
+      "residuals_by_predicted_quintile": [
+        {
+          "predicted_bin": "(41.428000000000004, 130.949]",
+          "n": 418,
+          "mae": 49.527012303074486,
+          "mean_residual": 27.104230582412555
+        },
+        {
+          "predicted_bin": "(130.949, 162.075]",
+          "n": 418,
+          "mae": 65.08037344562251,
+          "mean_residual": 21.257998229750115
+        },
+        {
+          "predicted_bin": "(162.075, 194.343]",
+          "n": 416,
+          "mae": 81.76422544010822,
+          "mean_residual": 28.666350779431625
+        },
+        {
+          "predicted_bin": "(194.343, 283.033]",
+          "n": 417,
+          "mae": 87.02794605469391,
+          "mean_residual": -7.079806877641184
+        },
+        {
+          "predicted_bin": "(283.033, 1105.779]",
+          "n": 418,
+          "mae": 194.55211248131815,
+          "mean_residual": 39.63149763987026
+        }
+      ],
+      "locked_test_by_room_type": [
+        {
+          "room_type": "Entire home/apt",
+          "r2": 0.41336337142700097,
+          "mae": 101.3103118668347,
+          "rmse": 172.48392380308326,
+          "n": 1750
+        },
+        {
+          "room_type": "Hotel room",
+          "r2": -0.47822298407190145,
+          "mae": 222.75198791967313,
+          "rmse": 256.5763088704759,
+          "n": 11
+        },
+        {
+          "room_type": "Private room",
+          "r2": 0.3070751466269255,
+          "mae": 60.64383203183297,
+          "rmse": 109.29269497742762,
+          "n": 324
+        },
+        {
+          "room_type": "Shared room",
+          "r2": -87.79621199186,
+          "mae": 70.66116782384034,
+          "rmse": 70.67380649534964,
+          "n": 2
+        }
+      ],
+      "shap": [
+        {
+          "feature": "distance_to_center_km",
+          "mean_abs_shap": 0.3204132914543152
+        },
+        {
+          "feature": "bedrooms",
+          "mean_abs_shap": 0.21326620876789093
+        },
+        {
+          "feature": "bathrooms",
+          "mean_abs_shap": 0.16782383620738983
+        },
+        {
+          "feature": "longitude",
+          "mean_abs_shap": 0.08230574429035187
+        },
+        {
+          "feature": "accommodates",
+          "mean_abs_shap": 0.0817055031657219
+        },
+        {
+          "feature": "latitude",
+          "mean_abs_shap": 0.06419890373945236
+        },
+        {
+          "feature": "is_private_room",
+          "mean_abs_shap": 0.04717998206615448
+        },
+        {
+          "feature": "distance_to_airport_km",
+          "mean_abs_shap": 0.020916027948260307
+        },
+        {
+          "feature": "is_hotel_room",
+          "mean_abs_shap": 0.000705922779161483
+        },
+        {
+          "feature": "is_shared_room",
+          "mean_abs_shap": 0.0
+        }
+      ]
+    },
+    "san-diego": {
+      "display": "San Diego, CA",
+      "snapshot": "2025-03-16",
+      "cleaning": {
+        "city": "san-diego",
+        "snapshot": "2025-03-16",
+        "rows_raw": 12991,
+        "entire_home_only": false,
+        "min_price": 25.0,
+        "max_price": 2000.0,
+        "dropped_not_entire_home": 0,
+        "dropped_missing_or_nonpositive_price": 1287,
+        "dropped_below_min_price": 3,
+        "dropped_above_max_price": 88,
+        "dropped_missing_coordinates": 0,
+        "dropped_missing_bedrooms": 19,
+        "dropped_bedroom_range": 4,
+        "dropped_missing_room_type": 0,
+        "rows_final": 11590,
+        "occupancy_observed": 9687,
+        "room_type_counts": {
+          "Entire home/apt": 9898,
+          "Private room": 1505,
+          "Hotel room": 147,
+          "Shared room": 40
+        },
+        "n_hosts": 5388
+      },
+      "split": {
+        "train_before": 8448,
+        "removed_host": 2421,
+        "removed_buffer": 2193,
+        "train_after": 3834,
+        "n_rows": 11590,
+        "n_groups": 112,
+        "n_test": 3142,
+        "test_fraction_of_rows": 0.2710957722174288
+      },
+      "locked_test": {
+        "gbm": {
+          "r2": 0.5553134317450639,
+          "mae": 85.02203341569555,
+          "rmse": 170.79480429396452,
+          "n": 3142
+        },
+        "ridge": {
+          "r2": 0.46123964142413265,
+          "mae": 90.39726062884486,
+          "rmse": 187.99463942197772,
+          "n": 3142
+        },
+        "baseline_room": {
+          "r2": 0.03333533644155684,
+          "mae": 135.51527689369829,
+          "rmse": 251.81730442099516,
+          "n": 3142
+        },
+        "baseline_room_bed": {
+          "r2": 0.33866393024228536,
+          "mae": 110.50254614894972,
+          "rmse": 208.28536426322307,
+          "n": 3142
+        }
+      },
+      "residuals_by_predicted_quintile": [
+        {
+          "predicted_bin": "(39.47, 117.387]",
+          "n": 632,
+          "mae": 25.68041691071666,
+          "mean_residual": 6.071640617691976
+        },
+        {
+          "predicted_bin": "(117.387, 159.363]",
+          "n": 625,
+          "mae": 41.40658830149105,
+          "mean_residual": 2.659096934680307
+        },
+        {
+          "predicted_bin": "(159.363, 213.383]",
+          "n": 628,
+          "mae": 57.50166883227715,
+          "mean_residual": 11.690860031985935
+        },
+        {
+          "predicted_bin": "(213.383, 321.368]",
+          "n": 628,
+          "mae": 94.82382886222973,
+          "mean_residual": 32.22231220035502
+        },
+        {
+          "predicted_bin": "(321.368, 1163.286]",
+          "n": 629,
+          "mae": 205.67515940216262,
+          "mean_residual": 83.58089135947863
+        }
+      ],
+      "locked_test_by_room_type": [
+        {
+          "room_type": "Entire home/apt",
+          "r2": 0.5831005986721645,
+          "mae": 84.06213604220868,
+          "rmse": 159.27812649241827,
+          "n": 2689
+        },
+        {
+          "room_type": "Hotel room",
+          "r2": -0.2114994173831728,
+          "mae": 280.11200529080054,
+          "rmse": 360.9637494278017,
+          "n": 39
+        },
+        {
+          "room_type": "Private room",
+          "r2": 0.35513839639663614,
+          "mae": 74.26721673548758,
+          "rmse": 213.6014922610261,
+          "n": 402
+        },
+        {
+          "room_type": "Shared room",
+          "r2": -2.3697705175920096,
+          "mae": 26.3629867174225,
+          "rmse": 33.1993339310051,
+          "n": 12
+        }
+      ],
+      "shap": [
+        {
+          "feature": "accommodates",
+          "mean_abs_shap": 0.2644292414188385
+        },
+        {
+          "feature": "longitude",
+          "mean_abs_shap": 0.1361987292766571
+        },
+        {
+          "feature": "bedrooms",
+          "mean_abs_shap": 0.1182171106338501
+        },
+        {
+          "feature": "bathrooms",
+          "mean_abs_shap": 0.0848182961344719
+        },
+        {
+          "feature": "is_private_room",
+          "mean_abs_shap": 0.04269563779234886
+        },
+        {
+          "feature": "distance_to_center_km",
+          "mean_abs_shap": 0.02902456372976303
+        },
+        {
+          "feature": "distance_to_airport_km",
+          "mean_abs_shap": 0.028416169807314873
+        },
+        {
+          "feature": "latitude",
+          "mean_abs_shap": 0.023660656064748764
+        },
+        {
+          "feature": "is_hotel_room",
+          "mean_abs_shap": 0.00913215521723032
+        },
+        {
+          "feature": "is_shared_room",
+          "mean_abs_shap": 0.004409094341099262
+        }
+      ]
+    },
+    "seattle": {
+      "display": "Seattle, WA",
+      "snapshot": "2025-03-16",
+      "cleaning": {
+        "city": "seattle",
+        "snapshot": "2025-03-16",
+        "rows_raw": 6772,
+        "entire_home_only": false,
+        "min_price": 25.0,
+        "max_price": 2000.0,
+        "dropped_not_entire_home": 0,
+        "dropped_missing_or_nonpositive_price": 764,
+        "dropped_below_min_price": 2,
+        "dropped_above_max_price": 2,
+        "dropped_missing_coordinates": 0,
+        "dropped_missing_bedrooms": 10,
+        "dropped_bedroom_range": 2,
+        "dropped_missing_room_type": 0,
+        "rows_final": 5992,
+        "occupancy_observed": 5179,
+        "room_type_counts": {
+          "Entire home/apt": 4978,
+          "Private room": 976,
+          "Hotel room": 27,
+          "Shared room": 11
+        },
+        "n_hosts": 3107
+      },
+      "split": {
+        "train_before": 4980,
+        "removed_host": 950,
+        "removed_buffer": 1126,
+        "train_after": 2904,
+        "n_rows": 5992,
+        "n_groups": 46,
+        "n_test": 1012,
+        "test_fraction_of_rows": 0.16889185580774366
+      },
+      "locked_test": {
+        "gbm": {
+          "r2": 0.43655713316544464,
+          "mae": 49.79858094429115,
+          "rmse": 95.16493153562682,
+          "n": 1012
+        },
+        "ridge": {
+          "r2": 0.34677381110466976,
+          "mae": 51.2668000685592,
+          "rmse": 102.46694566085803,
+          "n": 1012
+        },
+        "baseline_room": {
+          "r2": -0.028896497920390063,
+          "mae": 70.51086956521739,
+          "rmse": 128.59907401666882,
+          "n": 1012
+        },
+        "baseline_room_bed": {
+          "r2": -0.030588079326196338,
+          "mae": 70.36166007905139,
+          "rmse": 128.7047437633659,
+          "n": 1012
+        }
+      },
+      "residuals_by_predicted_quintile": [
+        {
+          "predicted_bin": "(35.126000000000005, 65.986]",
+          "n": 203,
+          "mae": 31.69404152881866,
+          "mean_residual": 21.49622736623217
+        },
+        {
+          "predicted_bin": "(65.986, 96.456]",
+          "n": 202,
+          "mae": 36.30868750423863,
+          "mean_residual": 20.40497367041364
+        },
+        {
+          "predicted_bin": "(96.456, 116.158]",
+          "n": 202,
+          "mae": 32.79876183299554,
+          "mean_residual": 16.530539898407017
+        },
+        {
+          "predicted_bin": "(116.158, 170.986]",
+          "n": 202,
+          "mae": 46.03873645831534,
+          "mean_residual": 12.35262928163123
+        },
+        {
+          "predicted_bin": "(170.986, 569.364]",
+          "n": 203,
+          "mae": 101.98396036734708,
+          "mean_residual": 24.582286143670895
+        }
+      ],
+      "locked_test_by_room_type": [
+        {
+          "room_type": "Entire home/apt",
+          "r2": 0.4225899332135433,
+          "mae": 53.15134654728777,
+          "rmse": 104.41178096776859,
+          "n": 752
+        },
+        {
+          "room_type": "Private room",
+          "r2": -0.10777737912591623,
+          "mae": 40.03120564261807,
+          "rmse": 61.33324090706808,
+          "n": 254
+        },
+        {
+          "room_type": "Shared room",
+          "r2": -41.238386097404586,
+          "mae": 43.07084647287382,
+          "rmse": 43.55694558707129,
+          "n": 6
+        }
+      ],
+      "shap": [
+        {
+          "feature": "bedrooms",
+          "mean_abs_shap": 0.19112977385520935
+        },
+        {
+          "feature": "accommodates",
+          "mean_abs_shap": 0.1594337522983551
+        },
+        {
+          "feature": "is_private_room",
+          "mean_abs_shap": 0.09323897212743759
+        },
+        {
+          "feature": "distance_to_center_km",
+          "mean_abs_shap": 0.07246141135692596
+        },
+        {
+          "feature": "bathrooms",
+          "mean_abs_shap": 0.04517025128006935
+        },
+        {
+          "feature": "longitude",
+          "mean_abs_shap": 0.03995458781719208
+        },
+        {
+          "feature": "distance_to_airport_km",
+          "mean_abs_shap": 0.03215556964278221
+        },
+        {
+          "feature": "latitude",
+          "mean_abs_shap": 0.020282618701457977
+        },
+        {
+          "feature": "is_hotel_room",
+          "mean_abs_shap": 0.004157007671892643
+        },
+        {
+          "feature": "is_shared_room",
+          "mean_abs_shap": 0.0
+        }
+      ]
+    }
+  },
+  "development_ablation": {
+    "austin": {
+      "size_and_room": {
+        "mae_mean": 76.57485751409821,
+        "mae_std": 4.427661932340231,
+        "r2_mean": 0.3263258728597446,
+        "r2_std": 0.11640733049368795,
+        "rmse_mean": 171.26052084488984,
+        "rmse_std": 14.173066165554236
+      },
+      "plus_location": {
+        "mae_mean": 72.3798640901962,
+        "mae_std": 6.212272255735884,
+        "r2_mean": 0.3799831132901217,
+        "r2_std": 0.12422989369393536,
+        "rmse_mean": 163.82959383326107,
+        "rmse_std": 10.669564274347588
+      },
+      "plus_property_type": {
+        "mae_mean": 72.02569196997135,
+        "mae_std": 5.489923426218213,
+        "r2_mean": 0.39875644264846777,
+        "r2_std": 0.12667372238610064,
+        "rmse_mean": 161.2033738298947,
+        "rmse_std": 11.170572666095607
+      },
+      "plus_interactions": {
+        "mae_mean": 76.09612948360584,
+        "mae_std": 6.372880016288983,
+        "r2_mean": 0.2922231547161503,
+        "r2_std": 0.13667979475348133,
+        "rmse_mean": 175.62529839495298,
+        "rmse_std": 19.198993462778486
+      },
+      "plus_listing_quality": {
+        "mae_mean": 67.52129024734916,
+        "mae_std": 6.0295178298079115,
+        "r2_mean": 0.4021785054492269,
+        "r2_std": 0.12270315736350797,
+        "rmse_mean": 161.35709700918582,
+        "rmse_std": 18.34722061333388
+      }
+    },
+    "san-diego": {
+      "size_and_room": {
+        "mae_mean": 85.10795523776775,
+        "mae_std": 14.131751562166857,
+        "r2_mean": 0.46734872382533954,
+        "r2_std": 0.08055438463679764,
+        "rmse_mean": 160.46972476537744,
+        "rmse_std": 40.01089452315938
+      },
+      "plus_location": {
+        "mae_mean": 83.7430392244328,
+        "mae_std": 21.852245826083106,
+        "r2_mean": 0.49113213200969347,
+        "r2_std": 0.1317037228895519,
+        "rmse_mean": 156.43955619935633,
+        "rmse_std": 42.75513876039412
+      },
+      "plus_property_type": {
+        "mae_mean": 82.93466120147711,
+        "mae_std": 20.055733001525557,
+        "r2_mean": 0.49465678908605726,
+        "r2_std": 0.12660641874591785,
+        "rmse_mean": 155.5857364541011,
+        "rmse_std": 41.056922485926755
+      },
+      "plus_interactions": {
+        "mae_mean": 94.20257593705428,
+        "mae_std": 19.789888050292152,
+        "r2_mean": 0.37297893775379987,
+        "r2_std": 0.12557334870447925,
+        "rmse_mean": 173.46201986943248,
+        "rmse_std": 42.65799723141773
+      },
+      "plus_listing_quality": {
+        "mae_mean": 83.08487840317534,
+        "mae_std": 15.467740244868866,
+        "r2_mean": 0.4832692145193139,
+        "r2_std": 0.1045820710992313,
+        "rmse_mean": 156.63566738562832,
+        "rmse_std": 33.68576526830572
+      }
+    },
+    "seattle": {
+      "size_and_room": {
+        "mae_mean": 48.43865777035883,
+        "mae_std": 11.993388607921275,
+        "r2_mean": 0.4334909721874013,
+        "r2_std": 0.14578387146990351,
+        "rmse_mean": 90.90831712726542,
+        "rmse_std": 28.72394915463923
+      },
+      "plus_location": {
+        "mae_mean": 47.9396779752184,
+        "mae_std": 12.19153249549052,
+        "r2_mean": 0.4379860768096623,
+        "r2_std": 0.1488986605571669,
+        "rmse_mean": 90.33920817205849,
+        "rmse_std": 28.214563832359453
+      },
+      "plus_property_type": {
+        "mae_mean": 48.3861345138903,
+        "mae_std": 12.716566802318356,
+        "r2_mean": 0.4439823289272368,
+        "r2_std": 0.17513739516795285,
+        "rmse_mean": 89.86152481263306,
+        "rmse_std": 29.99560571586227
+      },
+      "plus_interactions": {
+        "mae_mean": 56.991760645623934,
+        "mae_std": 14.450151254444798,
+        "r2_mean": 0.1946345939454321,
+        "r2_std": 0.11515650981009204,
+        "rmse_mean": 108.27248287320344,
+        "rmse_std": 29.51281134609857
+      },
+      "plus_listing_quality": {
+        "mae_mean": 51.92783371517239,
+        "mae_std": 13.06540876855718,
+        "r2_mean": 0.3045626730933613,
+        "r2_std": 0.12585981040881747,
+        "rmse_mean": 100.59326819717644,
+        "rmse_std": 28.279824654082905
+      }
+    }
+  },
+  "development_comparison": {
+    "austin": {
+      "baseline_room": {
+        "mae_mean": 103.00499663801781,
+        "mae_std": 15.789755113756645,
+        "r2_mean": -0.031159369757293075,
+        "r2_std": 0.03447389978621101,
+        "rmse_mean": 214.12007124889993,
+        "rmse_std": 30.169488872936686
+      },
+      "baseline_room_bed": {
+        "mae_mean": 97.75661302601728,
+        "mae_std": 17.137106835315983,
+        "r2_mean": 0.028725645849077996,
+        "r2_std": 0.12061350811924998,
+        "rmse_mean": 207.7890512768147,
+        "rmse_std": 34.89764541027728
+      },
+      "ridge": {
+        "mae_mean": 78.93540332346758,
+        "mae_std": 4.864240415389436,
+        "r2_mean": 0.11786968781101444,
+        "r2_std": 0.42384016636283184,
+        "rmse_mean": 190.7347156070382,
+        "rmse_std": 21.57147381859753
+      },
+      "gbm": {
+        "mae_mean": 71.89939958478926,
+        "mae_std": 5.926408824426912,
+        "r2_mean": 0.3848845212691484,
+        "r2_std": 0.11855681662028594,
+        "rmse_mean": 163.29392156816297,
+        "rmse_std": 10.978956457206788
+      }
+    },
+    "san-diego": {
+      "baseline_room": {
+        "mae_mean": 144.2282337365608,
+        "mae_std": 39.53821558014789,
+        "r2_mean": -0.23368521994906932,
+        "r2_std": 0.309848860299037,
+        "rmse_mean": 242.35589136817833,
+        "rmse_std": 57.41975919576908
+      },
+      "baseline_room_bed": {
+        "mae_mean": 134.5951363850796,
+        "mae_std": 34.163249268307155,
+        "r2_mean": -0.1109011678214686,
+        "r2_std": 0.3242854435221912,
+        "rmse_mean": 227.66622444448012,
+        "rmse_std": 47.06166174378224
+      },
+      "ridge": {
+        "mae_mean": 78.71567581269751,
+        "mae_std": 15.96402935000331,
+        "r2_mean": 0.5312447308270516,
+        "r2_std": 0.062014606893687416,
+        "rmse_mean": 149.7212089823173,
+        "rmse_std": 32.66756784432997
+      },
+      "gbm": {
+        "mae_mean": 85.17655297986872,
+        "mae_std": 23.42240339480109,
+        "r2_mean": 0.4801029033864519,
+        "r2_std": 0.1565275499169475,
+        "rmse_mean": 157.6997256644837,
+        "rmse_std": 44.348851240102185
+      }
+    },
+    "seattle": {
+      "baseline_room": {
+        "mae_mean": 70.9046212966688,
+        "mae_std": 13.566103837604233,
+        "r2_mean": -0.08347480289769801,
+        "r2_std": 0.07239492995020329,
+        "rmse_mean": 125.04195848658996,
+        "rmse_std": 29.647456571841065
+      },
+      "baseline_room_bed": {
+        "mae_mean": 70.63033967132853,
+        "mae_std": 13.502579137564634,
+        "r2_mean": -0.07863565459881347,
+        "r2_std": 0.07109049709565393,
+        "rmse_mean": 124.79369377818833,
+        "rmse_std": 29.715393449201432
+      },
+      "ridge": {
+        "mae_mean": 49.1537567929566,
+        "mae_std": 11.27528704384858,
+        "r2_mean": 0.45782321357004496,
+        "r2_std": 0.1457661715998333,
+        "rmse_mean": 88.53623176168601,
+        "rmse_std": 27.030260754396664
+      },
+      "gbm": {
+        "mae_mean": 47.310998333257125,
+        "mae_std": 12.07194683699228,
+        "r2_mean": 0.4535320652000217,
+        "r2_std": 0.15536233746965794,
+        "rmse_mean": 89.19296529826971,
+        "rmse_std": 29.02007781174327
+      }
+    }
+  },
+  "learning_curves": {
+    "austin": [
+      {
+        "fraction": 0.15,
+        "n_train": 566,
+        "valid_mae": 83.94304173918397,
+        "train_mae": 87.73572468782422
+      },
+      {
+        "fraction": 0.3,
+        "n_train": 561,
+        "valid_mae": 82.61012441353577,
+        "train_mae": 52.76776052216811
+      },
+      {
+        "fraction": 0.5,
+        "n_train": 1212,
+        "valid_mae": 73.76255054460638,
+        "train_mae": 73.89522401089016
+      },
+      {
+        "fraction": 0.75,
+        "n_train": 2433,
+        "valid_mae": 69.90014942549388,
+        "train_mae": 66.92513551093964
+      },
+      {
+        "fraction": 1.0,
+        "n_train": 3168,
+        "valid_mae": 70.15150955948098,
+        "train_mae": 68.70495923283531
+      }
+    ],
+    "san-diego": [
+      {
+        "fraction": 0.15,
+        "n_train": 659,
+        "valid_mae": 77.54589076749544,
+        "train_mae": 39.81807612836138
+      },
+      {
+        "fraction": 0.3,
+        "n_train": 740,
+        "valid_mae": 88.45418971032386,
+        "train_mae": 37.42240315727303
+      },
+      {
+        "fraction": 0.5,
+        "n_train": 1339,
+        "valid_mae": 72.07113535094419,
+        "train_mae": 63.760982588675745
+      },
+      {
+        "fraction": 0.75,
+        "n_train": 1494,
+        "valid_mae": 67.66504296544454,
+        "train_mae": 70.29812899292313
+      },
+      {
+        "fraction": 1.0,
+        "n_train": 2144,
+        "valid_mae": 65.12876399909455,
+        "train_mae": 70.21322375619025
+      }
+    ],
+    "seattle": [
+      {
+        "fraction": 0.15,
+        "n_train": 328,
+        "valid_mae": 47.478467469025844,
+        "train_mae": 53.10400705649446
+      },
+      {
+        "fraction": 0.3,
+        "n_train": 671,
+        "valid_mae": 40.6103059306054,
+        "train_mae": 43.20953640952178
+      },
+      {
+        "fraction": 0.5,
+        "n_train": 637,
+        "valid_mae": 45.477984147468824,
+        "train_mae": 59.68089380061233
+      },
+      {
+        "fraction": 0.75,
+        "n_train": 1580,
+        "valid_mae": 41.165969738174454,
+        "train_mae": 51.91382513061242
+      },
+      {
+        "fraction": 1.0,
+        "n_train": 1731,
+        "valid_mae": 39.419162428219856,
+        "train_mae": 40.4225260685753
+      }
+    ]
+  },
+  "leakage_demo": {
+    "role": "demonstration_of_the_old_target_not_a_reported_result",
+    "n": 10296,
+    "n_clusters": 15,
+    "correlation_price_with_median_that_includes_itself": 0.6476704184444085,
+    "correlation_price_with_leave_one_out_median": 0.6353512870759299,
+    "cv_r2_against_smoothed_target": 0.9734971183580435,
+    "cv_mae_against_smoothed_target": 7.166766083694375,
+    "cv_r2_against_actual_price": 0.3853646075772761,
+    "cv_mae_against_actual_price": 84.3952077659601,
+    "cv_rmse_against_actual_price": 170.07284048809476
+  },
+  "smoke": false
+}
