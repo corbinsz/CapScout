@@ -30,6 +30,9 @@ __pycache__/
 .venv/
 venv/
 
+# Census and OSM downloads before they are cut down to a city extract.
+data/external/_cache/
+
 # Local caches and optional uploads. Inside Airbnb snapshots under
 # data/raw/cities/*/listings.csv.gz are part of the study and stay tracked.
 backend/data/*

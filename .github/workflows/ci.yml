@@ -16,7 +16,7 @@ jobs:
         run: pip install -r requirements.txt
       - name: Lint
         run: |
-          ruff check data features models evaluation tests backend
-          black --check data features models evaluation tests backend
+          ruff check data features models evaluation tests backend app
+          black --check data features models evaluation tests backend app
       - name: Tests
         run: pytest

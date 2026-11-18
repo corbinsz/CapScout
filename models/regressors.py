@@ -59,8 +59,17 @@ class LogPriceModel:
 
 
 def make_xgboost(
-    params: dict, n_estimators: int, *, early_stopping_rounds: int | None = None
+    params: dict,
+    n_estimators: int,
+    *,
+    early_stopping_rounds: int | None = None,
+    monotone: dict | None = None,
+    objective: str = "reg:squarederror",
+    quantile_alpha: float | None = None,
 ) -> XGBRegressor:
+    kwargs = {}
+    if quantile_alpha is not None:
+        kwargs["quantile_alpha"] = quantile_alpha
     return XGBRegressor(
         n_estimators=n_estimators,
         learning_rate=params["learning_rate"],
@@ -69,17 +78,29 @@ def make_xgboost(
         subsample=params["subsample"],
         colsample_bytree=params["colsample_bytree"],
         reg_lambda=params["reg_lambda"],
-        objective="reg:squarederror",
+        objective=objective,
         tree_method="hist",
         random_state=42,
         n_jobs=-1,
         verbosity=0,
         early_stopping_rounds=early_stopping_rounds,
+        monotone_constraints=monotone,
+        **kwargs,
     )
 
 
-def make_lightgbm(params: dict, n_estimators: int) -> LGBMRegressor:
+def make_lightgbm(
+    params: dict,
+    n_estimators: int,
+    *,
+    monotone: list[int] | None = None,
+    objective: str = "regression",
+    alpha: float | None = None,
+) -> LGBMRegressor:
     depth = int(params["max_depth"])
+    kwargs = {}
+    if alpha is not None:
+        kwargs["alpha"] = alpha
     return LGBMRegressor(
         n_estimators=n_estimators,
         learning_rate=params["learning_rate"],
@@ -89,9 +110,47 @@ def make_lightgbm(params: dict, n_estimators: int) -> LGBMRegressor:
         subsample=params["subsample"],
         colsample_bytree=params["colsample_bytree"],
         reg_lambda=params["reg_lambda"],
+        objective=objective,
         random_state=42,
         n_jobs=-1,
         verbosity=-1,
+        monotone_constraints=monotone,
+        **kwargs,
+    )
+
+
+def make_catboost(
+    params: dict,
+    n_estimators: int,
+    *,
+    monotone: dict | None = None,
+    loss: str = "RMSE",
+):
+    """CatBoost on the same depth and learning rate as the other two libraries.
+
+    `allow_writing_files` stays off so a training run does not drop a
+    catboost_info directory into the repo. Depth is the same integer the
+    protocol searched for XGBoost; it is the analogous knob, not a claim
+    that the trees split identically.
+    """
+    from catboost import CatBoostRegressor
+
+    return CatBoostRegressor(
+        iterations=n_estimators,
+        depth=int(params["max_depth"]),
+        learning_rate=params["learning_rate"],
+        l2_leaf_reg=params["reg_lambda"],
+        # subsample is ignored unless the bootstrap is Bernoulli. Bayesian
+        # bootstrap is the CatBoost default, and it would raise here.
+        bootstrap_type="Bernoulli",
+        subsample=params["subsample"],
+        rsm=params["colsample_bytree"],
+        loss_function=loss,
+        monotone_constraints=monotone,
+        random_seed=42,
+        thread_count=-1,
+        allow_writing_files=False,
+        verbose=False,
     )
 
 

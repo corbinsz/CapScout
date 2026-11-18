@@ -5,7 +5,7 @@ target-version = ["py311"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-src = ["data", "features", "models", "evaluation", "tests", "backend"]
+src = ["data", "features", "models", "evaluation", "tests", "backend", "app"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
@@ -16,6 +16,7 @@ ignore = ["E501"]
 "backend/app.py" = ["E402"]
 "backend/services/data_service.py" = ["E402"]
 "backend/services/prediction_service.py" = ["E402"]
+"app/streamlit_app.py" = ["E402"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

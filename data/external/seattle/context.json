@@ -1,0 +1,33 @@
+{
+  "city": "seattle",
+  "bbox": [
+    -122.539478,
+    47.381550000000004,
+    -122.12087,
+    47.854009999999995
+  ],
+  "bbox_pad_degrees": 0.12,
+  "acs_vintage": "2024 5-year",
+  "acs_source": "U.S. Census Bureau ACS table-based summary file, tables B19013 (median household income), B25064 (median gross rent), B25077 (median home value), B01003 (total population)",
+  "tiger_source": "TIGER/Line 2024 census tracts",
+  "osm_source": "OpenStreetMap, queried through a public Overpass endpoint",
+  "downloaded_at": "2026-11-18",
+  "census_medians": {
+    "census_median_income": 129181.0,
+    "census_median_rent": 2170.0,
+    "census_median_home_value": 852900.0,
+    "census_pop_density": 2264.8225708886403
+  },
+  "n_tracts": 452,
+  "acs_matched_income": 447,
+  "n_pois": {
+    "food": 5259,
+    "transit": 2200,
+    "park": 36550,
+    "beach": 2771,
+    "attraction": 403
+  },
+  "distance_cap_km": 20.0,
+  "count_radius_km": 1.0,
+  "nearest_tract_fallback_km": 2.0
+}

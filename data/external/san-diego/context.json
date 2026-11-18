@@ -1,0 +1,33 @@
+{
+  "city": "san-diego",
+  "bbox": [
+    -117.40171000000001,
+    32.42076,
+    -116.816852,
+    33.22179
+  ],
+  "bbox_pad_degrees": 0.12,
+  "acs_vintage": "2024 5-year",
+  "acs_source": "U.S. Census Bureau ACS table-based summary file, tables B19013 (median household income), B25064 (median gross rent), B25077 (median home value), B01003 (total population)",
+  "tiger_source": "TIGER/Line 2024 census tracts",
+  "osm_source": "OpenStreetMap, queried through a public Overpass endpoint",
+  "downloaded_at": "2026-11-18",
+  "census_medians": {
+    "census_median_income": 110065.0,
+    "census_median_rent": 2354.0,
+    "census_median_home_value": 817800.0,
+    "census_pop_density": 2425.4802636380373
+  },
+  "n_tracts": 701,
+  "acs_matched_income": 693,
+  "n_pois": {
+    "food": 4227,
+    "transit": 4747,
+    "park": 65777,
+    "beach": 2706,
+    "attraction": 413
+  },
+  "distance_cap_km": 20.0,
+  "count_radius_km": 1.0,
+  "nearest_tract_fallback_km": 2.0
+}

@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from features.columns import KNN_COLUMNS, MONOTONE_DOWN, MONOTONE_UP, SMOOTH_COLUMNS
 from features.fold import FoldEncoder
 from lightgbm import early_stopping
-from models.regressors import FIXED_PARAMS, make_lightgbm, make_xgboost
+from models.regressors import FIXED_PARAMS, make_catboost, make_lightgbm, make_xgboost
 from sklearn.linear_model import RidgeCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -22,7 +23,7 @@ from sklearn.preprocessing import StandardScaler
 from evaluation.protocol import EARLY_STOPPING_ROUNDS, KNN_K, MAX_TREES, TARGET_PRIOR
 from evaluation.splits import holdout_groups
 
-SPATIAL_COLUMNS = ["neigh_log_price", "neigh_bed_log_price", "knn_log_price"]
+SPATIAL_COLUMNS = SMOOTH_COLUMNS + KNN_COLUMNS
 
 
 def params_for_depth(depth: int) -> dict:
@@ -35,20 +36,44 @@ def _as_frame(X: pd.DataFrame) -> pd.DataFrame:
     return X.reset_index(drop=True)
 
 
+def monotone_spec(columns: list[str], library: str):
+    """Constraint aligned to `columns`. 1 means the prediction cannot fall as the column rises."""
+    spec = []
+    for column in columns:
+        if column in MONOTONE_UP:
+            spec.append(1)
+        elif column in MONOTONE_DOWN:
+            spec.append(-1)
+        else:
+            spec.append(0)
+    if library == "lightgbm":
+        return spec
+    return {
+        column: value
+        for column, value in zip(columns, spec, strict=True)
+        if value or library == "xgboost"
+    }
+
+
 def design_matrices(
     frame: pd.DataFrame,
     train_idx: np.ndarray,
     eval_idx: np.ndarray,
     columns: list[str],
-    use_spatial: bool,
+    spatial_mode: str | bool,
 ) -> tuple[pd.DataFrame, np.ndarray, pd.DataFrame, np.ndarray, FoldEncoder | None]:
-    """Train/eval matrices. Spatial columns are fit on train_idx only."""
+    """Train/eval matrices. Price encodings are fit on train_idx only.
+
+    `spatial_mode` is "none", "smooth", or "knn". True is accepted as
+    "smooth" plus knn so an older caller still builds every spatial column.
+    """
+    mode = _spatial_mode(spatial_mode)
     y = frame["price_clean"].to_numpy(dtype=float)
     log_y = np.log1p(y[train_idx])
     X_train = _as_frame(frame.iloc[train_idx][list(columns)].copy())
     X_eval = _as_frame(frame.iloc[eval_idx][list(columns)].copy())
     encoder = None
-    if use_spatial:
+    if mode != "none":
         encoder = FoldEncoder(k=KNN_K, prior=TARGET_PRIOR)
         encoder.fit(
             frame["latitude"].to_numpy()[train_idx],
@@ -69,15 +94,48 @@ def design_matrices(
             frame["neighbourhood_cleansed"].to_numpy()[eval_idx],
             frame["bedrooms"].to_numpy()[eval_idx],
         )
+        names = _spatial_names(mode)
         for name, train_values, eval_values in zip(
-            SPATIAL_COLUMNS, train_spatial, eval_spatial, strict=True
+            names,
+            _select_spatial(train_spatial, mode),
+            _select_spatial(eval_spatial, mode),
+            strict=True,
         ):
             X_train[name] = train_values
             X_eval[name] = eval_values
     return X_train, log_y, X_eval, y[eval_idx], encoder
 
 
-def _predict_dollars(model, X: pd.DataFrame, library: str) -> np.ndarray:
+def _spatial_mode(spatial_mode: str | bool) -> str:
+    if spatial_mode is True:
+        return "both"
+    if spatial_mode is False or spatial_mode is None:
+        return "none"
+    if spatial_mode not in {"none", "smooth", "knn", "both"}:
+        raise ValueError(f"Unknown spatial mode: {spatial_mode}")
+    return spatial_mode
+
+
+def _spatial_names(mode: str) -> list[str]:
+    if mode == "smooth":
+        return list(SMOOTH_COLUMNS)
+    if mode == "knn":
+        return list(KNN_COLUMNS)
+    if mode == "both":
+        return list(SPATIAL_COLUMNS)
+    return []
+
+
+def _select_spatial(values: tuple[np.ndarray, np.ndarray, np.ndarray], mode: str):
+    neigh, bed, knn = values
+    if mode == "smooth":
+        return (neigh, bed)
+    if mode == "knn":
+        return (knn,)
+    return values
+
+
+def _predict_log(model, X: pd.DataFrame, library: str) -> np.ndarray:
     trees = getattr(model, "_capscout_trees", None)
     if library == "xgboost" and trees:
         logged = model.predict(X, iteration_range=(0, int(trees)))
@@ -85,19 +143,56 @@ def _predict_dollars(model, X: pd.DataFrame, library: str) -> np.ndarray:
         logged = model.predict(X, num_iteration=int(trees))
     else:
         logged = model.predict(X)
-    return np.maximum(np.expm1(np.asarray(logged, dtype=float)), 0.0)
+    return np.asarray(logged, dtype=float).reshape(-1)
 
 
-def fit_boosted(library: str, params: dict, X: pd.DataFrame, y_log: np.ndarray, groups: np.ndarray):
-    """Early-stopped model. `_capscout_trees` is the tree count to use."""
+def _predict_dollars(model, X: pd.DataFrame, library: str) -> np.ndarray:
+    return np.maximum(np.expm1(_predict_log(model, X, library)), 0.0)
+
+
+def _new_model(library: str, params: dict, n_estimators: int, *, monotone, early_stopping: bool):
+    constraint = monotone_spec(list(params.get("_columns") or []), library) if monotone else None
+    # The column list rides along on params so the constraint lines up with
+    # the matrix. It is not a hyperparameter and the constructors ignore it.
+    if library == "xgboost":
+        return make_xgboost(
+            params,
+            n_estimators,
+            early_stopping_rounds=EARLY_STOPPING_ROUNDS if early_stopping else None,
+            monotone=constraint,
+        )
+    if library == "lightgbm":
+        return make_lightgbm(params, n_estimators, monotone=constraint)
+    if library == "catboost":
+        return make_catboost(params, n_estimators, monotone=constraint or None)
+    raise ValueError(f"Unknown library: {library}")
+
+
+def fit_boosted(
+    library: str,
+    params: dict,
+    X: pd.DataFrame,
+    y_log: np.ndarray,
+    groups: np.ndarray,
+    *,
+    monotone: bool = False,
+):
+    """Early-stopped model. `_capscout_trees` is the tree count to use.
+
+    The stopping slice is a spatial cut of the training rows. It is not the
+    validation fold and not the locked test. During comparison we predict
+    with that early-stopped fit, so every candidate leaves the same rows out.
+    """
     X = _as_frame(X)
     y_log = np.asarray(y_log, dtype=float)
     groups = np.asarray(groups)
+    fitted = dict(params)
+    fitted["_columns"] = list(X.columns)
     n_groups = len(np.unique(groups))
     if n_groups >= 8 and len(X) >= 200:
         inner_train, inner_valid = holdout_groups(groups, 0.2, seed=0)
+        model = _new_model(library, fitted, MAX_TREES, monotone=monotone, early_stopping=True)
         if library == "xgboost":
-            model = make_xgboost(params, MAX_TREES, early_stopping_rounds=EARLY_STOPPING_ROUNDS)
             model.fit(
                 X.iloc[inner_train],
                 y_log[inner_train],
@@ -105,8 +200,7 @@ def fit_boosted(library: str, params: dict, X: pd.DataFrame, y_log: np.ndarray, 
                 verbose=False,
             )
             model._capscout_trees = int(model.best_iteration) + 1
-        else:
-            model = make_lightgbm(params, MAX_TREES)
+        elif library == "lightgbm":
             model.fit(
                 X.iloc[inner_train],
                 y_log[inner_train],
@@ -114,32 +208,85 @@ def fit_boosted(library: str, params: dict, X: pd.DataFrame, y_log: np.ndarray, 
                 callbacks=[early_stopping(EARLY_STOPPING_ROUNDS, verbose=False)],
             )
             model._capscout_trees = int(model.best_iteration_)
+        else:
+            model.fit(
+                X.iloc[inner_train],
+                y_log[inner_train],
+                eval_set=(X.iloc[inner_valid], y_log[inner_valid]),
+                use_best_model=True,
+                early_stopping_rounds=EARLY_STOPPING_ROUNDS,
+            )
+            model._capscout_trees = int(model.tree_count_)
         return model
 
-    if library == "xgboost":
-        model = make_xgboost(params, min(MAX_TREES, 200), early_stopping_rounds=None)
-    else:
-        model = make_lightgbm(params, min(MAX_TREES, 200))
+    model = _new_model(
+        library, fitted, min(MAX_TREES, 200), monotone=monotone, early_stopping=False
+    )
     model.fit(X, y_log)
     model._capscout_trees = None
     return model
 
 
-def refit_boosted(library: str, params: dict, n_trees: int, X: pd.DataFrame, y_log: np.ndarray):
+def refit_boosted(
+    library: str,
+    params: dict,
+    n_trees: int,
+    X: pd.DataFrame,
+    y_log: np.ndarray,
+    *,
+    monotone: bool = False,
+):
     """Refit on every development row with the tree count early stopping chose."""
     n_trees = max(int(n_trees), 20)
     X = _as_frame(X)
-    if library == "xgboost":
-        model = make_xgboost(params, n_trees, early_stopping_rounds=None)
-    else:
-        model = make_lightgbm(params, n_trees)
+    fitted = dict(params)
+    fitted["_columns"] = list(X.columns)
+    model = _new_model(library, fitted, n_trees, monotone=monotone, early_stopping=False)
     model.fit(X, np.asarray(y_log, dtype=float))
+    model._capscout_trees = None
+    return model
+
+
+def fit_quantile(
+    library: str,
+    params: dict,
+    n_trees: int,
+    X: pd.DataFrame,
+    y_log: np.ndarray,
+    alpha: float,
+):
+    """Pinball loss at `alpha`. Unconstrained: LightGBM rejects monotone + quantile.
+
+    The tree count is taken from the point model. It is not re-searched,
+    because a search here would be a second tuning loop on the same folds.
+    """
+    n_trees = max(int(n_trees), 20)
+    X = _as_frame(X)
+    y_log = np.asarray(y_log, dtype=float)
+    if library == "xgboost":
+        model = make_xgboost(
+            params,
+            n_trees,
+            objective="reg:quantileerror",
+            quantile_alpha=alpha,
+        )
+    elif library == "lightgbm":
+        model = make_lightgbm(params, n_trees, objective="quantile", alpha=alpha)
+    elif library == "catboost":
+        model = make_catboost(params, n_trees, loss=f"Quantile:alpha={alpha}")
+    else:
+        raise ValueError(library)
+    model.fit(X, y_log)
     model._capscout_trees = None
     return model
 
 
 def predict_dollars(model, X: pd.DataFrame, library: str) -> np.ndarray:
     return _predict_dollars(model, _as_frame(X), library)
+
+
+def predict_log(model, X: pd.DataFrame, library: str) -> np.ndarray:
+    return _predict_log(model, _as_frame(X), library)
 
 
 def fit_predict_ridge(X_train: pd.DataFrame, y_log: np.ndarray, X_eval: pd.DataFrame) -> np.ndarray:
