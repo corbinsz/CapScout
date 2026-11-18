@@ -46,3 +46,6 @@ nul
 *.cookies.txt
 
 .vercel
+
+# Local agent settings
+.claude/

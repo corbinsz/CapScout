@@ -4,10 +4,12 @@ Train XGBoost models for STR investment prediction.
 XGBoost only -- appropriate for our data sizes (40K-156K rows),
 handles NaN natively, and histogram-based for fast training.
 
-Trains on 100% of Airbnb data (no hold-out split). CV folds handle
-evaluation; Redfin for-sale properties are the real test set.
+Trains on 100% of the Airbnb rows (no hold-out saved with the model).
+Redfin listings are the for-sale inputs at prediction time; they have
+no nightly-rate label, so they are not a test set.
 
-Reports both Train R2 (fit) and CV R2 (generalization) after training.
+Prints a train R² (sklearn, in-sample) and a CV pseudo-R²
+(1 - mean fold MSE / variance of all smoothed targets).
 
 Usage: python -m models.train_model [city_key] [--fast|--quick|--all]
 """
@@ -84,8 +86,10 @@ def train_target(target_name, X_all, y_all):
     with the best hyperparameters found during CV.
 
     Reports:
-      - CV R2: average across 5 held-out folds (generalization)
-      - Train R2: predict on all training data with final model (fit)
+      - Train R2: sklearn r2_score of the refit model on all training rows.
+      - CV R2: 1 - (mean fold MSE) / variance(all y). This is not the mean
+        of per-fold r2_score values. y is the smoothed target, and the
+        caller smooths on the full sample before this split.
     """
     if QUICK_MODE:
         return _quick_train(target_name, X_all, y_all)
@@ -110,7 +114,9 @@ def train_target(target_name, X_all, y_all):
     search.fit(X_all, y_all)
     elapsed = time.time() - t0
 
-    # CV R2 (held-out fold average)
+    # Pseudo-R² from the search's mean fold MSE and the variance of every
+    # training target. np.var is the full sample (ddof=0), not each held-out
+    # fold, and best_score_ averages neg_mean_squared_error across folds.
     cv_mse = -search.best_score_
     cv_r2 = 1 - cv_mse / np.var(y_all)
 

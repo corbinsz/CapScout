@@ -14,9 +14,11 @@ export default function PredictionProcess() {
         </div>
         <div className="section-body" style={{ fontSize: 14, lineHeight: 1.8 }}>
           <p style={{ marginBottom: 12 }}>
-            CapScout trains its models on real Airbnb performance data from{' '}
-            <strong>Inside Airbnb</strong>, a public dataset that provides every active listing's
-            nightly rate, occupancy, property type, location, and calendar availability.
+            CapScout trains its models on public listings from{' '}
+            <strong>Inside Airbnb</strong>: nightly asking price, property type, location,
+            and how many of the next 30 days the host has marked available. Monthly rows
+            are built from that snapshot times a city seasonal factor. The training path
+            does not use the Inside Airbnb calendar file.
           </p>
           <p style={{ marginBottom: 12 }}>
             For cities with available county assessor records (currently Austin, Seattle, and Dallas),
@@ -30,11 +32,12 @@ export default function PredictionProcess() {
               padding: '16px', borderLeft: '4px solid var(--primary)'
             }}>
               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6, color: 'var(--primary)' }}>
-                Airbnb Listings + Calendar
+                Airbnb listings
               </div>
               <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                Nightly rates, occupancy patterns, property type, bedrooms, bathrooms,
-                location, and monthly booking data for thousands of active listings per city.
+                Asking nightly rate, property type, bedrooms, bathrooms, and location.
+                Occupancy in the training set is derived from availability_30, not from
+                observed bookings.
               </div>
             </div>
             <div style={{
@@ -67,8 +70,7 @@ export default function PredictionProcess() {
           <ul style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <li><strong>Entire homes only</strong> &mdash; private rooms and shared spaces are excluded since for-sale properties are whole units</li>
             <li><strong>Listing price cap (P2-P98)</strong> &mdash; removes extreme outlier prices from the listing data</li>
-            <li><strong>Calendar price cap (P95)</strong> &mdash; some hosts set $9,999/night as a placeholder to block dates. Capping at the 95th percentile removes these fake prices while keeping legitimately expensive listings</li>
-            <li><strong>Minimum data requirements</strong> &mdash; listings must have valid location, at least 1 bedroom, and a calculable occupancy rate</li>
+            <li><strong>Valid location</strong> &mdash; rows without coordinates are dropped. Bedrooms and bathrooms missing from the file are filled with the column median</li>
           </ul>
         </div>
       </div>
@@ -77,7 +79,7 @@ export default function PredictionProcess() {
       <div className="detail-section" style={{ marginBottom: 24 }}>
         <div className="section-header">
           Step 3: Area Median Targeting
-          <div className="section-subtitle">The key insight that makes predictions accurate</div>
+          <div className="section-subtitle">The model is trained on a neighborhood median, not each host's price</div>
         </div>
         <div className="section-body" style={{ fontSize: 14, lineHeight: 1.8 }}>
           <p style={{ marginBottom: 12 }}>
@@ -207,51 +209,26 @@ export default function PredictionProcess() {
                 Occupancy Model
               </div>
               <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                Predicts monthly occupancy rate with seasonal awareness (captures booking patterns)
+                Predicts a typical occupancy rate from availability and a seasonal factor
               </div>
             </div>
           </div>
           <p style={{ marginBottom: 12 }}>
-            Hyperparameters are tuned via <strong>RandomizedSearchCV</strong> (50 random
-            combinations, 5-fold cross-validation). The best parameters are used to retrain
-            on <strong>100% of the data</strong> &mdash; there is no hold-out split. The real
-            "test set" is Redfin for-sale properties, which come from a completely different
-            distribution than the training data.
+            The shipped models are tuned with <strong>RandomizedSearchCV</strong> (50 draws,
+            5-fold CV) and then refit on every listing. There is no saved holdout for those
+            files. The number that search prints is{' '}
+            <code>1 &minus; mean fold MSE / variance of all smoothed targets</code>. That is
+            not scikit-learn's R², the target is the area median, and the median is fit
+            before the split.
           </p>
           <p>
-            Training reports both <strong>Train R2</strong> (how well the model fits) and{' '}
-            <strong>CV R2</strong> (how well it generalizes to unseen data). A small gap
-            between them means the model generalizes well.
+            A separate check holds out 20% of listings, fits the medians on the rest, and
+            scores a fixed XGBoost with <code>sklearn.metrics.r2_score</code>. Price R²
+            against the area median is about 0.87–0.99. Price R² against the listing's own
+            rate is about 0.10–0.53, depending on the city. Occupancy R² against the
+            listing's own availability-based rate is about zero. The city table and the
+            command to rerun it are in the README (<code>python -m scripts.eval_holdout</code>).
           </p>
-
-          <div style={{ overflowX: 'auto', marginTop: 16 }}>
-            <table className="comps-table" style={{ fontSize: 13 }}>
-              <thead>
-                <tr>
-                  <th>City</th>
-                  <th>Price CV R2</th>
-                  <th>Occupancy CV R2</th>
-                  <th>Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td>Honolulu</td><td>0.993</td><td>0.996</td><td></td></tr>
-                <tr><td>San Diego</td><td>0.996</td><td>0.971</td><td></td></tr>
-                <tr><td>Fort Lauderdale</td><td>0.981</td><td>0.943</td><td></td></tr>
-                <tr><td>Las Vegas</td><td>0.980</td><td>0.980</td><td></td></tr>
-                <tr><td>Dallas</td><td>0.973</td><td>0.853</td><td>Assessor enriched</td></tr>
-                <tr><td>New Orleans</td><td>0.972</td><td>0.947</td><td></td></tr>
-                <tr><td>Austin</td><td>0.971</td><td>0.936</td><td>Assessor enriched</td></tr>
-                <tr><td>Asheville</td><td>0.965</td><td>0.967</td><td></td></tr>
-                <tr><td>Denver</td><td>0.961</td><td>0.925</td><td></td></tr>
-                <tr><td>Washington, D.C.</td><td>0.956</td><td>0.925</td><td></td></tr>
-                <tr><td>Seattle</td><td>0.951</td><td>0.920</td><td>Assessor enriched</td></tr>
-                <tr><td>Boston</td><td>0.932</td><td>0.907</td><td></td></tr>
-                <tr><td>Nashville</td><td>0.921</td><td>0.933</td><td></td></tr>
-                <tr><td>Fort Worth</td><td>0.886</td><td>0.809</td><td></td></tr>
-              </tbody>
-            </table>
-          </div>
         </div>
       </div>
 
