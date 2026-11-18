@@ -80,6 +80,9 @@ def test_metrics_are_on_the_dollar_scale():
     metrics = regression_metrics(np.array([100.0, 200.0]), np.array([110.0, 180.0]))
     assert abs(metrics["mae"] - 15.0) < 1e-9
     assert metrics["r2"] < 1.0
+    # |10|/100 and |20|/200 -> 10% both, so MAPE and median APE agree.
+    assert abs(metrics["mape"] - 10.0) < 1e-9
+    assert abs(metrics["median_ape"] - 10.0) < 1e-9
 
 
 def test_bedroom_interaction_falls_back_when_the_pair_is_new():

@@ -1,11 +1,10 @@
 """Score one property with the saved development-set model.
 
-Listing-quality fields (reviews, amenities, host, minimum nights) are left
-missing unless the caller actually has them. Filling them with zeros would
-claim the home has no kitchen and no reviews. Trees treat missingness as
-its own direction, which is the honest input for a house that has never
-been listed. The published test metrics are for listings where those fields
-were observed; a for-sale score is a rougher use of the same model.
+Listing-quality fields are left missing unless the caller has them. Zeros
+would claim the home has no kitchen and no reviews. Census and OpenStreetMap
+features are looked up from the coordinate, the same join the training rows
+used. The interval is the log-residual conformal radius stored with the
+artifact. It was fit on development folds, not on this call.
 """
 
 from __future__ import annotations
@@ -13,16 +12,20 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from evaluation.fitting import predict_dollars
+from evaluation.intervals import apply_log_interval
+from features.columns import CENSUS_COLUMNS, OSM_COLUMNS
 from features.frame import AMENITY_FLAGS, attach_base_features
+from features.place import features_at
 
 from models.artifacts import available, load_artifact
+from models.explain import shap_matrix, top_reasons
 
 
 def model_available(city_key: str) -> bool:
     return available(city_key)
 
 
-def _frame_row(features: dict, city_key: str) -> pd.Series:
+def _frame_row(features: dict, city_key: str, needed: set[str]) -> pd.Series:
     bedrooms = float(features.get("bedrooms") or 1)
     row = {
         "bedrooms": bedrooms,
@@ -45,8 +48,8 @@ def _frame_row(features: dict, city_key: str) -> pd.Series:
         "neighbourhood_cleansed": features.get("neighbourhood") or "unknown",
     }
     frame = attach_base_features(pd.DataFrame([row]), city_key)
-    # attach_base_features treats a missing review count as "zero reviews",
-    # which is right for a listing file and wrong for a home with no ad.
+    # A missing review count on a file means "no reviews yet". A home that
+    # has never been listed is not that. Leave the fields missing.
     if "number_of_reviews" not in features and "reviews_per_month" not in features:
         frame["log_reviews"] = np.nan
         frame["reviews_per_month"] = np.nan
@@ -62,15 +65,54 @@ def _frame_row(features: dict, city_key: str) -> pd.Series:
     if "amenities" not in features:
         for column in list(AMENITY_FLAGS) + ["amenity_count"]:
             frame[column] = np.nan
+    place_columns = needed & (set(CENSUS_COLUMNS) | set(OSM_COLUMNS))
+    if place_columns:
+        place = features_at(city_key, float(features["latitude"]), float(features["longitude"]))
+        for column in place_columns:
+            frame[column] = place[column]
+        frame["census_imputed"] = place["census_imputed"]
+        frame["census_join"] = place["census_join"]
+        frame["inside_extract"] = place["inside_extract"]
     return frame.iloc[0]
+
+
+def _predict_matrix(artifact: dict, matrix: pd.DataFrame) -> np.ndarray:
+    if artifact.get("library") == "blend":
+        libraries = list(artifact["blend_libraries"])
+        stacked = [
+            predict_dollars(artifact["models"][library], matrix, library) for library in libraries
+        ]
+        return np.mean(stacked, axis=0)
+    return predict_dollars(artifact["model"], matrix, artifact["library"])
+
+
+def _reasons(artifact: dict, matrix: pd.DataFrame) -> list[dict]:
+    names = list(matrix.columns)
+    if artifact.get("library") == "blend":
+        libraries = list(artifact["blend_libraries"])
+        values = np.mean(
+            [shap_matrix(artifact["models"][library], matrix, library)[0] for library in libraries],
+            axis=0,
+        )
+    else:
+        values = shap_matrix(artifact["model"], matrix, artifact["library"])[0]
+    observed = matrix.notna().iloc[0].to_numpy()
+    return top_reasons(
+        names,
+        values,
+        k=5,
+        observed=observed,
+        feature_values=matrix.iloc[0].to_numpy(dtype=float),
+    )
 
 
 def score_features(features: dict, city_key: str) -> dict:
     artifact = load_artifact(city_key)
-    row = _frame_row(features, city_key)
+    row = _frame_row(features, city_key, set(artifact["columns"]))
     columns = list(artifact["columns"])
     matrix = pd.DataFrame([{column: row.get(column, np.nan) for column in columns}])
-    if artifact["use_spatial"]:
+    mode = artifact.get("spatial_mode") or ("both" if artifact.get("use_spatial") else "none")
+    if mode not in (None, "none", False):
         neighbourhood = np.array([features.get("neighbourhood") or "unknown"])
         neigh, bed, knn = artifact["encoder"].transform_new(
             np.array([float(features["latitude"])]),
@@ -78,18 +120,33 @@ def score_features(features: dict, city_key: str) -> dict:
             neighbourhood,
             np.array([float(row["bedrooms"])]),
         )
-        matrix["neigh_log_price"] = neigh
-        matrix["neigh_bed_log_price"] = bed
-        matrix["knn_log_price"] = knn
-    nightly = float(predict_dollars(artifact["model"], matrix, artifact["library"])[0])
+        if mode in ("smooth", "both"):
+            matrix["neigh_log_price"] = neigh
+            matrix["neigh_bed_log_price"] = bed
+        if mode in ("knn", "both"):
+            matrix["knn_log_price"] = knn
+    nightly = float(_predict_matrix(artifact, matrix)[0])
+    radius = artifact.get("conformal_log_radius")
+    if radius is None:
+        low = high = None
+    else:
+        low_arr, high_arr = apply_log_interval(np.array([nightly]), float(radius))
+        low, high = float(low_arr[0]), float(high_arr[0])
     neighbourhood_name = features.get("neighbourhood") or ""
     occupancy = artifact["occupancy_by_neighbourhood"].get(
         neighbourhood_name, artifact["occupancy_global"]
     )
     return {
         "nightly_rate": nightly,
+        "interval_low": low,
+        "interval_high": high,
+        "interval_level": artifact.get("interval_level", 0.80),
+        "reasons": _reasons(artifact, matrix),
+        "census_imputed": bool(row.get("census_imputed", False)),
+        "census_join": int(row.get("census_join", 0) or 0),
+        "inside_extract": bool(row.get("inside_extract", True)),
         "occupancy_rate": float(occupancy),
         "occupancy_source": "neighbourhood_median_of_review_proxy",
-        "feature_set": artifact["feature_set"],
-        "library": artifact["library"],
+        "feature_set": artifact.get("feature_set"),
+        "library": artifact.get("library"),
     }

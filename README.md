@@ -1,61 +1,73 @@
-CapScout is a personal project built in spare time for fun and learning. It is not a commercial product.
+CapScout is a personal project built in Corbin's spare time, for learning and as a portfolio piece. It is not a commercial product.
 
 # CapScout
 
-A study of how well a public Airbnb listing’s advertised nightly rate can be predicted from the listing itself, without leaking nearby listings or the same host into the test set.
+How close can a public model get to an Airbnb listing's advertised nightly rate, without training on the listing next door or on the same host?
 
-The write-up is [reports/FINDINGS.md](reports/FINDINGS.md). That file is the study guide: where the data came from, every cleaning rule, why each feature is there, how the split works, what was tried, and what the numbers mean. This page is the short version.
+The long version is [reports/FINDINGS.md](reports/FINDINGS.md). Sources and licenses are in [DATA.md](DATA.md).
 
 ## The result
 
-One locked spatial test per city, scored once. The model is XGBoost on log price, depth 4, using size, room type, coordinates, distance to downtown, and distance to the airport. Metrics are in dollars, after converting back from the log.
+One locked spatial test per city, frozen before the new features were scored, and scored once. The model is an equal-weight blend of CatBoost and XGBoost on log price. It uses size, room type, coordinates, distance to downtown and the airport, census tract income, rent, home value, and density, and the listing's own amenities and reviews. Metrics are in dollars.
 
-| City | Test R² | Test MAE | Test RMSE |
-| --- | ---: | ---: | ---: |
-| Austin | 0.426 | $95.61 | $164.78 |
-| San Diego | 0.555 | $85.02 | $170.79 |
-| Seattle | 0.437 | $49.80 | $95.16 |
+| City | Test R² | Test MAE | Test RMSE | MAPE | Median APE | Listings |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Austin | 0.422 | $87.74 | $160.46 | 33.6% | 29.0% | 2,796 |
+| San Diego | 0.678 | $98.96 | $178.04 | 30.4% | 24.0% | 875 |
+| Seattle | 0.532 | $38.19 | $74.44 | 26.6% | 21.1% | 2,042 |
 
-On the same rows, a neighbourhood-by-room-type median is worse, and in Austin it is worse than predicting the average (test R² −0.688). A ridge regression on the same columns lands at 0.026 / 0.461 / 0.347. The tree model wins the locked test in all three cities. San Diego’s development splits actually preferred ridge on MAE; that is reported in the findings and was not used to change the test.
+On the same rows, a neighbourhood-by-room-type median is worse (MAE $127.68, $187.07, $61.90). The previous specification, size and location only, lands at R² 0.344 / 0.523 / 0.458. A ridge regression on the selected columns lands at 0.258 / 0.519 / 0.464. Development R² for the selected model was 0.562 ± 0.054 in Austin, 0.568 ± 0.070 in San Diego, and 0.544 ± 0.084 in Seattle.
 
-An older version of this project trained on area-median prices and reported R² near 0.97. On Austin, a model scored against that smoothed target still shows R² 0.973, and the same predictions scored against the listing’s own price show R² 0.385. The high number was the target being easy. It is not a result of this study.
+An earlier study on a different spatial split, with a smaller feature set, reported R² 0.426, 0.555, and 0.437. Those numbers are not this test. The comparison that uses the same listings is the "previous specification" row in the findings.
 
-## What was deliberately left out
+An older pipeline trained on area-median prices and showed R² near 0.97. That was the target being easy. Scored against the listing's own price, the same exercise is about R² 0.385. It is a demonstration, not a result of this study.
 
-Only Austin, San Diego, and Seattle are modeled. They are single metros, the snapshots are from 2025, and bedrooms are filled in. Hawaii is several islands in one file. Several other cities are missing a price on about 30% of rows. Asheville’s bedrooms column is empty. Those files remain on disk and are not in the headline table.
+## What did not help
 
-Listing quality (reviews, amenities, host flags) and nearest-neighbour prices were measured on the development splits. Neighbour comps got worse once listings within 1 km were removed from training. Reviews and amenities helped Austin and hurt Seattle, and the average gain was under a pre-set 1% bar, so they are not in the model. LightGBM was about 1% better on the development average, short of a pre-set 2% bar, so the model stays XGBoost.
+OpenStreetMap distances and counts, building-type flags, smoothed neighbourhood prices, nearest-training-listing prices, and monotone constraints did not clear the pre-set bar. CatBoost alone was a little better than XGBoost and not better enough to replace it; it is half of the blend because the blend was. Detail is in the findings. The 80% intervals covered 66.7% of Austin's test, 75.2% of San Diego's, and 86.6% of Seattle's. They are not uniformly calibrated.
 
 ## Data
 
-Inside Airbnb listings, CC BY 4.0. Credit Inside Airbnb. The snapshots in `data/raw/cities/` are filtered; the license and the exact files are described in the findings. This project does not scrape Airbnb.com, and it does not download listing-site inventories.
+| Source | License | Used for |
+| --- | --- | --- |
+| Inside Airbnb listings | CC BY 4.0 | The rows, the price, size, room type, amenities, reviews |
+| Census ACS 2024 5-year and TIGER/Line tracts | Public domain | Tract income, rent, home value, density |
+| OpenStreetMap via Overpass | ODbL, © OpenStreetMap contributors | Measured, not in the scored model |
 
-Occupancy in the local app, if you run it, is a neighbourhood median of Inside Airbnb’s published review-based proxy (the “San Francisco model,” capped at 70%). It is not observed bookings and it is not a trained model.
+The calendar file was not used. Unavailable is not the same thing as booked. Redfin, Zillow, and AirDNA were not used.
 
-## Layout
+## Reproduce
 
-| Path | What it is |
-| --- | --- |
-| `data/` | City list, download, cleaning, the occupancy proxy |
-| `features/` | Columns that do not use the target, and fold-safe price encodings |
-| `evaluation/` | The split, the baselines, the tree models, the report |
-| `models/` | The saved development-set artifacts and the scorer |
-| `reports/` | Findings, metrics, and figures |
-| `backend/`, `src/` | A small local app for looking at the three cities |
-
-## Run it
+From the repository root, with the pinned `requirements.txt`:
 
 ```bash
 pip install -r requirements.txt
-python -m evaluation.run_eval    # rewrites reports/ and models/artifacts/
+python -m evaluation.run_eval
 pytest
-
-# local app, after the artifacts exist
-cd backend && python app.py
-# other terminal, from the repo root
-npm install && npm run dev
 ```
 
-`evaluation/protocol.py` is the design: the test seed, the 1 km buffer, the host rule, and the bars for “simpler model” and “switch to LightGBM.” Change those and you are running a different study.
+That command downloads the Census and OpenStreetMap extracts if `data/external/` is missing, rebuilds features, fits the development splits, writes `reports/metrics.json`, and scores the locked test once. The first download is about 150 MB of Census files plus a few Overpass queries. Cached city extracts are already in the repo, so a second run skips the network. The evaluation itself is a few minutes on a laptop.
 
-Tests check the split, the occupancy formula, that a fold encoder cannot see a price it was not fit on, and that the figures in this README and in the findings match `reports/metrics.json`.
+`evaluation/protocol.py` is the design: the test seed, the 1 km buffer, the host rule, and the bars for a simpler feature set, a new library, and the blend. Change those and you are running a different study. The held-out listing ids are in `evaluation/locked_test_ids.json`.
+
+## Run the local app
+
+After the artifacts exist (they are committed, or they appear when the command above finishes):
+
+```bash
+streamlit run app/streamlit_app.py
+```
+
+The app binds to `127.0.0.1:8501` only. Pick a city, search an address or click the map, enter bedrooms, bathrooms, guests, and room type. It returns a nightly rate, an 80% interval, the main reasons, and nearby advertised rates. A second page shows the locked-test metrics and the figures.
+
+![CapScout local estimate](docs/app-estimate.png)
+
+The rate is an advertised-rate estimate for a listing that looks like the one you described. Reviews are part of the scored model and are left missing when you have not supplied them, which is the right input for a home that has never been listed. It is not a quote.
+
+## Limitations
+
+- The label is the advertised rate, not what a guest paid.
+- Errors of tens of dollars, and intervals a hundred dollars wide, are the honest precision.
+- San Diego's test is 875 listings. That R² is one split.
+- Seattle's training set after the buffer is 1,507 listings, against a test of 2,042.
+- Three cities, one protocol. This is not a national model.

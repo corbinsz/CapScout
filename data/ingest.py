@@ -191,6 +191,21 @@ def load_listings(city_key: str, *, entire_home_only: bool = False) -> tuple[pd.
     return df, stats
 
 
+def load_study_frame(city_key: str) -> tuple[pd.DataFrame, dict]:
+    """Modeling frame: cleaned listings plus census and OpenStreetMap columns.
+
+    The external columns are a function of coordinates. They are attached
+    before the split because they do not use the price; the split audit
+    checks that no price column other than the fold-fit encodings is used.
+    """
+    from features.place import attach_place_features
+
+    frame, stats = load_listings(city_key)
+    frame, info = attach_place_features(frame, city_key)
+    stats["place"] = info
+    return frame, stats
+
+
 def load_and_clean_listings(city_key: str | None = None) -> pd.DataFrame:
     """Frame used by the local app's analytics views."""
     frame, _stats = load_listings(city_key or "austin")

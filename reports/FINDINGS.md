@@ -1,71 +1,65 @@
-CapScout is a personal project built in spare time for fun and learning. It is not a commercial product.
+CapScout is a personal project built in spare time for learning. It is not a commercial product.
 
 # What the nightly-rate model actually does
 
-This is a study guide for the model, not a product pitch. The question is: given a public Airbnb listing in one city, how close can we get to the nightly price on that listing, without cheating?
+This is a study guide, not a product pitch. The question is: given a public Airbnb listing in one city, how close can we get to the nightly price on that listing, without training on the house next door or on the same host?
 
-The short answer, on a test set that was scored once:
+The short answer, on a test set that was frozen before the new features were built and scored once at the end:
 
-| City | Test R² | Test MAE | Test RMSE | Test listings |
-| --- | ---: | ---: | ---: | ---: |
-| Austin | 0.426 | $95.61 | $164.78 | 2,087 |
-| San Diego | 0.555 | $85.02 | $170.79 | 3,142 |
-| Seattle | 0.437 | $49.80 | $95.16 | 1,012 |
+| City | Test R² | Test MAE | Test RMSE | MAPE | Median APE | Test listings |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Austin | 0.422 | $87.74 | $160.46 | 33.6% | 29.0% | 2,796 |
+| San Diego | 0.678 | $98.96 | $178.04 | 30.4% | 24.0% | 875 |
+| Seattle | 0.532 | $38.19 | $74.44 | 26.6% | 21.1% | 2,042 |
 
-R² is the share of price variance the predictions capture. Zero means “you would have done as well by predicting the average price.” MAE is the average absolute miss, in dollars per night. RMSE is the same idea but it punishes a few large misses more than MAE does.
+R² is the share of price variance the predictions capture. Zero means predicting the average price would have done as well. MAE is the average absolute miss, in dollars per night. RMSE punishes a few large misses more than MAE does. MAPE is the average of |miss| / price, in percent. Median APE is the same idea for a typical listing, so one luxury miss does not set it.
 
-Those three numbers are the result. Everything below is what they mean, how they were produced, and what not to claim.
+Those numbers are the result. Everything below is what they mean, how they were produced, and what not to claim.
 
-The code that produced them is `python -m evaluation.run_eval`. The raw output is `reports/metrics.json` and `reports/locked_test_predictions.csv`. The figures are in `reports/figures/`.
+The code is `python -m evaluation.run_eval`. The raw output is `reports/metrics.json` and `reports/locked_test_predictions.csv`. The figures are in `reports/figures/`. Sources and the join methods are in `DATA.md`.
+
+## In plain English
+
+We kept the three cities from the previous round, Austin, San Diego, and Seattle, because the other Inside Airbnb snapshots on disk are either several markets in one file or missing a price or a bedroom count on too many rows. We froze a new spatial holdout, seed 7, and wrote the held-out listing ids down before any census or map feature was scored. The previous round had already published a seed-42 test. Reusing it would have meant tuning against a test that had been read.
+
+On the development cells we compared, in an order written down first: size, then location, then census tract attributes, then OpenStreetMap, then building type. A simpler set won if it was within 1% mean absolute error of the best set. Census won that comparison. Map features and building type were close and not better enough to add. Two ways of using other listings' prices, both fit inside the training fold only, did not help. The listing's own amenities and reviews did: development MAE fell from about $64 to about $59, which cleared a pre-set 1% bar, including in Seattle.
+
+The point model is a blend. CatBoost was a little better than XGBoost on the development splits and not 2% better, so it did not replace XGBoost. An equal-weight average of the two was just over 1% better than XGBoost alone, which was the bar for keeping a blend. Monotone constraints, which would have forced more bedrooms to never lower the prediction, were slightly worse and were dropped. The trees learned that direction anyway.
+
+On the locked test the blend beats a neighbourhood median and beats the previous specification (size, location, XGBoost, depth 4) in every city. It does not beat them by the same amount, and San Diego's test is only 875 listings, so that city's R² of 0.678 is one split, not a stable law. The 80% intervals, calibrated on development folds to cover about 80%, covered 66.7% of Austin's test, 75.2% of San Diego's, and 86.6% of Seattle's. The spatial shift the split was built to create is also a shift in the errors. The interval is a range, not a guarantee.
 
 ## Where the data came from
 
-The listings are Inside Airbnb snapshots, one file per city, under `data/cities.py` dates:
+Listings are Inside Airbnb snapshots, CC BY 4.0. Credit Inside Airbnb. Dates and the cleaning rules are below. We did not scrape Airbnb.com.
 
-- Austin, scraped date 2025-06-13
-- San Diego, 2025-03-16
-- Seattle, 2025-03-16
+New columns, measured on the development splits:
 
-Inside Airbnb’s public downloads are under the Creative Commons Attribution 4.0 license (CC BY 4.0). That license allows this personal, non-commercial project, including adapting the files, as long as Inside Airbnb is credited and changes are noted. The files here are filtered and given new columns; they are not a verbatim republication of the full dump. Source: [insideairbnb.com/get-the-data](https://insideairbnb.com/get-the-data/) and [insideairbnb.com/data-policies](https://insideairbnb.com/data-policies/). Inside Airbnb is not Airbnb and is not affiliated with this project.
+- **Census ACS 2024 5-year**, public domain, joined by point-in-polygon to TIGER/Line 2024 tracts. Median household income, median gross rent, median home value, population density. About 99.8% of rows landed in a tract polygon. A missing estimate is the city median of tracts, not a function of listing prices.
+- **OpenStreetMap**, ODbL, © OpenStreetMap contributors, via Overpass. Distance to the nearest food place, transit stop, park, beach, and attraction, and counts within 1 km. Built, measured, and not used in the scored model.
+- **The listing's own ad:** amenities, minimum nights, review score and volume, superhost, host portfolio size, instant book. These are known for an existing ad. They are not known for a house that has never been listed. The local app leaves them missing in that case.
 
-We did not scrape Airbnb.com.
+The calendar was not used. Inside Airbnb says an unavailable night is not necessarily a booked night, and availability depends on the price, so it would be a leak.
 
-A few sources were considered and not used:
+A previous study of a different split, with size and location only, reported:
 
-- **The calendar file.** Inside Airbnb says the calendar does not tell a booked night from a night the host blocked. Treating “unavailable” as “booked” would invent occupancy. We left the calendar alone.
-- **Census tract income.** Listings in these files have no ZIP code, and a tract join needs a boundary file we would have to maintain. Neighbourhood and coordinates already carry the local price level. Adding Census would have been a second geography project.
-- **OpenStreetMap extracts.** Distance to the airport uses a handful of published FAA airport reference points typed into `data/cities.py`, not a map download.
-- **Redfin listing rows.** Redfin’s terms forbid automated collection, and the MLS owns the listing data. There is no downloader in this repo. The optional CSV upload in the local app is for a file you downloaded yourself. It is not part of the study.
+| City | That study's R² | MAE | RMSE |
+| --- | ---: | ---: | ---: |
+| Austin | 0.426 | $95.61 | $164.78 |
+| San Diego | 0.555 | $85.02 | $170.79 |
+| Seattle | 0.437 | $49.80 | $95.16 |
 
-### Why only three cities
-
-Austin, San Diego, and Seattle are each one metro. Their listings sit in a tight patch of coordinates (latitude spread on the order of 0.05–0.07 degrees), the snapshots are from 2025, and bedrooms are almost filled in.
-
-After the price window below, Austin keeps 10,296 listings and was missing a price on only 16 rows. San Diego keeps 11,590. Seattle keeps 5,992, and only 2 listings sat above the $2,000 cap, so a luxury tail does not run the score.
-
-The other snapshots are still on disk and are not in these results.
-
-- Hawaii is several islands in one file. A single “city” model would mix markets that are an ocean apart.
-- Las Vegas, Fort Lauderdale, and Nashville are missing a nightly price on roughly 30% of rows. The priced subset may be a biased slice of hosts who bother to publish a rate.
-- Asheville’s bedrooms column is essentially empty, so a size model has nothing to stand on.
-- The remaining cities are smaller or have the same missing-price problem, and fitting fourteen markets would have made the evaluation thinner rather than better.
+Do not put those next to the table at the top and call it an improvement. The rows are different. The same-rows comparison is later, against a model with that older specification trained on this study's development listings.
 
 ## Every cleaning step
 
-Cleaning is in `data/ingest.py`. The rules are fixed dollar amounts and missingness checks. They are not percentiles of the whole file. A percentile computed before the split would let the test listings help decide who counts as an outlier.
+Cleaning is in `data/ingest.py`. The rules are fixed dollar amounts, not percentiles of the file. A percentile computed before the split would let the test listings help decide who counts as an outlier.
 
-Starting from the raw file, in order:
-
-1. Keep every room type (entire home, private room, shared room, hotel room). Room type is a feature, and the baseline also gets room type, so the model is not praised for a split a median already makes.
-2. Parse the price text to a number. Drop missing or non-positive prices.
-3. Drop prices under $25. Those are placeholders and errors, not a real nightly rate.
-4. Drop prices over $2,000. Above that, a few luxury or junk listings dominate squared error. This is a removal, not a cap: we do not quietly pull a $5,000 night down to $2,000 and then score the pulled value.
-5. Drop rows with no latitude or longitude.
-6. Drop rows with no bedroom count, or with a bedroom count outside 0–10. Zero is a studio and stays.
-7. Drop rows with no room type. None of the three cities lost a row here.
-8. If guest capacity (`accommodates`) is missing or zero, fill it with two guests per bedroom. That is a hole in the file, not a guess from other listings’ prices. Observed capacities are left alone.
-
-Counts removed:
+1. Keep every room type. Room type is a feature, and the baseline also gets room type.
+2. Parse the price. Drop missing or non-positive prices.
+3. Drop prices under $25 and over $2,000. The upper cut removes the row. It does not quietly rewrite a $5,000 night as $2,000.
+4. Drop rows with no latitude, longitude, or room type.
+5. Drop rows with no bedroom count, or a bedroom count outside 0–10. Zero is a studio and stays.
+6. If guest capacity is missing or zero, fill it with two guests per bedroom. Observed capacities are left alone.
 
 | Rule | Austin | San Diego | Seattle |
 | --- | ---: | ---: | ---: |
@@ -77,251 +71,240 @@ Counts removed:
 | Bedrooms outside 0–10 | 14 | 4 | 2 |
 | Rows used | 10,296 | 11,590 | 5,992 |
 
-Room mix after cleaning: Austin 8,972 entire homes, 1,285 private rooms, 32 hotel rooms, 7 shared rooms. San Diego 9,898 / 1,505 / 147 / 40. Seattle 4,978 / 976 / 27 / 11.
+Square footage is not on these files. This study does not invent it.
 
-Square footage is not on these files. An earlier assessor join was never saved with the snapshots, so this study does not invent it.
+## The features that were eligible
 
-## The features, and why each one is there
+Stage 1, each one added on top of the one above, compared at XGBoost depth 6 so depth does not get mixed into the feature decision:
 
-The model that was locked in uses ten columns:
+1. **Size and room type.** Bedrooms, bathrooms, capacity, and flags for a private room, a shared room, and a hotel room. An entire home is the baseline, all three flags off.
+2. **Location.** Latitude, longitude, distance to downtown, distance to the airport. Coordinates let a tree draw a surface. The two distances are the part a person can say out loud.
+3. **Census.** Tract income, rent, home value, density. Slow-moving, and not a function of the advertised rate.
+4. **OpenStreetMap.** Distances and 1 km counts. A cap of 20 km keeps "no beach in Austin" from becoming a huge number.
+5. **Structure.** House, cabin, cottage, condo, townhouse, guest unit, and two interactions: capacity times a private or shared room, and downtown distance times house or condo. An extra guest does not price like a whole home when the product is a room.
 
-- **Bedrooms, bathrooms, accommodates.** Size is the obvious price driver. Capacity is not the same thing as bedrooms: a two-bedroom that sleeps eight is a different product.
-- **Room-type flags** (`is_private_room`, `is_shared_room`, `is_hotel_room`). An entire home is the baseline, all three flags off. A private room should not be scored as if it were the whole house.
-- **Latitude and longitude.** Price changes across a city in ways a single “distance to downtown” number cannot capture. In San Diego the coast is a price, and longitude shows up in the SHAP chart for that reason.
-- **Distance to the city center, and distance to the nearest major airport.** Center distance is “how far from the tourist core.” Airport distance separates a neighborhood near the field from one that is not. These are computed from the listing’s coordinates and from fixed reference points. They do not use anyone’s price.
+Then, on whatever stage 1 kept, two encodings that use other listings' prices, fit on the training fold only:
 
-We also built, and then measured, features we did not keep. The rule for keeping a group is in the next section. The groups, in the only order we considered, were:
+- A smoothed neighbourhood mean of log price, and the same thing by bedroom bin. Unseen neighbourhoods fall back to the training mean. The prior is 20 listings, so a block of three sales cannot memorize itself.
+- The median log price of the 40 nearest other training listings. Under a 1 km buffer those neighbours are not next door.
 
-1. Size and room type, as above.
-2. Plus location (coordinates and the two distances).
-3. Plus property type: house, cabin, cottage, condo, townhouse, guest unit. A cabin and a condo are different buildings even when both are “entire place.”
-4. Plus interactions:
-   - accommodates × private room, and accommodates × shared room, because an extra guest does not change the price of a room the way it changes the price of a whole home;
-   - distance-to-center × house, and distance-to-center × condo, so the drive from downtown can have a different slope by building type;
-   - a smoothed mean log price of the neighbourhood, fit on the training rows only;
-   - the same smoothing for neighbourhood × bedroom bin, because a one-bedroom and a four-bedroom in the same neighbourhood are different markets;
-   - the median log price of the 40 nearest *other* training listings.
-5. Plus listing quality: minimum nights (capped at 90 so a 365-night typo cannot dominate), amenity flags and a count, review score, log review count, reviews per month, superhost, log of the host’s listing count, instant book.
+An encoding had to improve mean development MAE by at least 1%. If both did, the smoothed one would win a tie, because it is the more stable of the two. Neither cleared the bar.
 
-The neighbourhood and nearest-neighbour features use other listings’ prices. They are fit inside each training split and never see the row being scored, including when two listings share a coordinate. That is `features/fold.py`. Building them on the whole city and then splitting would leak the test price into the features.
-
-Why listing quality is tempting and dangerous: reviews and amenities are real information about an ad that already exists. They are not known for a house that has never been listed. We measured them anyway, on the development splits, and the pre-set rule did not keep them. Details are under “What we tried that did not help.”
+Then listing quality, same 1% bar. It cleared it.
 
 ## How the data was split
 
-This is the part that makes the numbers defensible.
+**A cell, not a row.** Each listing is assigned to a grid cell of 0.03 degrees, about 3 km of latitude, from its coordinates alone.
 
-**A cell, not a row.** Each listing is assigned to a grid cell of 0.03 degrees (about 3 km of latitude) from its coordinates alone. The cell id does not use the price.
+**One locked test.** Seed 7 holds out 20% of cells. The fraction is of cells, not of rows, so the row share is not 20%. The ids are in `evaluation/locked_test_ids.json`. They were written from coordinates and the seed, and the code refuses to regenerate them if they no longer match.
 
-**One locked test.** `GroupShuffleSplit` with seed 42 holds out 20% of the cells. That fraction is of cells, not of rows, so the row share is not exactly 20%: Austin 20.3% (2,087 listings), San Diego 27.1% (3,142), Seattle 16.9% (1,012). Larger cells make San Diego’s test heavier. Those listings were not used to pick features, tree depth, or XGBoost versus LightGBM. They were scored once, at the end.
+| City | Test listings | Share of rows | Training rows before the blocks | Removed for a shared host | Removed by the 1 km buffer | Training rows used |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Austin | 2,796 | 27.2% | 7,500 | 1,501 | 1,602 | 4,397 |
+| San Diego | 875 | 7.5% | 10,715 | 1,610 | 627 | 8,478 |
+| Seattle | 2,042 | 34.1% | 3,950 | 1,015 | 1,428 | 1,507 |
 
-**Same host cannot sit on both sides.** If a host has a listing in the test cells, their other listings are removed from training. A host’s pricing habits are not a free feature.
+San Diego's test is a small set of cells. Seattle's test is a large set, and the buffer then removes most of what would have been the training side. Both facts are the split working, and both make a single MAE less stable than it looks.
 
-**Nothing within 1 km of a test listing stays in training.** A cell boundary is an arbitrary line. Without this buffer, the house across the street could still be in the training set. The buffer deletes training rows; it does not move them into the test.
+**Tuning never sees the test.** The development rows are split the same way five times, seeds 0 through 4. Mean MAE across those seeds, averaged over the three cities, makes every modeling choice. The spread we report is the sample standard deviation across the five seeds. It is a spread, not a confidence interval from a formula.
 
-What that costs, because it is a lot and should be visible:
+**Early stopping is inside the training side** of whatever split is being fit. A further 20% of those training cells pick the number of trees. That slice is not the validation fold and not the locked test. The model that scores the locked test is then refit on all of the development rows, with that tree count.
 
-| City | Training rows before the blocks | Removed for a shared host | Removed by the 1 km buffer | Training rows actually used |
-| --- | ---: | ---: | ---: | ---: |
-| Austin | 8,209 | 1,360 | 1,546 | 5,303 |
-| San Diego | 8,448 | 2,421 | 2,193 | 3,834 |
-| Seattle | 4,980 | 950 | 1,126 | 2,904 |
+**The target is log(1 + price).** A 20% miss on a $100 night is treated like a 20% miss on a $400 night. Every reported metric is computed after converting predictions back to dollars. We do not report a log-space R² and call it the result.
 
-**Tuning never sees the test.** The development rows (the training side above) are split the same way five times, seeds 0 through 4: 20% of the remaining cells held out, then the same host purge and 1 km buffer. Mean MAE across those five seeds, averaged over the three cities, makes every modeling choice. We report that mean and its standard deviation. The standard deviation is the sample standard deviation across the five seeds, so it is a spread, not a confidence interval from a formula.
+## What was selected
 
-**Early stopping is inside the training side of whatever split is being fit.** A further 20% of those training cells pick the number of trees. That slice is not the validation fold and not the locked test. During the comparison, each candidate is scored from that early-stopped fit, so every candidate is treated the same. The single model that scores the locked test is then refit on all of the development rows, with the tree count early stopping chose. The saved file in `models/artifacts/` is that development refit. The test listings are not in it.
+Development MAE, averaged across the three cities and five seeds. Stage 1 is XGBoost depth 6. The best stage-1 MAE was $63.84, for structure. Census was $64.29, which is within 1%, and it is the simpler set, so census is what we kept. Location alone was $65.26, which is outside that band.
 
-**The target is log(1 + price).** Nightly rates are skewed. Squared error on dollars spends the model on a few expensive listings. Squared error on the log treats a 20% miss on a $100 night like a 20% miss on a $400 night. Every reported R², MAE, and RMSE is computed after converting predictions back to dollars with `expm1`. We do not report a log-space R² and call it the result.
+| Feature set | Mean development MAE | In the model? |
+| --- | ---: | --- |
+| Size and room type | $68.93 | no, location was better by more than 1% |
+| Plus location | $65.26 | no |
+| Plus census | $64.29 | yes, this is the stage-1 set |
+| Plus OpenStreetMap | $64.45 | no |
+| Plus structure | $63.84 | no, within 1% of census, and census is simpler |
+| Location plus OpenStreetMap, no census | $65.15 | not eligible, a substitution check |
+| Census plus smoothed neighbourhood price | $70.88 | no, worse |
+| Census plus 40 nearest training prices | $64.15 | no, short of a 1% gain |
+| Census plus listing quality | $58.70 | yes |
 
-## The models we tried
+Per city, the same ablation, mean ± standard deviation of MAE. This is the table that says what each source did, rather than the average hiding a city.
 
-All of these were fit on the development splits. None of them were chosen by looking at the locked test.
+| Set | Austin | San Diego | Seattle |
+| --- | ---: | ---: | ---: |
+| Size and room | 83.63 ± 15.06 | 71.50 ± 13.87 | 51.67 ± 3.82 |
+| Plus location | 81.79 ± 14.73 | 64.04 ± 17.87 | 49.95 ± 5.99 |
+| Plus census | 79.96 ± 16.37 | 64.01 ± 16.89 | 48.91 ± 6.59 |
+| Plus OpenStreetMap | 80.18 ± 15.29 | 63.28 ± 17.30 | 49.89 ± 5.86 |
+| Plus structure | 79.56 ± 14.87 | 63.38 ± 16.82 | 48.58 ± 6.10 |
+| OSM without census | 81.41 ± 14.15 | 64.10 ± 18.13 | 49.93 ± 6.04 |
+| Smoothed neighbourhood price | 85.36 ± 13.68 | 68.92 ± 18.52 | 58.36 ± 6.06 |
+| 40 nearest training prices | 79.34 ± 15.16 | 63.48 ± 17.05 | 49.62 ± 6.24 |
+| Listing quality | 71.21 ± 16.15 | 59.13 ± 14.15 | 45.77 ± 5.73 |
 
-**Baseline.** Median training price for the same neighbourhood and room type. If that pair was not in the training cells, fall back to the neighbourhood median, then to the overall training median. A stricter baseline adds a bedroom bin (0 through 6) on top of neighbourhood and room type.
+Read it as differences, not as a leaderboard. Location is worth a few dollars in every city, and more than that in San Diego. Census is worth about $2 in Austin, about $1 in Seattle, and nothing visible in San Diego. OpenStreetMap on top of census is flat or a bit worse. Listing quality is the large, consistent gain: about $9 in Austin, $5 in San Diego, $3 in Seattle. The smoothed neighbourhood price is actively harmful, especially in Seattle, which is what a spatial split should do to a feature that only knows neighbourhoods the training cells happened to contain.
 
-**Ridge regression** on the same columns as the selected tree model, including any fold-fit encodings when those were in the candidate set. Medians for missing values and the scaling are fit on the training side of that split only. The penalty is chosen by `RidgeCV` on that same training side, over a fixed grid of alphas. The target is the log price; the score is in dollars.
+The chart is `reports/figures/ablation_mae.png`.
 
-**XGBoost** with a histogram tree builder. Learning rate 0.05, `min_child_weight` 8, row and column subsampling 0.8, and L2 penalty 1 were fixed before looking at the other cities. The only depth values tried were 4, 6, and 8. Up to 400 trees, with early stopping after 30 rounds of no improvement.
-
-**LightGBM** at the depth XGBoost had already settled on, same learning rate and similar leaf constraints. It replaces XGBoost only if its mean development MAE is under 98% of XGBoost’s. That bar was written down so a 1% wobble could not change the headline library.
-
-### What was selected, and the rule
-
-Feature groups are cumulative. We take the simplest prefix whose mean development MAE, averaged across cities and seeds, is within 1% of the best prefix. Shallower trees win the same way.
-
-Development MAE, averaged across the three cities and five seeds:
-
-| Feature prefix | Mean MAE |
-| --- | ---: |
-| Size and room type | $70.04 |
-| Plus location | $68.02 |
-| Plus property type | $67.78 |
-| Plus interactions and spatial comps | $75.76 |
-| Plus listing quality | $67.51 |
-
-Listing quality is the best by a hair ($67.51 versus $68.02 for location). That is a 0.7% gap, inside the 1% band, so the simpler location model is the one we kept. Property type is in the same band and was not worth the extra columns either.
-
-Tree depth, on that location model, same average:
+Depth, on the selected columns, same average:
 
 | Depth | Mean MAE |
 | --- | ---: |
-| 4 | $68.13 |
-| 6 | $68.02 |
-| 8 | $68.16 |
+| 4 | $58.37 |
+| 6 | $58.70 |
+| 8 | $59.22 |
 
-Depth 6 is best. Depth 4 is within 1%, so the selected model is **XGBoost with depth 4**.
+Depth 4 is the best, not merely within 1% of the best. Deeper trees were worse.
 
-LightGBM at that depth had mean development MAE $67.49, against $68.13 for XGBoost. That is about a 0.9% improvement, short of the 2% bar. The headline model stays XGBoost.
+Libraries at depth 4:
 
-Per city, on the five development seeds, for the model we actually kept (mean ± standard deviation):
+| Library | Mean MAE |
+| --- | ---: |
+| XGBoost | $58.37 |
+| LightGBM | $58.83 |
+| CatBoost | $57.70 |
+| XGBoost with monotone constraints | $59.00 |
+| Equal-weight CatBoost and XGBoost | $57.62 |
 
-| City | Model | R² | MAE | RMSE |
-| --- | --- | ---: | ---: | ---: |
-| Austin | Neighbourhood × room | -0.031 ± 0.034 | 103.00 ± 15.79 | 214.12 ± 30.17 |
-| Austin | × bedroom bin | 0.029 ± 0.121 | 97.76 ± 17.14 | 207.79 ± 34.90 |
-| Austin | Ridge | 0.118 ± 0.424 | 78.94 ± 4.86 | 190.73 ± 21.57 |
-| Austin | XGBoost | 0.385 ± 0.119 | 71.90 ± 5.93 | 163.29 ± 10.98 |
-| San Diego | Neighbourhood × room | -0.234 ± 0.310 | 144.23 ± 39.54 | 242.36 ± 57.42 |
-| San Diego | × bedroom bin | -0.111 ± 0.324 | 134.60 ± 34.16 | 227.67 ± 47.06 |
-| San Diego | Ridge | 0.531 ± 0.062 | 78.72 ± 15.96 | 149.72 ± 32.67 |
-| San Diego | XGBoost | 0.480 ± 0.157 | 85.18 ± 23.42 | 157.70 ± 44.35 |
-| Seattle | Neighbourhood × room | -0.083 ± 0.072 | 70.90 ± 13.57 | 125.04 ± 29.65 |
-| Seattle | × bedroom bin | -0.079 ± 0.071 | 70.63 ± 13.50 | 124.79 ± 29.72 |
-| Seattle | Ridge | 0.458 ± 0.146 | 49.15 ± 11.28 | 88.54 ± 27.03 |
-| Seattle | XGBoost | 0.454 ± 0.155 | 47.31 ± 12.07 | 89.19 ± 29.02 |
+CatBoost is about 1.1% better than XGBoost. The bar for replacing XGBoost was 2%, so the single model stays XGBoost. The blend is about 1.3% better than XGBoost, and the bar for a blend was 1%, so the blend is the scored model. The weights were not fit on the validation fold. A learned stacker would have needed another split, and with three cities it would mostly be noise. Monotone constraints were about 1.1% worse. More bedrooms does raise the prediction, which the partial-dependence plots show, but forcing the constraint did not reduce dollar error.
 
-Read the San Diego row carefully. On the development splits, ridge had a lower MAE than the tree model ($78.72 versus $85.18). We did not switch to ridge, because the protocol’s selected model is the tree, and ridge is the linear baseline. The locked test, below, went the other way. Both facts stay in the write-up.
+Development results for the blend that was kept, mean ± standard deviation across five seeds:
 
-The negative R² on the neighbourhood median is not a bug in the median. The test cells are different parts of the city. A neighbourhood the training cells never saw falls back to a citywide median, and a citywide median is a bad guess for a held-out beach or a held-out suburb. That is what a spatial split is supposed to reveal.
+| City | R² | MAE |
+| --- | ---: | ---: |
+| Austin | 0.562 ± 0.054 | 69.71 ± 15.11 |
+| San Diego | 0.568 ± 0.070 | 58.28 ± 15.32 |
+| Seattle | 0.544 ± 0.084 | 44.88 ± 5.48 |
 
-The chart is `reports/figures/model_comparison.png`.
+Ridge on the same columns, same splits: Austin MAE 71.19 ± 15.01 (R² 0.554 ± 0.096), San Diego 62.34 ± 15.89 (R² 0.529 ± 0.025), Seattle 45.26 ± 5.72 (R² 0.582 ± 0.058). In Seattle, on the development splits, ridge's R² is higher than the blend's. We did not switch to ridge. The protocol's selected model is the tree blend, and ridge is the linear baseline. The locked test, below, prefers the blend in Seattle as well. Both facts stay.
 
-### Learning curves
-
-On development seed 0 only — still not the test — we refit the selected model on 15%, 30%, 50%, 75%, and 100% of the training cells and scored the same validation cells. The chart is `reports/figures/learning_curves.png`.
-
-Validation MAE generally falls as more of the city is available, and the train MAE and validation MAE end up close once the full development training cells are used. San Diego overfits when only a small slice of cells is used (train MAE around $40 against validation MAE around $80) and the gap closes by the time most cells are in. The curves are jagged because a random subset of cells is not a smooth “more data” knob: one unlucky set of cells can be worse than a smaller set. That noise is why the curve is a diagnostic, not a tuning tool.
+The neighbourhood median's development R² is about zero or negative. The test cells are different parts of the city. A neighbourhood the training cells never saw falls back to a citywide median, and a citywide median is a bad guess for a held-out neighbourhood. That is what a spatial split is for.
 
 ## The locked test
 
 Scored once, after the choices above.
 
-| City | Model | R² | MAE | RMSE |
-| --- | --- | ---: | ---: | ---: |
-| Austin | Neighbourhood × room | -0.688 | $152.46 | $282.59 |
-| Austin | × bedroom bin | -0.395 | $138.47 | $256.92 |
-| Austin | Ridge | 0.026 | $111.00 | $214.67 |
-| Austin | XGBoost | 0.426 | $95.61 | $164.78 |
-| San Diego | Neighbourhood × room | 0.033 | $135.52 | $251.82 |
-| San Diego | × bedroom bin | 0.339 | $110.50 | $208.29 |
-| San Diego | Ridge | 0.461 | $90.40 | $187.99 |
-| San Diego | XGBoost | 0.555 | $85.02 | $170.79 |
-| Seattle | Neighbourhood × room | -0.029 | $70.51 | $128.60 |
-| Seattle | × bedroom bin | -0.031 | $70.36 | $128.70 |
-| Seattle | Ridge | 0.347 | $51.27 | $102.47 |
-| Seattle | XGBoost | 0.437 | $49.80 | $95.16 |
+| City | Model | R² | MAE | RMSE | MAPE | Median APE |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Austin | Neighbourhood × room | -0.172 | $127.68 | $228.43 | 53.1% | 42.7% |
+| Austin | × bedroom bin | 0.099 | $113.94 | $200.31 | 48.0% | 37.4% |
+| Austin | Previous specification | 0.344 | $93.21 | $170.88 | 38.5% | 31.6% |
+| Austin | Ridge | 0.258 | $99.60 | $181.72 | 37.2% | 34.2% |
+| Austin | Blend | 0.422 | $87.74 | $160.46 | 33.6% | 29.0% |
+| San Diego | Neighbourhood × room | 0.006 | $187.07 | $312.82 | 65.9% | 48.1% |
+| San Diego | × bedroom bin | 0.327 | $156.69 | $257.29 | 59.6% | 40.2% |
+| San Diego | Previous specification | 0.523 | $117.45 | $216.64 | 33.8% | 27.1% |
+| San Diego | Ridge | 0.519 | $113.67 | $217.70 | 31.3% | 26.3% |
+| San Diego | Blend | 0.678 | $98.96 | $178.04 | 30.4% | 24.0% |
+| Seattle | Neighbourhood × room | -0.053 | $61.90 | $111.69 | 46.7% | 34.5% |
+| Seattle | × bedroom bin | -0.053 | $61.94 | $111.67 | 46.7% | 34.5% |
+| Seattle | Previous specification | 0.458 | $43.07 | $80.16 | 30.3% | 24.1% |
+| Seattle | Ridge | 0.464 | $40.68 | $79.70 | 28.6% | 21.9% |
+| Seattle | Blend | 0.532 | $38.19 | $74.44 | 26.6% | 21.1% |
 
-On this one split the tree model beats the median and beats ridge in every city. Austin’s ridge basically fails (R² 0.026) while the tree still reaches 0.426, which matches the SHAP picture: Austin’s price is a spatial surface, and a linear model on raw latitude and longitude is a poor surface.
-
-Entire homes only, same predictions, same test cells (the old project’s population, reported as a slice rather than a different experiment):
-
-| City | Entire-home test R² | MAE | RMSE | n |
-| --- | ---: | ---: | ---: | ---: |
-| Austin | 0.413 | $101.31 | $172.48 | 1,750 |
-| San Diego | 0.583 | $84.06 | $159.28 | 2,689 |
-| Seattle | 0.423 | $53.15 | $104.41 | 752 |
-
-An earlier audit of the previous pipeline, on a random 20% of listings and on entire homes, put honest R² roughly in the 0.10–0.53 range. This test is a harder question (whole cells held out, hosts blocked, a 1 km gap), and entire-home R² lands at 0.413, 0.583, and 0.423. It is not the same split, so it is not a paired “before and after” on identical rows. It is the number you get when next-door listings are not allowed to help.
+The previous specification is XGBoost depth 4 on size, room type, and location only. Same development rows, same test rows, same fitting procedure. It is the fair "did the new columns help" comparison. They did: MAE falls by about $5 in Austin, $18 in San Diego, and $5 in Seattle. That bundle is census plus listing quality plus the blend, not census alone. The ablation is where those pieces are separated, and it was not re-run on the test.
 
 Predicted versus actual, and residual versus predicted, are `reports/figures/pred_vs_actual.png` and `reports/figures/residuals.png`.
 
 ### Where the errors are
 
-Dollar error grows with the predicted price. That is what a log target does: it cares about relative error, so a miss on an expensive listing is a lot of dollars.
-
-Austin, MAE by predicted-price quintile: about $50, $65, $82, $87, then $195 in the top bin. The top bin is predictions from about $283 to $1,106.
-
-San Diego: about $26, $41, $58, $95, then $206. The mean residual in that top bin is +$84, which means the model is still low on the listings it already thinks are expensive. It shrinks toward the middle.
-
-Seattle’s top bin (predictions up to about $569) has MAE about $102. The cheaper four bins sit between $32 and $46.
+Dollar error grows with the predicted price. The top fifth of Austin predictions, roughly $204 to $1,079, has MAE about $167, and the model is still low there (mean residual about +$85). San Diego's pattern is the same shape. Seattle's dollar errors are smaller because Seattle's prices are smaller. Expensive listings are systematically under-predicted. A log target does that: it cares about relative error, and it shrinks extremes toward the middle.
 
 Room type on the same test:
 
-- Entire homes carry most of the R² above.
-- Private rooms are cheaper and the dollar MAE is smaller (Austin $60.64, San Diego $74.27, Seattle $40.03), but Seattle’s private-room R² is negative: the model is not beating the private-room mean there.
-- Hotel rooms are rare (11 in Austin’s test, 39 in San Diego, none in Seattle’s test) and the model misses them badly. San Diego hotel-room MAE is $280.
-- Shared rooms are a handful of listings. An R² on 2 or 6 or 12 rows is noise. Ignore it.
+- Entire homes are most of the rows and carry the R² above. Austin 2,417 homes, R² 0.425, MAE $90.02. San Diego 670 homes, R² 0.669, MAE $103.90. Seattle 1,685 homes, R² 0.495, MAE $40.91.
+- Private rooms are cheaper. Dollar MAE is smaller (Austin $68.00, San Diego $58.27, Seattle $25.33). Austin's private-room R² is only 0.101.
+- Hotel rooms are rare and the model misses them by about $250. Do not quote a hotel-room R².
+- Shared rooms are a handful of listings, including a single San Diego row. An R² on that is not a result.
 
-### What the model is using
+## Prediction intervals
 
-SHAP values here are the average absolute contribution to the log-price prediction, on a sample of up to 600 locked-test rows. They explain the model we scored. They were not used to drop features after the fact. The chart is `reports/figures/shap.png`.
+The interval in the app is an 80% band from split conformal on the log residual. For each development fold we took the absolute error in log price, held that fold out, and checked coverage with a radius fit on the other folds. That development coverage was 79.7% in Austin, 80.1% in San Diego, and 79.7% in Seattle. The radius applied to the test is fit on all of those development residuals, not on the test.
 
-- **Austin:** distance to downtown (0.32), bedrooms (0.21), bathrooms (0.17), then longitude, capacity, and latitude. Private-room status is real but smaller (0.05). Airport distance is minor (0.02).
-- **San Diego:** guest capacity (0.26) and longitude (0.14) lead, then bedrooms and bathrooms. Longitude is the coast. Downtown distance matters less than in Austin.
-- **Seattle:** bedrooms (0.19), capacity (0.16), and private-room status (0.09), then distance to downtown.
+On the locked test the same radius covered 66.7% of Austin (median width $119), 75.2% of San Diego (median width $185), and 86.6% of Seattle (median width $109). The chart is `reports/figures/calibration.png`. Austin's band is too narrow, especially on the listings the model already thinks are expensive, which are the ones it under-predicts. Seattle's band is a bit wide. A spatial holdout is not an exchangeable sample, so the conformal coverage guarantee does not fully apply. We did not widen Austin's band after seeing 66.7%. That would be a second look at the test.
+
+A quantile model, pinball loss at the 10th and 90th percentiles, fit on the development rows and scored once, covered 70.2%, 70.9%, and 71.8%. The two quantiles did not cross. Coverage is more similar across cities than the conformal band, and still short of 80%. It is the diagnostic, not the interval the app shows.
+
+## What the model is using
+
+SHAP values are the average absolute contribution to the log-price prediction, on a sample of up to 600 locked-test rows, averaged across the two models in the blend. They explain the model we scored. They were not used to drop features. The chart is `reports/figures/shap.png`.
+
+- **Austin:** bedrooms (0.21), reviews per month (0.13), the host's listing count (0.11), bathrooms (0.11), capacity (0.09), private-room status (0.08), tract median home value (0.08), distance to downtown (0.07).
+- **San Diego:** capacity (0.25) and longitude (0.19) lead. Longitude is the coast. Then bedrooms, bathrooms, and reviews per month. Census is not in the top eight. That matches the ablation, where census did not move San Diego's development MAE.
+- **Seattle:** bedrooms (0.15), capacity (0.13), reviews per month (0.08), private-room status (0.07), distance to downtown (0.06), tract home value (0.05).
+
+Partial dependence, on development rows, holding the other columns fixed (`reports/figures/partial_dependence.png`):
+
+- Bedrooms raise the predicted rate in every city. In Austin the curve goes from about $119 for a studio to about $229 for five bedrooms. Seattle goes from about $113 to about $198. The monotone constraint was not needed for the trees to learn this.
+- Distance to downtown lowers the rate, sharply in Seattle (about $183 at 1 km, about $134 at 10 km) and mildly in Austin. In San Diego the curve is almost flat. The coast, not the downtown pin, is the location signal, which is why longitude leads the San Diego SHAP chart.
+- Tract median income moves Austin and San Diego by about $10 across the middle of the distribution, and it does not move Seattle in any clean direction. Home value shows up in SHAP for Austin and Seattle. Income is a real column and a small one.
 
 ## The old R² near 0.97
 
-The previous training target was not the listing’s price. Listings were clustered geographically, grouped by cluster and bedroom count, and each row’s target was replaced by that group’s median price. The model was then scored against those medians. Medians are smooth. A model that has latitude and bedrooms can redraw a smooth median easily.
+The previous training target, in a pipeline this study does not use, was not the listing's price. Listings were clustered geographically, grouped by cluster and bedroom count, and each row's target was replaced by that group's median price. The model was then scored against those medians.
 
-On Austin, as a demonstration and not as a result we are claiming (it uses the whole city, including what would have been a test):
+On Austin, as a demonstration and not as a result (it uses the whole city, including what would have been a test):
 
 - A model trained on the group median and scored against that median has cross-validated R² **0.973** and MAE about **$7**.
-- The same predictions, scored against the listing’s own price, have R² **0.385** and MAE **$84.40**.
+- The same predictions, scored against the listing's own price, have R² **0.385** and MAE **$84.40**.
 
-That is the inflation. The second number is in the same ballpark as a real model. The first number is the target being easy.
-
-A separate, smaller issue is that a median computed before the split includes the listing’s own price. On Austin the correlation between price and the median that includes the listing is 0.648. The correlation with a leave-one-out median is 0.635. So “the row helped write its own target” is real but modest. Scoring the smoothed target as if it were the listing price is the thing that manufactures a 0.97.
-
-This study does not train on a median. The baselines use medians as predictions. The model’s target is the listing.
+That is the inflation. This study does not train on a median. The baselines use medians as predictions. The model's target is the listing.
 
 ## What we tried that did not help
 
-The ablation chart is `reports/figures/ablation_mae.png`. Development MAE by city (mean ± sd across five seeds), XGBoost depth 6, which is the depth the ablation used before the depth search:
+**OpenStreetMap.** On top of census, mean development MAE went from $64.29 to $64.45. Without census, against location alone, it went from $65.26 to $65.15. Per city the moves are a dollar or less, and in Seattle adding the map features to census made MAE worse ($48.91 to $49.89). Parks are everywhere in these extracts, so "distance to a park" has little contrast. Beaches matter in principle in San Diego and not in Austin, and a single column for all three cities did not pay for itself. The features are still built by `python -m data.external`, so the negative result is reproducible rather than a missing download.
 
-| Prefix | Austin | San Diego | Seattle |
-| --- | ---: | ---: | ---: |
-| Size and room | 76.57 ± 4.43 | 85.11 ± 14.13 | 48.44 ± 11.99 |
-| Plus location | 72.38 ± 6.21 | 83.74 ± 21.85 | 47.94 ± 12.19 |
-| Plus property type | 72.03 ± 5.49 | 82.93 ± 20.06 | 48.39 ± 12.72 |
-| Plus interactions | 76.10 ± 6.37 | 94.20 ± 19.79 | 56.99 ± 14.45 |
-| Plus listing quality | 67.52 ± 6.03 | 83.08 ± 15.47 | 51.93 ± 13.07 |
+**Building type and the two interactions.** The best stage-1 number, and within 1% of census. Not worth the extra columns under the pre-set rule.
 
-Location helps in all three cities, a few dollars of MAE. Property type does not move the average enough to keep.
+**Smoothed neighbourhood prices.** Worse in every city, and badly worse in Seattle ($48.91 to $58.36). A neighbourhood the training cells never saw falls back to a broad mean, and that constant is noise to a tree that already has coordinates and a tract income.
 
-**Interactions and nearest-neighbour prices made things worse** under this split, by about $4 in Austin, $10 in San Diego, and $9 in Seattle versus location alone. The reason is the split itself. The 40 nearest training listings are at least 1 km away, often in a different cell, so “comps” are not comps. A neighbourhood encoding fit only on other cells does not know the held-out neighbourhood and falls back to a broad mean. Fed to a tree, that noise hurts. On a random split that lets the house next door into training, those features would look strong. That strength would be the leakage this design was built to refuse.
+**Forty nearest training listings.** Slightly better than census alone in the average ($64.15 versus $64.29), short of 1%. The neighbours are at least 1 km away. They are not comps.
 
-**Listing quality helps Austin and hurts Seattle.** Austin’s development MAE falls from $72.38 to $67.52 when reviews, amenities, and host fields are added. Seattle’s rises from $47.94 to $51.93. Averaged across cities the gain is under 1%, so the fields stay out. That is also the honest product statement: once you cannot see the listing next door, the ad’s own reviews are not a reliable extra, and they are unavailable for a house that has no ad yet.
+**Monotone constraints.** About 1% worse. The partial-dependence plot already slopes the right way for bedrooms.
 
-**LightGBM** was a little better on the development average and not better enough to switch. **Deeper trees** were the same story.
+**CatBoost as the only model.** About 1% better than XGBoost, short of the 2% bar. It is in the blend because the average cleared a different, pre-set bar, not because we liked the name.
 
-**A pooled model across cities** was not fit. Three cities with a pre-committed per-city protocol was the study. Pooling would have been a second project and a way to shop for a better number.
+**A learned stacker, a pooled three-city model, and the calendar.** Not fit. A stacker needs a further split or it flatters itself. Pooling would have been a second study. The calendar would have been a leak.
+
+## Self-audit
+
+Checked in code and recorded in `reports/metrics.json` under each city:
+
+- The frozen listing ids match seed 7 recomputed from coordinates. The file does not contain prices.
+- No spatial cell is in both training and test.
+- No host is in both training and test.
+- No training listing is within 1 km of a test listing. The minimum gap is just over 1 km in each city.
+- The only columns whose names involve price would be the fold-fit encodings. Those encodings were not selected, and none of them are in the scored matrix.
+- Census and OpenStreetMap columns are computed from coordinates and public maps. Shuffling the price column cannot change them. The tests cover the distance function and the tract join on a synthetic polygon.
+- Feature sets, depth, library, the monotone decision, and the blend were chosen by the functions in `evaluation/select.py` from development MAE only. `tests/test_report.py` replays those functions on the JSON and fails if the recorded winner was edited.
+- The locked-test metrics in the JSON match `reports/locked_test_predictions.csv` recomputed from the saved predictions, including the interval coverage.
+
+`audit_passed` in the JSON is true.
 
 ## What the local app is doing
 
-The Flask app and the React screen are a way to look at the three cities and at a single scored property. They are not a second evaluation.
+`streamlit run app/streamlit_app.py` serves `127.0.0.1` only. It is a way to read one prediction and the test report. It is not a second evaluation and it is not deployed.
 
-- The number the model owns is one nightly rate.
-- The 12-month curve multiplies that rate by hand-set seasonal weights in `data/cities.py`. The weights average to 1, so they do not change the annual average. They are a sketch of the travel calendar (SXSW, summer, and so on), not a fit to bookings.
-- Occupancy on the screen is the median, in that neighbourhood, of Inside Airbnb’s San Francisco review proxy, computed on the development listings only. The proxy assumes half of stays leave a review, uses the city’s average stay or the listing’s minimum nights when that minimum is longer, divides by 30, and caps the result at 70%. Listings with no reviews are left missing rather than called 0% occupied. We did not train a model to predict this proxy. The inputs that define it are the review counts, and using those inputs would be circular. The calendar cannot supply a cleaner label.
-- The 0–100 score is a mortgage worksheet on top of that revenue. It is not a measure of predictive accuracy.
-
-For a home that is not an existing listing, reviews and amenities are left missing. They are not filled with zeros. Zeros would mean “no kitchen” and “no reviews.”
+- The nightly rate is the blend.
+- The band is the conformal interval from this study, with the city's radius.
+- The reasons are SHAP values on that row, averaged across the two models, turned into an approximate percent with exp(shap) − 1.
+- Nearby rates are Inside Airbnb advertised prices for similar listings. They are not inputs to the model.
+- An address is geocoded with the Census geocoder, which is public domain. The map can also take a click.
+- Reviews and amenities are left missing unless you have them. Missing is not "no kitchen." The test metrics are for listings where those fields were observed. A never-listed home is a rougher use of the same model.
 
 ## Limitations
 
 - The label is the advertised rate, not what a guest paid and not what a host cleared after fees.
-- Airbnb jitters coordinates by up to about 150 meters. Distances and cells are fuzzy at that scale.
-- The 1 km buffer and the host purge throw away a large share of training rows. The model is answering “a part of the city I did not train on,” which is harder than “the house next door,” and it is also a smaller training set.
-- Test size differs by city because cells are not equal. San Diego’s test is 27% of rows.
+- Airbnb jitters coordinates by up to about 150 meters. Distances, cells, and the tract join are fuzzy at that scale. Tract polygons in the cache are simplified by about 15 meters on top of that.
+- The 1 km buffer and the host purge throw away a large share of training rows. Seattle keeps 1,507 training listings against a test of 2,042.
+- Test size differs by city because cells are not equal. San Diego's test is 7.5% of rows. One unlucky set of cells moves that R².
 - Hotel rooms and shared rooms are too rare to judge.
-- Errors of $50 to $200 a night are large relative to the price. The model is a ranking and a rough level, not a quote.
-- Expensive listings are systematically a bit under-predicted.
-- Development seed-to-seed MAE moves by $6 in Austin and by $20 in San Diego. One split’s MAE is not a stable law.
-- Austin’s development R² for ridge has a standard deviation of 0.42. One bad spatial fold swings a linear model hard. Do not quote a development R² without the spread.
-- The saved model has not seen the test listings. That is intentional. It is slightly weaker than a model refit on every row would be, and the test number matches the model that was saved.
-- Three cities, one protocol. Nothing here is a national Airbnb model.
-- Histogram trees were fit with every CPU core. A repeat run can move the third decimal of a metric. The tables match `reports/locked_test_predictions.csv` and `reports/metrics.json` from this run; those files are the record.
+- Errors of $40 to $100 a night, and intervals $100 to $180 wide, are large relative to the price. The model is a level and a ranking, not a quote.
+- Expensive listings are under-predicted, and Austin's 80% interval only covered 67% of the test.
+- Development seed-to-seed MAE moves by about $15 in Austin and San Diego. One split's MAE is not a stable law.
+- The saved model has not seen the test listings. That is intentional.
+- Three cities, one protocol. Nothing here is a national model.
+- Histogram trees can move the third decimal of a metric when every CPU core is used. The tables match `reports/metrics.json` from this run. That file is the record.
 
 ## How to reproduce
 
@@ -333,12 +316,10 @@ python -m evaluation.run_eval
 pytest
 ```
 
-The evaluation refits every development split. It takes a while. It writes `reports/metrics.json`, `reports/locked_test_predictions.csv`, the figures, and `models/artifacts/<city>/model.joblib`.
+The evaluation refits every development split, then scores the locked test once. It writes `reports/metrics.json`, `reports/locked_test_predictions.csv`, the figures, and `models/artifacts/<city>/model.joblib`.
 
 The local app, after that:
 
 ```bash
-cd backend && python app.py
+streamlit run app/streamlit_app.py
 ```
-
-and, in another terminal, `npm install && npm run dev`. The app only offers Austin, San Diego, and Seattle.

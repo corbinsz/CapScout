@@ -1,0 +1,21 @@
+[global]
+developmentMode = false
+
+[server]
+address = "127.0.0.1"
+port = 8501
+headless = true
+enableXsrfProtection = true
+enableCORS = true
+corsAllowedOrigins = ["http://127.0.0.1:8501", "http://localhost:8501"]
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#0f6e56"
+backgroundColor = "#f4efe6"
+secondaryBackgroundColor = "#fffdf8"
+textColor = "#1c1915"
+font = "sans serif"

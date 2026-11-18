@@ -50,10 +50,19 @@ def plot_ablation(ablation: dict, path: Path) -> None:
     _save(fig, path)
 
 
-def plot_model_comparison(comparison: dict, path: Path) -> None:
+def plot_model_comparison(comparison: dict, path: Path, models: list[str] | None = None) -> None:
     cities = list(comparison)
-    models = ["baseline_room", "baseline_room_bed", "ridge", "gbm"]
-    labels = ["Neighbourhood × room", "× bedroom bin", "Ridge", "GBM"]
+    default = ["baseline_room", "baseline_room_bed", "ridge", "gbm"]
+    models = models or [name for name in default if name in next(iter(comparison.values()))]
+    labels = {
+        "baseline_room": "Neighbourhood × room",
+        "baseline_room_bed": "× bedroom bin",
+        "ridge": "Ridge",
+        "xgboost": "XGBoost",
+        "lightgbm": "LightGBM",
+        "catboost": "CatBoost",
+        "gbm": "Selected",
+    }
     x = np.arange(len(models))
     width = 0.25
     fig, ax = plt.subplots(figsize=(9, 4.8))
@@ -61,7 +70,7 @@ def plot_model_comparison(comparison: dict, path: Path) -> None:
         means = [comparison[city][m]["mae_mean"] for m in models]
         stds = [comparison[city][m]["mae_std"] for m in models]
         ax.bar(x + (i - 1) * width, means, width, yerr=stds, label=city, capsize=2)
-    ax.set_xticks(x, labels)
+    ax.set_xticks(x, [labels.get(name, name) for name in models], rotation=15, ha="right")
     ax.set_ylabel("Development MAE ($/night)")
     ax.set_title("Baselines, ridge, and the selected GBM")
     ax.legend()
@@ -130,4 +139,47 @@ def plot_shap(shap_rows: dict, path: Path) -> None:
         ax.set_xlabel("Mean |SHAP| on log price")
         ax.set_title(city)
     fig.suptitle("What the locked-test model uses", y=1.02)
+    _save(fig, path)
+
+
+def plot_calibration(preds: pd.DataFrame, path: Path) -> None:
+    """Does the 80% interval cover 80% in cheap listings and in expensive ones?"""
+    cities = list(preds["city"].unique())
+    fig, ax = plt.subplots(figsize=(8.2, 4.6))
+    for city in cities:
+        part = preds[preds["city"] == city].copy()
+        part["bin"] = pd.qcut(part["pred_gbm"], 8, duplicates="drop")
+        rows = []
+        for _label, group in part.groupby("bin", observed=True):
+            covered = (group["y_true"] >= group["pred_lo"]) & (group["y_true"] <= group["pred_hi"])
+            rows.append((float(group["pred_gbm"].median()), float(covered.mean())))
+        ax.plot([r[0] for r in rows], [r[1] for r in rows], marker="o", label=city)
+    ax.axhline(0.80, color="black", linewidth=1, linestyle="--", label="nominal 80%")
+    ax.set_ylim(0, 1)
+    ax.set_xlabel("Median predicted nightly price in the bin ($)")
+    ax.set_ylabel("Share of listings inside the interval")
+    ax.set_title("Locked test: interval coverage by predicted price")
+    ax.legend(fontsize=8)
+    _save(fig, path)
+
+
+def plot_pdp(curves: dict, path: Path) -> None:
+    """Partial dependence on the development rows. One feature, three cities."""
+    if not curves:
+        return
+    features = list(next(iter(curves.values())))
+    fig, axes = plt.subplots(1, len(features), figsize=(4.3 * len(features), 4.2), squeeze=False)
+    for ax, feature in zip(axes[0], features, strict=True):
+        for city, city_curves in curves.items():
+            rows = city_curves.get(feature) or []
+            if not rows:
+                continue
+            ax.plot(
+                [r["value"] for r in rows], [r["mean_pred"] for r in rows], marker="o", label=city
+            )
+        ax.set_title(feature.replace("_", " "))
+        ax.set_ylabel("Mean predicted nightly rate ($)")
+        ax.set_xlabel("Feature value, other columns held")
+    axes[0][0].legend(fontsize=8)
+    fig.suptitle("Partial dependence on the development set", y=1.03)
     _save(fig, path)

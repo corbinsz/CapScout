@@ -7,7 +7,12 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 
 def regression_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
-    """R², MAE, and RMSE in dollars per night."""
+    """R², MAE, RMSE, MAPE, and median absolute percent error, in dollars.
+
+    MAPE is the mean of |error| / price, in percent. Prices in this study
+    are at least $25, so a zero price cannot blow it up. Median APE is the
+    more robust cousin: one luxury miss does not set the percentage.
+    """
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
     # A log model can theoretically predict a hair under zero after expm1
@@ -16,10 +21,28 @@ def regression_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, floa
     # that would hide over-prediction.
     y_pred = np.maximum(y_pred, 0.0)
     rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
+    ape = np.abs(y_true - y_pred) / y_true
     return {
         "r2": float(r2_score(y_true, y_pred)),
         "mae": float(mean_absolute_error(y_true, y_pred)),
         "rmse": rmse,
+        "mape": float(np.mean(ape) * 100.0),
+        "median_ape": float(np.median(ape) * 100.0),
+        "n": int(len(y_true)),
+    }
+
+
+def interval_metrics(y_true: np.ndarray, low: np.ndarray, high: np.ndarray) -> dict[str, float]:
+    """Coverage and width of a prediction interval. Coverage is the share inside."""
+    y_true = np.asarray(y_true, dtype=float)
+    low = np.asarray(low, dtype=float)
+    high = np.asarray(high, dtype=float)
+    covered = (y_true >= low) & (y_true <= high)
+    width = high - low
+    return {
+        "coverage": float(np.mean(covered)),
+        "median_width": float(np.median(width)),
+        "mean_width": float(np.mean(width)),
         "n": int(len(y_true)),
     }
 

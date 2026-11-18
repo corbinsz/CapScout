@@ -1,0 +1,33 @@
+{
+  "city": "austin",
+  "bbox": [
+    -98.17335,
+    29.95844,
+    -97.44243999999999,
+    30.639400000000002
+  ],
+  "bbox_pad_degrees": 0.12,
+  "acs_vintage": "2024 5-year",
+  "acs_source": "U.S. Census Bureau ACS table-based summary file, tables B19013 (median household income), B25064 (median gross rent), B25077 (median home value), B01003 (total population)",
+  "tiger_source": "TIGER/Line 2024 census tracts",
+  "osm_source": "OpenStreetMap, queried through a public Overpass endpoint",
+  "downloaded_at": "2026-11-18",
+  "census_medians": {
+    "census_median_income": 103312.0,
+    "census_median_rent": 1801.5,
+    "census_median_home_value": 481400.0,
+    "census_pop_density": 1239.8185804623079
+  },
+  "n_tracts": 448,
+  "acs_matched_income": 444,
+  "n_pois": {
+    "food": 3237,
+    "transit": 2390,
+    "park": 34360,
+    "beach": 212,
+    "attraction": 110
+  },
+  "distance_cap_km": 20.0,
+  "count_radius_km": 1.0,
+  "nearest_tract_fallback_km": 2.0
+}
