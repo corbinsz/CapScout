@@ -95,6 +95,81 @@ V2_BLEND = ("catboost", "xgboost")
 CONFIRM_SEED = 11
 CONFIRM_GROUP_FRACTION = 0.20
 
+# Final holdout for this round. Seed 7 and seed 11 have both been read, so
+# neither can choose a feature. Seed 23 holds out 20% of the cells that are
+# in neither of those two. It is not 0–4, 7, 11, or 42, and it was not
+# searched. The ids are written before any v4 model is fit.
+FINAL_SEED = 23
+FINAL_GROUP_FRACTION = 0.20
+
+# Inside Airbnb snapshots strictly before each city's study date, still
+# hosted for free on the day this list was written. Later public scrapes
+# (Austin from 2025-12, San Diego and Seattle from 2025-12) post-date the
+# label, so they are not here. The list is every file that answered, not a
+# subset picked because it scored well. One row per listing: the newest of
+# these wins, and a listing already in the study file is not repeated.
+HISTORY_SNAPSHOTS = {
+    "austin": (
+        "2024-04-21",
+        "2024-05-19",
+        "2024-06-17",
+        "2024-07-21",
+        "2024-08-14",
+        "2024-09-13",
+        "2024-10-14",
+        "2024-11-14",
+        "2024-12-14",
+        "2025-01-16",
+        "2025-02-16",
+        "2025-03-06",
+        "2025-04-12",
+        "2025-05-11",
+    ),
+    "san-diego": ("2025-02-18",),
+    "seattle": ("2025-02-18",),
+}
+
+# Matched comps. One specification, not a grid. v2's 40-neighbour median
+# and v3's 5 km kernel mixed room types and stayed too local for a 3 km
+# cell plus a 1 km buffer. 15 km is about five cells. 250 is the query
+# cap so a rare room type does not silently become the citywide median.
+COMP_NEIGHBORS = 40
+COMP_QUERY = 250
+COMP_MAX_KM = 15.0
+COMP_MIN_MATCHES = 8
+
+# Same width as the TF-IDF that failed in v3, so a sentence embedding has
+# to beat bag-of-words at the same number of columns. The model is a small
+# static embedding, not a searched network.
+EMBED_MODEL = "minishlab/potion-base-8M"
+EMBED_COMPONENTS = 8
+
+# Tail weights. Median price has weight 1, the 90th percentile has weight
+# 3, and nothing is weighted above 3 or below 1. Not searched.
+TAIL_WEIGHT_HIGH = 3.0
+
+# Hyperparameters. Screened on seeds 0–1 and kept only if seeds 2–4 also
+# clear the 1% bar. An adaptive search on all five seeds would overfit them.
+TUNE_SCREEN_SEEDS = (0, 1)
+TUNE_CONFIRM_SEEDS = (2, 3, 4)
+TUNE_GRID = (
+    {"name": "lr_0.03", "learning_rate": 0.03},
+    {"name": "lr_0.08", "learning_rate": 0.08},
+    {"name": "min_child_20", "min_child_weight": 20.0},
+)
+
+# Mondrian bands on the predicted price. Five is a quintile. A band with
+# fewer than 40 calibration residuals uses the city-wide quantile instead.
+MONDRIAN_BANDS = 5
+MONDRIAN_MIN_ROWS = 40
+# A new interval has to close the worst price-band hole by this much.
+INTERVAL_BAND_GAIN = 0.03
+# An evaluation band smaller than this is not a coverage estimate.
+BAND_MIN_EVAL = 15
+
+# Add-ons, in the only order the sequential rule considers.
+V4_ADDON_ORDER = ("matched_comps", "text_embed", "history", "tail_weight")
+
 # Text and kernel settings. Fixed here so a later reader can see they were
 # not a grid search. Eight components is small on purpose: Seattle's
 # training set after the buffer is about 1,500 rows.
@@ -229,6 +304,12 @@ def stage1_spec(name: str) -> tuple[list[str], str]:
 def v2_features() -> tuple[list[str], str]:
     """The published specification: census, location, size, and listing quality."""
     return resolve_features(V2_STAGE1, None, V2_QUALITY)
+
+
+def v3_features() -> tuple[list[str], str, str]:
+    """The published v3 stack: v2 columns plus the detail block. Not re-searched."""
+    columns, _spatial = v2_features()
+    return stack_features(columns, ["listing_detail"])
 
 
 def stack_features(base_columns: list[str], kept: list[str]) -> tuple[list[str], str, str]:

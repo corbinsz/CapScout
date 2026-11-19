@@ -14,6 +14,12 @@ No Redfin, Zillow, AirDNA, or other source whose terms forbid automated collecti
 
 Other snapshots are on disk and were screened. They are not in the model. Hawaii is several islands in one file. Asheville has almost no bedrooms. Las Vegas, Fort Lauderdale, Nashville, and Washington are missing a nightly price on roughly 20–30% of rows. Boston, Denver, Dallas, Fort Worth, and New Orleans are missing a price on about 9–20%. A fourth market with a large unpriced slice would not make the spatial test more honest.
 
+### Earlier snapshots of the same three cities
+
+Inside Airbnb's public page keeps about the last 12 months. On the day this round was frozen, every file still hosted for San Diego and Seattle before their study dates was one snapshot, 2025-02-18. Austin still had a monthly file from 2024-04-21 through 2025-05-11. Files dated after the study snapshot (Austin 2025-06-13, San Diego and Seattle 2025-03-16) were left alone: a later scrape is a price from after the label. The files are under `data/raw/cities/<city>/history/<date>.csv.gz`, CC BY 4.0, credit Inside Airbnb. `python -m data.history` downloads any that are missing.
+
+A listing that is already in the study file is not repeated. The newest earlier snapshot is kept for ids the study file does not have. Those rows can enter training only. They are dropped when they share a host with a held-out listing, sit in a held-out cell, or fall inside the 1 km buffer. Whether they cleared the error bar is in the findings, not here.
+
 ### Not used from Inside Airbnb
 
 - **Calendar, availability, estimated occupancy, and estimated revenue.** Inside Airbnb says a night marked unavailable is not necessarily booked. Those fields also move with the price being predicted, so they would be a leak. They are not features.
@@ -70,4 +76,4 @@ Distance to downtown uses the city reference point in `data/cities.py`. Distance
 
 ## What the scored model actually uses
 
-Census tract attributes, plus the listing's own size, coordinates, distances, amenities, review scores, and host fields. The later round added beds, a shared-bath flag, host tenure and response, the separate review scores other than value, and a few more amenity flags. OpenStreetMap columns, listing text, and smoothed nearby prices were built and measured and left out. The findings record the comparison.
+Census tract attributes, plus the listing's own size, coordinates, distances, amenities, review scores, and host fields. v3 added beds, a shared-bath flag, host tenure and response, the separate review scores other than value, and a few more amenity flags. This round measured earlier snapshots, matched comps, a sentence embedding, tail weights, a third tree library, a small hyperparameter grid, a weighted blend, and two retransformation fixes. None of them cleared the error bar, so the scored columns are still v3's. The 80% band is now fit separately in bands of the predicted price. OpenStreetMap columns were measured in v2 and left out. The findings record the comparisons.

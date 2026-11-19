@@ -63,6 +63,7 @@ def plot_model_comparison(comparison: dict, path: Path, models: list[str] | None
         "lightgbm": "LightGBM",
         "catboost": "CatBoost",
         "v2": "v2 specification",
+        "v3": "v3 specification",
         "gbm": "Selected",
     }
     x = np.arange(len(models))
@@ -109,7 +110,7 @@ def plot_pred_vs_actual(preds: pd.DataFrame, path: Path) -> None:
         ax.set_xlabel("Actual nightly price ($)")
         ax.set_ylabel("Predicted ($)")
         ax.set_title(city)
-    fig.suptitle("Locked test: predicted vs actual", y=1.02)
+    fig.suptitle("Final holdout: predicted vs actual", y=1.02)
     _save(fig, path)
 
 
@@ -126,7 +127,7 @@ def plot_residuals(preds: pd.DataFrame, path: Path) -> None:
         ax.set_xlabel("Predicted nightly price ($)")
         ax.set_ylabel("Actual − predicted ($)")
         ax.set_title(city)
-    fig.suptitle("Locked test residuals", y=1.02)
+    fig.suptitle("Final holdout residuals", y=1.02)
     _save(fig, path)
 
 
@@ -140,7 +141,7 @@ def plot_shap(shap_rows: dict, path: Path) -> None:
         ax.barh([pretty(p["feature"]) for p in pairs], [p["mean_abs_shap"] for p in pairs])
         ax.set_xlabel("Mean |SHAP| on log price")
         ax.set_title(city)
-    fig.suptitle("What the locked-test model uses", y=1.02)
+    fig.suptitle("What the final-holdout model uses", y=1.02)
     _save(fig, path)
 
 
@@ -160,7 +161,7 @@ def plot_calibration(preds: pd.DataFrame, path: Path) -> None:
     ax.set_ylim(0, 1)
     ax.set_xlabel("Median predicted nightly price in the bin ($)")
     ax.set_ylabel("Share of listings inside the interval")
-    ax.set_title("Locked test: interval coverage by predicted price")
+    ax.set_title("Final holdout: interval coverage by predicted price")
     ax.legend(fontsize=8)
     _save(fig, path)
 

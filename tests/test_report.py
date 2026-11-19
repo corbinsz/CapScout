@@ -14,7 +14,10 @@ from evaluation.metrics import interval_metrics, regression_metrics
 from evaluation.protocol import STAGE1
 from evaluation.select import (
     choose_addon,
+    choose_band_interval,
     choose_blend,
+    choose_confirmed,
+    choose_correction,
     choose_depth,
     choose_interval,
     choose_library,
@@ -28,10 +31,12 @@ from evaluation.select import (
 
 ROOT = Path(__file__).resolve().parents[1]
 JSON_PATH = ROOT / "reports" / "metrics.json"
+FINAL_PATH = ROOT / "reports" / "final_predictions.csv"
 CSV_PATH = ROOT / "reports" / "locked_test_predictions.csv"
 CONFIRM_PATH = ROOT / "reports" / "confirmation_predictions.csv"
 V2_JSON = ROOT / "reports" / "v2_metrics.json"
 V2_CSV = ROOT / "reports" / "v2_locked_test_predictions.csv"
+V3_JSON = ROOT / "reports" / "v3_metrics.json"
 FINDINGS = ROOT / "reports" / "FINDINGS.md"
 README = ROOT / "README.md"
 
@@ -40,37 +45,50 @@ def _load():
     return json.loads(JSON_PATH.read_text()), pd.read_csv(CSV_PATH)
 
 
+def _match(part: pd.DataFrame, saved: dict, saved_interval: dict) -> None:
+    recomputed = regression_metrics(part["y_true"].to_numpy(), part["pred_gbm"].to_numpy())
+    for key in ("r2", "mae", "rmse", "mape", "median_ape", "n"):
+        assert abs(recomputed[key] - saved[key]) < 1e-6, (key, recomputed, saved)
+    interval = interval_metrics(part["y_true"], part["pred_lo"], part["pred_hi"])
+    assert abs(interval["coverage"] - saved_interval["coverage"]) < 1e-6
+
+
 def test_predictions_match_the_json():
-    payload, preds = _load()
+    payload, locked = _load()
+    final = pd.read_csv(FINAL_PATH)
+    confirm = pd.read_csv(CONFIRM_PATH)
     assert payload["smoke"] is False
     assert payload["audit_passed"] is True
     for city, report in payload["cities"].items():
-        part = preds[preds["city"] == city]
-        recomputed = regression_metrics(part["y_true"].to_numpy(), part["pred_gbm"].to_numpy())
-        saved = report["locked_test"]["gbm"]
-        for key in ("r2", "mae", "rmse", "mape", "median_ape", "n"):
-            assert abs(recomputed[key] - saved[key]) < 1e-6, (city, key, recomputed, saved)
-        interval = interval_metrics(part["y_true"], part["pred_lo"], part["pred_hi"])
-        saved_interval = report["locked_test"]["interval"]
-        assert abs(interval["coverage"] - saved_interval["coverage"]) < 1e-6
+        _match(
+            final[final["city"] == city],
+            report["final_holdout"]["gbm"],
+            report["final_holdout"]["interval"],
+        )
+        _match(
+            locked[locked["city"] == city],
+            report["locked_test"]["gbm"],
+            report["locked_test"]["interval"],
+        )
+        _match(
+            confirm[confirm["city"] == city],
+            report["confirmation"]["gbm"],
+            report["confirmation"]["interval"],
+        )
+        assert report["audit"]["final"]["passed"] is True
         assert report["audit"]["split"]["passed"] is True
         assert report["audit"]["confirmation"]["passed"] is True
-        confirm = payload["cities"][city]["confirmation"]
-        confirm_part = pd.read_csv(CONFIRM_PATH)
-        confirm_part = confirm_part[confirm_part["city"] == city]
-        recomputed_confirm = regression_metrics(
-            confirm_part["y_true"].to_numpy(), confirm_part["pred_gbm"].to_numpy()
-        )
-        for key in ("r2", "mae", "rmse", "mape", "median_ape", "n"):
-            assert abs(recomputed_confirm[key] - confirm["gbm"][key]) < 1e-6, city
+        # The point model was not changed, so seed 7's dollars match the archive.
+        published = payload["published_v3"][city]["gbm"]["mae"]
+        assert abs(report["locked_test"]["gbm"]["mae"] - published) < 1e-6
 
 
-def test_prose_quotes_the_locked_test():
+def test_prose_quotes_the_final_holdout():
     payload, _preds = _load()
     findings = FINDINGS.read_text()
     readme = README.read_text()
     for city, report in payload["cities"].items():
-        gbm = report["locked_test"]["gbm"]
+        gbm = report["final_holdout"]["gbm"]
         for text in (findings, readme):
             assert f"{gbm['r2']:.3f}" in text
             assert f"{gbm['mae']:.2f}" in text
@@ -80,9 +98,12 @@ def test_prose_quotes_the_locked_test():
         dev = payload["development_comparison"][city]["gbm"]
         assert f"{dev['r2_mean']:.3f} ± {dev['r2_std']:.3f}" in findings
         assert f"{dev['mae_mean']:.2f} ± {dev['mae_std']:.2f}" in findings
-        coverage = report["locked_test"]["interval"]["coverage"]
+        coverage = report["final_holdout"]["interval"]["coverage"]
         assert f"{coverage * 100:.1f}%" in findings
         assert f"{coverage * 100:.1f}%" in readme
+        seed7 = report["locked_test"]["gbm"]
+        assert f"{seed7['mae']:.2f}" in findings
+        assert f"{seed7['r2']:.3f}" in findings
 
 
 def test_recorded_choices_follow_the_pre_set_rule():
@@ -124,28 +145,47 @@ def test_recorded_choices_follow_the_pre_set_rule():
     )
     assert choose_blend(winner, protocol["blend_development_mae"]) == protocol["blend"]
 
+    v3 = json.loads(V3_JSON.read_text())["protocol"]
+    kept_v3 = choose_sequential(
+        v3["v3_base_mae"],
+        [(item["name"], item["mae"]) for item in v3["v3_trials"]],
+    )
+    assert kept_v3 == v3["v3_kept"]
+    depth_pairs = [(int(depth), mae) for depth, mae in v3["depth_development_mae"].items()]
+    assert choose_depth(depth_pairs) == v3["chosen_depth"]
+    assert (
+        choose_pooled(v3["per_city_development_mae"], v3["pooled_development_mae"]) == v3["pooled"]
+    )
+    assert choose_interval(v3["interval_candidates"]) == v3["interval_method"]
+
     payload, _preds = _load()
-    current_protocol = payload["protocol"]
+    current = payload["protocol"]
     kept = choose_sequential(
-        current_protocol["v3_base_mae"],
-        [(item["name"], item["mae"]) for item in current_protocol["v3_trials"]],
+        current["v4_base_mae"],
+        [(item["name"], item["mae"]) for item in current["v4_trials"]],
     )
-    assert kept == current_protocol["v3_kept"]
-    depth_pairs = [
-        (int(depth), mae) for depth, mae in current_protocol["depth_development_mae"].items()
-    ]
-    assert choose_depth(depth_pairs) == current_protocol["chosen_depth"]
+    assert kept == current["v4_kept"]
+    # Nothing was added, so the third library is compared with the v3 baseline.
+    assert choose_quality(current["v4_base_mae"], current["three_library_mae"]) is False
+    screen_default = current["tune"]["screen_default"]
+    best_screen = min(item["mae"] for item in current["tune"]["screen"])
+    assert choose_confirmed(screen_default, best_screen) is False
+    assert current["tune"]["kept"] is False
     assert (
-        choose_pooled(
-            current_protocol["per_city_development_mae"],
-            current_protocol["pooled_development_mae"],
+        choose_confirmed(current["stacker_confirm_default"], current["stacker_confirm_mae"])
+        == current["stacker_kept"]
+    )
+    assert (
+        choose_correction(
+            current["correction_mae"]["none"],
+            [
+                ("smear", current["correction_mae"]["smear"]),
+                ("isotonic", current["correction_mae"]["isotonic"]),
+            ],
         )
-        == current_protocol["pooled"]
+        == current["correction"]
     )
-    assert (
-        choose_interval(current_protocol["interval_candidates"])
-        == current_protocol["interval_method"]
-    )
+    assert choose_band_interval(current["interval_candidates"]) == current["interval_method"]
 
 
 def test_published_v2_archive_matches_its_predictions():

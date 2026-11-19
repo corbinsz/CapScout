@@ -532,7 +532,15 @@ def select_v3(prepared: dict, *, smoke: bool = False) -> dict:
     }
 
 
-def fit_holdout(prepared: dict, train_idxs: dict, eval_idxs: dict, spec: dict, *, refit: bool):
+def fit_holdout(
+    prepared: dict,
+    train_idxs: dict,
+    eval_idxs: dict,
+    spec: dict,
+    *,
+    refit: bool,
+    with_quantiles: bool = True,
+):
     """Fit the chosen point model and per-city quantile models. Score `eval_idxs`.
 
     `refit` is true for a holdout score: early stopping picks the tree count,
@@ -611,23 +619,28 @@ def fit_holdout(prepared: dict, train_idxs: dict, eval_idxs: dict, spec: dict, *
             out[city] = fitted
 
     for city in cities:
-        quant = _per_city_fold(
-            prepared[city]["frame"],
-            prepared[city]["split"]["groups"],
-            train_idxs[city],
-            eval_idxs[city],
-            columns,
-            spatial,
-            text,
-            depth,
-            quantiles=True,
-            refit=refit,
-        )
-        out[city]["q_lo"] = quant["q_lo"]
-        out[city]["q_hi"] = quant["q_hi"]
-        out[city]["q_models"] = quant["q_models"]
         y = prepared[city]["frame"]["price_clean"].to_numpy(dtype=float)[eval_idxs[city]]
         out[city]["y"] = y
+        if with_quantiles:
+            quant = _per_city_fold(
+                prepared[city]["frame"],
+                prepared[city]["split"]["groups"],
+                train_idxs[city],
+                eval_idxs[city],
+                columns,
+                spatial,
+                text,
+                depth,
+                quantiles=True,
+                refit=refit,
+            )
+            out[city]["q_lo"] = quant["q_lo"]
+            out[city]["q_hi"] = quant["q_hi"]
+            out[city]["q_models"] = quant["q_models"]
+        else:
+            out[city]["q_lo"] = None
+            out[city]["q_hi"] = None
+            out[city]["q_models"] = None
         if len(y) != len(out[city]["pred"]):
             raise RuntimeError(f"{city} prediction length does not match the holdout")
     return out

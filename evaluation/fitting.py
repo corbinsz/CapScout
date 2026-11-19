@@ -237,6 +237,39 @@ def _new_model(library: str, params: dict, n_estimators: int, *, monotone, early
     raise ValueError(f"Unknown library: {library}")
 
 
+def _weight_slice(sample_weight: np.ndarray | None, index: np.ndarray) -> np.ndarray | None:
+    if sample_weight is None:
+        return None
+    return np.asarray(sample_weight, dtype=float)[index]
+
+
+def _fit_model(model, library: str, X, y, sample_weight, eval_X=None, eval_y=None) -> None:
+    """Train one library. `sample_weight` is omitted when it is None.
+
+    Passing None is not the same as omitting it for every constructor, so
+    the argument is only added when a tail weight was actually built.
+    """
+    kwargs: dict = {}
+    if sample_weight is not None:
+        kwargs["sample_weight"] = np.asarray(sample_weight, dtype=float)
+    if library == "xgboost":
+        if eval_X is not None:
+            kwargs["eval_set"] = [(eval_X, eval_y)]
+            kwargs["verbose"] = False
+        model.fit(X, y, **kwargs)
+    elif library == "lightgbm":
+        if eval_X is not None:
+            kwargs["eval_set"] = [(eval_X, eval_y)]
+            kwargs["callbacks"] = [early_stopping(EARLY_STOPPING_ROUNDS, verbose=False)]
+        model.fit(X, y, **kwargs)
+    else:
+        if eval_X is not None:
+            kwargs["eval_set"] = (eval_X, eval_y)
+            kwargs["use_best_model"] = True
+            kwargs["early_stopping_rounds"] = EARLY_STOPPING_ROUNDS
+        model.fit(X, y, **kwargs)
+
+
 def fit_boosted(
     library: str,
     params: dict,
@@ -245,12 +278,15 @@ def fit_boosted(
     groups: np.ndarray,
     *,
     monotone: bool = False,
+    sample_weight: np.ndarray | None = None,
 ):
     """Early-stopped model. `_capscout_trees` is the tree count to use.
 
     The stopping slice is a spatial cut of the training rows. It is not the
     validation fold and not the locked test. During comparison we predict
     with that early-stopped fit, so every candidate leaves the same rows out.
+    `sample_weight` is the tail weight. It is None for every model that is
+    not the tail-weighted candidate, so those fits stay comparable to v3.
     """
     X = _as_frame(X)
     y_log = np.asarray(y_log, dtype=float)
@@ -261,37 +297,27 @@ def fit_boosted(
     if n_groups >= 8 and len(X) >= 200:
         inner_train, inner_valid = holdout_groups(groups, 0.2, seed=0)
         model = _new_model(library, fitted, MAX_TREES, monotone=monotone, early_stopping=True)
+        _fit_model(
+            model,
+            library,
+            X.iloc[inner_train],
+            y_log[inner_train],
+            _weight_slice(sample_weight, inner_train),
+            X.iloc[inner_valid],
+            y_log[inner_valid],
+        )
         if library == "xgboost":
-            model.fit(
-                X.iloc[inner_train],
-                y_log[inner_train],
-                eval_set=[(X.iloc[inner_valid], y_log[inner_valid])],
-                verbose=False,
-            )
             model._capscout_trees = int(model.best_iteration) + 1
         elif library == "lightgbm":
-            model.fit(
-                X.iloc[inner_train],
-                y_log[inner_train],
-                eval_set=[(X.iloc[inner_valid], y_log[inner_valid])],
-                callbacks=[early_stopping(EARLY_STOPPING_ROUNDS, verbose=False)],
-            )
             model._capscout_trees = int(model.best_iteration_)
         else:
-            model.fit(
-                X.iloc[inner_train],
-                y_log[inner_train],
-                eval_set=(X.iloc[inner_valid], y_log[inner_valid]),
-                use_best_model=True,
-                early_stopping_rounds=EARLY_STOPPING_ROUNDS,
-            )
             model._capscout_trees = int(model.tree_count_)
         return model
 
     model = _new_model(
         library, fitted, min(MAX_TREES, 200), monotone=monotone, early_stopping=False
     )
-    model.fit(X, y_log)
+    _fit_model(model, library, X, y_log, sample_weight)
     model._capscout_trees = None
     return model
 
@@ -304,6 +330,7 @@ def refit_boosted(
     y_log: np.ndarray,
     *,
     monotone: bool = False,
+    sample_weight: np.ndarray | None = None,
 ):
     """Refit on every development row with the tree count early stopping chose."""
     n_trees = max(int(n_trees), 20)
@@ -311,7 +338,7 @@ def refit_boosted(
     fitted = dict(params)
     fitted["_columns"] = list(X.columns)
     model = _new_model(library, fitted, n_trees, monotone=monotone, early_stopping=False)
-    model.fit(X, np.asarray(y_log, dtype=float))
+    _fit_model(model, library, X, np.asarray(y_log, dtype=float), sample_weight)
     model._capscout_trees = None
     return model
 
