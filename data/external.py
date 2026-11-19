@@ -506,9 +506,9 @@ def main() -> None:
     parser.add_argument("cities", nargs="*", help="City keys. Defaults to the study cities.")
     parser.add_argument("--refresh", action="store_true", help="Ignore cached extracts.")
     args = parser.parse_args()
-    from evaluation.protocol import study_cities
+    from data.cities import STUDY_CITIES
 
-    cities = tuple(args.cities) if args.cities else study_cities()
+    cities = tuple(args.cities) if args.cities else STUDY_CITIES
     ensure_external(cities, refresh=args.refresh)
     print("External extracts are in data/external/", flush=True)
 

@@ -1,6 +1,6 @@
 # Data
 
-The current scored model is the simple spatial study in `reports/FINDINGS.md`: ridge regression for the nightly rate, and a linear model for a rough nights estimate. Raw Inside Airbnb files are not in git. Download them with `python -m data.download austin san-diego seattle`. Older history files, if you want them, come from `python -m data.history` and are gitignored the same way.
+The current scored model is the simple spatial study in `reports/FINDINGS.md`: ridge regression for the nightly rate, and a linear model for a rough nights estimate. Raw Inside Airbnb files are not in git. Download them with `python -m data.download austin san-diego seattle`. Earlier snapshot lists from older pipelines are on the git tag `archive-pre-v7`. They are not part of this tree.
 
 Every source below can be downloaded by a script and reused for this study. Derived columns (distances, counts, tract attributes joined to listings) are what a model can see. The national Census files and the raw Overpass responses are caches and are not committed. The city extracts under `data/external/` are small and stay in the repo.
 
@@ -18,14 +18,14 @@ Other snapshots are on disk and were screened. They are not in the model. Hawaii
 
 ### Earlier snapshots of the same three cities
 
-Inside Airbnb's public page keeps about the last 12 months. The previous round's history list, which this model does not use, is San Diego and Seattle 2025-02-18 and Austin monthly files from 2024-04-21 through 2025-05-11. The files belong under `data/raw/cities/<city>/history/<date>.csv.gz`, CC BY 4.0, credit Inside Airbnb. `python -m data.history` downloads any that are missing. They are gitignored, same as the current snapshots.
+Inside Airbnb's public page keeps about the last 12 months. An earlier round kept San Diego and Seattle 2025-02-18 and Austin monthly files from 2024-04-21 through 2025-05-11. This model does not use those files. The code that downloaded them is on the git tag `archive-pre-v7`.
 
 A listing that is already in the study file is not repeated. The newest earlier snapshot is kept for ids the study file does not have. Those rows can enter training only. They are dropped when they share a host with a held-out listing, sit in a held-out cell, or fall inside the 1 km buffer. Whether they cleared the error bar is in the findings, not here.
 
 ### Not used from Inside Airbnb
 
 - **Calendar and availability, as a model feature.** Inside Airbnb says a night marked unavailable is not necessarily booked. `availability_365` is not a feature and it is not the nights label. A separate daily panel, documented in `docs/CALENDAR.md`, stores public availability for about 300 active listings in each study city on the `calendar-data` branch. Those files are not training columns. The review-proxy nights model does not read them.
-- **The review-based nights estimate is a separate label, not a price feature.** `number_of_reviews_ltm`, divided by a 50% review rate, times a stated 3-night stay (or a longer minimum up to 90 nights), capped at 70% of the year, is the occupancy study's target. The price model does not train on it, and the nights model does not train on the review count, the minimum stay, or the price. Listings with no reviews in the last 12 months are left out of that study. The assumptions are in `docs/OCCUPANCY.md`.
+- **The review-based nights estimate is a separate label, not a price feature.** `number_of_reviews_ltm`, divided by a 50% review rate, times a stated 3-night stay (or a longer minimum up to 90 nights), capped at 70% of the year, is the occupancy study's target. The price model does not train on it, and the nights model does not train on the review count, the minimum stay, or the price. Listings with no reviews in the last 12 months are left out of that study. The assumptions are in `reports/FINDINGS.md` and `docs/CALENDAR.md`.
 - **`review_scores_value`.** Guests score value by comparing the stay to the price. The other review scores (cleanliness, location, accuracy, check-in, communication) are in the model. The value score is not.
 - **The review text file.** Sentiment over the raw reviews is a separate download and was not fit. The aspect scores on the listing file were used instead.
 - **Photos.** `picture_url` points at a host's image. The photograph is not part of the CC BY listing table and was not downloaded.

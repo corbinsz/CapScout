@@ -83,7 +83,7 @@ def nearest_and_count(
 
     An empty POI extract returns the cap and a zero count. That is a real
     statement ("nothing in the extract"), not a missing value the model
-    would median-fill into a typical neighbourhood.
+    would median-fill into a neighbourhood median.
     """
     lat = np.asarray(lat, dtype=float)
     lon = np.asarray(lon, dtype=float)

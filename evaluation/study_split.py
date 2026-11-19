@@ -17,9 +17,8 @@ import numpy as np
 import pandas as pd
 from data.cities import CITIES, STUDY_CITIES
 from features.geo import distance_to_city_center_km
+from sklearn.neighbors import BallTree
 
-from evaluation.blocking import buffer_train, protect_train
-from evaluation.freeze import listing_ids
 from evaluation.study_protocol import (
     BUFFER_KM,
     CELL_KM,
@@ -32,6 +31,61 @@ from evaluation.study_protocol import (
 
 PATH = Path(__file__).resolve().parent / "study_ids.json"
 METERS_PER_DEGREE = 111_320.0
+EARTH_RADIUS_KM = 6371.0
+
+
+def listing_ids(series: pd.Series) -> list[str]:
+    """Inside Airbnb ids are integers. Force that, so '123.0' cannot sneak in."""
+    values = pd.to_numeric(series, errors="raise").astype("int64")
+    return [str(value) for value in values.tolist()]
+
+
+def _radians(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
+    return np.radians(np.column_stack([np.asarray(lat, dtype=float), np.asarray(lon, dtype=float)]))
+
+
+def _purge_hosts(
+    hosts: np.ndarray, train_idx: np.ndarray, test_idx: np.ndarray
+) -> tuple[np.ndarray, int]:
+    """Drop training rows whose host also has a row on the other side."""
+    blocked = set(np.asarray(hosts)[test_idx])
+    keep = np.array([i for i in train_idx if hosts[i] not in blocked], dtype=int)
+    return keep, int(len(train_idx) - len(keep))
+
+
+def buffer_train(
+    lat: np.ndarray,
+    lon: np.ndarray,
+    train_idx: np.ndarray,
+    test_idx: np.ndarray,
+    buffer_km: float = BUFFER_KM,
+) -> tuple[np.ndarray, int]:
+    """Drop training rows within buffer_km of any held-out row."""
+    if len(train_idx) == 0 or len(test_idx) == 0:
+        return train_idx, 0
+    tree = BallTree(_radians(lat[test_idx], lon[test_idx]), metric="haversine")
+    dist, _idx = tree.query(_radians(lat[train_idx], lon[train_idx]), k=1)
+    dist_km = np.atleast_1d(dist).ravel() * EARTH_RADIUS_KM
+    close = dist_km < buffer_km
+    keep = train_idx[~close]
+    return keep, int(close.sum())
+
+
+def protect_train(
+    lat: np.ndarray,
+    lon: np.ndarray,
+    hosts: np.ndarray,
+    train_idx: np.ndarray,
+    test_idx: np.ndarray,
+) -> tuple[np.ndarray, dict[str, int]]:
+    after_hosts, n_hosts = _purge_hosts(hosts, train_idx, test_idx)
+    after_buffer, n_buffer = buffer_train(lat, lon, after_hosts, test_idx)
+    return after_buffer, {
+        "train_before": int(len(train_idx)),
+        "removed_host": n_hosts,
+        "removed_buffer": n_buffer,
+        "train_after": int(len(after_buffer)),
+    }
 
 
 def within_city(lat: float, lon: float, city_key: str, max_km: float = MAX_KM_FROM_CENTER) -> bool:

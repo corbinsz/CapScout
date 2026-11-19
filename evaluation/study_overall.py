@@ -133,68 +133,79 @@ def _span(metric: dict[str, float], kind: str) -> str:
     return f"{_show(metric['point'], kind)} ({_show(metric['low'], kind)} to {_show(metric['high'], kind)})"
 
 
+def _summary_table(each: dict, homes: dict) -> list[str]:
+    header = "| Summary | R² | Model miss | Local median rate | Median % error | Less error |"
+    rule = "| --- | ---: | ---: | ---: | ---: | ---: |"
+
+    def row(label: str, block: dict) -> str:
+        return (
+            f"| {label} | "
+            + " | ".join(
+                [
+                    _span(block["r2"], "r2"),
+                    _span(block["mae"], "money"),
+                    _span(block["baseline_mae"], "money"),
+                    _span(block["median_ape"], "pct"),
+                    _span(block["error_removed"], "removed"),
+                ]
+            )
+            + " |"
+        )
+
+    return [header, rule, row("Every home once", homes), row("Each city once", each)]
+
+
 def findings_overall(predictions: pd.DataFrame) -> str:
-    """The findings section. Quoted verbatim by the report test."""
+    """Selection-time overall, before the added features. Quoted by the report test."""
     stats = bootstrap_overall(predictions)
     each = stats["each_city_once"]
     homes = stats["every_home_once"]
     lines = [
-        "The city rows are the numbers to quote. Austin, San Diego, and Seattle are different markets: the usual nightly rate on this holdout is about $113, $92, and $49, and the holdouts are 2,101, 817, and 730 homes. One blended score would let Austin's prices, and its larger sample, speak for the other two cities.",
+        "Counting every holdout home once is the pooled result on these columns. "
+        f"The miss is {money(homes['mae']['point'])} a night, against {money(homes['baseline_mae']['point'])} for the local median rate, "
+        f"which is {pct(100.0 * homes['error_removed']['point'])} less error. "
+        f"R² is {r2(homes['r2']['point'])}, and the median error is {pct(homes['median_ape']['point'])}. "
+        "The holdout is 3,648 homes. "
+        "Resampling cells inside each city 1,000 times, then stacking the draws, gives a 95% interval of "
+        f"R² {r2(homes['r2']['low'])} to {r2(homes['r2']['high'])}, "
+        f"a miss of {money(homes['mae']['low'])} to {money(homes['mae']['high'])}, "
+        f"a local-median miss of {money(homes['baseline_mae']['low'])} to {money(homes['baseline_mae']['high'])}, "
+        f"a median error of {pct(homes['median_ape']['low'])} to {pct(homes['median_ape']['high'])}, "
+        f"and {pct(100.0 * homes['error_removed']['low'])} to {pct(100.0 * homes['error_removed']['high'])} less error. "
+        "Seattle's part of that interval resamples only 8 held-out cells.",
+        "",
+        "The city rows stay beside that pool. Austin, San Diego, and Seattle are different markets: "
+        "the median advertised rate on this holdout is $146 in Austin, $153 in San Diego, and $111 in Seattle, "
+        "and the holdouts are 2,101, 817, and 730 homes. "
+        "One score for all three would let Austin's prices, and its larger sample, speak for the other two cities.",
         "",
         "Counting each city once is the overall the model was chosen on. Ridge's average miss is "
-        f"{money(each['mae']['point'])} a night, against {money(each['baseline_mae']['point'])} for the usual local rate, which is {pct(100.0 * each['error_removed']['point'])} less error. "
+        f"{money(each['mae']['point'])} a night, against {money(each['baseline_mae']['point'])} for the local median rate, "
+        f"which is {pct(100.0 * each['error_removed']['point'])} less error. "
         f"The average of the three R² values is {r2(each['r2']['point'])}, and the average of the three median percent errors is {pct(each['median_ape']['point'])}. "
         "Resampling each city's holdout cells 1,000 times, then averaging the three cities, gives a 95% interval of "
         f"R² {r2(each['r2']['low'])} to {r2(each['r2']['high'])}, a miss of {money(each['mae']['low'])} to {money(each['mae']['high'])}, "
-        f"a usual-rate miss of {money(each['baseline_mae']['low'])} to {money(each['baseline_mae']['high'])}, "
+        f"a local-median miss of {money(each['baseline_mae']['low'])} to {money(each['baseline_mae']['high'])}, "
         f"a median percent error of {pct(each['median_ape']['low'])} to {pct(each['median_ape']['high'])}, "
         f"and {pct(100.0 * each['error_removed']['low'])} to {pct(100.0 * each['error_removed']['high'])} less error.",
         "",
-        "Counting every holdout home once, instead of each city once, the miss is "
-        f"{money(homes['mae']['point'])} against a usual rate of {money(homes['baseline_mae']['point'])}. "
-        f"That pool has R² {r2(homes['r2']['point'])}, a median error of {pct(homes['median_ape']['point'])}, "
-        f"and {pct(100.0 * homes['error_removed']['point'])} less error than the usual local rate. "
-        "The same cell resampling, keeping each city's share of the homes, puts the R² between "
-        f"{r2(homes['r2']['low'])} and {r2(homes['r2']['high'])} and the miss between {money(homes['mae']['low'])} and {money(homes['mae']['high'])}. "
-        f"The dollar error is higher than {money(each['mae']['point'])} because Austin has more of the holdout and more expensive misses.",
-        "",
-        "| Summary | R² | Model miss | Usual local rate | Median % error | Less error |",
-        "| --- | ---: | ---: | ---: | ---: | ---: |",
-        "| Each city once | "
-        + " | ".join(
-            [
-                _span(each["r2"], "r2"),
-                _span(each["mae"], "money"),
-                _span(each["baseline_mae"], "money"),
-                _span(each["median_ape"], "pct"),
-                _span(each["error_removed"], "removed"),
-            ]
-        )
-        + " |",
-        "| Every home once | "
-        + " | ".join(
-            [
-                _span(homes["r2"], "r2"),
-                _span(homes["mae"], "money"),
-                _span(homes["baseline_mae"], "money"),
-                _span(homes["median_ape"], "pct"),
-                _span(homes["error_removed"], "removed"),
-            ]
-        )
-        + " |",
+        *_summary_table(each, homes),
     ]
     return "\n".join(lines)
 
 
 def readme_overall_table(predictions: pd.DataFrame) -> str:
-    """Short holdout table for the top of the README. Point estimates only."""
+    """Point estimates. Every home once is the first row."""
     parts = _city_parts(predictions)
     each = _equal_weight(parts)
     homes = _every_home(parts)
     labels = {"austin": "Austin, TX", "san-diego": "San Diego, CA", "seattle": "Seattle, WA"}
     lines = [
-        "| City | R² | Average miss | Median error | Less error than the usual local rate |",
+        "| City | R² | Average miss | Median error | Less error than the local median rate |",
         "| --- | ---: | ---: | ---: | ---: |",
+        "| Every home once | "
+        f"{r2(homes['r2'])} | {money(homes['mae'])} | "
+        f"{pct(homes['median_ape'])} | {pct(100.0 * homes['error_removed'])} |",
     ]
     for city, part in parts.items():
         score = _score(
@@ -219,10 +230,5 @@ def readme_overall_table(predictions: pd.DataFrame) -> str:
         "| Each city once | "
         f"{r2(each['r2'])} | {money(each['mae'])} | "
         f"{pct(each['median_ape'])} | {pct(100.0 * each['error_removed'])} |"
-    )
-    lines.append(
-        "| Every home once | "
-        f"{r2(homes['r2'])} | {money(homes['mae'])} | "
-        f"{pct(homes['median_ape'])} | {pct(100.0 * homes['error_removed'])} |"
     )
     return "\n".join(lines)

@@ -1,6 +1,10 @@
-"""Fit the simple-model study. The holdout file is written before any fit.
+"""Fit the comparison the model was chosen on. The holdout file is written first.
 
 python -m evaluation.run_study
+
+The app artifact is that ridge model plus the adopted place features.
+This command refits the comparison columns and would replace that artifact.
+The committed artifact is the one scored after the feature rule cleared.
 """
 
 from __future__ import annotations
@@ -30,10 +34,8 @@ from evaluation.study_protocol import (
     PRICE_FORBIDDEN,
     PRICE_LADDER,
     assert_seeds,
-    challenger_reason,
     choose_nights_target,
     choose_params,
-    choose_shipped,
     choose_simplest,
     nights_cleared,
     nights_reason,
@@ -166,7 +168,6 @@ def run() -> dict:
 
     from evaluation.study_models import (
         AreaMedian,
-        BlendModel,
         apply_interval,
         bootstrap_metrics,
         cv_area,
@@ -174,10 +175,8 @@ def run() -> dict:
         direction_checks,
         dollar_effects,
         fit_interval,
-        make_catboost,
         make_forest,
         make_linear,
-        make_network,
         make_ridge,
         make_xgb,
         oof_predict,
@@ -403,12 +402,7 @@ def run() -> dict:
                     kind=kind,
                     high=high,
                 ),
-                "neural_net": lambda: make_network(columns, kind=kind, high=high),
             }
-            if label == "price":
-                builders["catboost"] = lambda params=city_tune["xgboost"]["params"]: make_catboost(
-                    columns, int(params["max_depth"]), kind=kind, high=high
-                )
             for name, builder in builders.items():
                 model = builder()
                 model.fit(frame.iloc[train_idx], y[train_idx])
@@ -416,8 +410,6 @@ def run() -> dict:
                 pred[test_idx] = model.predict(frame.iloc[test_idx])
                 city_pred[name] = pred
                 del model
-            if label == "price":
-                city_pred["blend"] = 0.5 * (city_pred["xgboost"] + city_pred["catboost"])
             predictions[city] = city_pred
         return tuned, predictions
 
@@ -450,15 +442,10 @@ def run() -> dict:
     nights_simple = choose_simplest(
         [(name, nights_means[name]) for name in ELIGIBLE_MODELS],
     )
-    shipped = choose_shipped(
-        price_simple,
-        price_means[price_simple],
-        price_means["catboost"],
-        price_means["blend"],
-    )
+    shipped = price_simple
     print(f"Price ships {shipped}. Nights ships {nights_simple}.", flush=True)
 
-    def build_named(name, columns, params, kind, high, xgb_params):
+    def build_named(name, columns, params, kind, high):
         if name == "area_median":
             return None
         if name == "linear":
@@ -481,21 +468,6 @@ def run() -> dict:
                 kind=kind,
                 high=high,
             )
-        if name == "catboost":
-            return make_catboost(columns, int(xgb_params["max_depth"]), kind=kind, high=high)
-        if name == "blend":
-            return (
-                make_xgb(
-                    columns,
-                    xgb_params["max_depth"],
-                    xgb_params["min_child_weight"],
-                    kind=kind,
-                    high=high,
-                ),
-                make_catboost(columns, int(xgb_params["max_depth"]), kind=kind, high=high),
-            )
-        if name == "neural_net":
-            return make_network(columns, kind=kind, high=high)
         raise KeyError(name)
 
     def refit(name, columns, kind, high, y_column):
@@ -518,15 +490,9 @@ def run() -> dict:
                 )
                 models[city] = _FrameArea(inner)
                 continue
-            built = build_named(name, columns, params, kind, high, params["xgboost"])
-            if name == "blend":
-                first, second = built
-                first.fit(frame.iloc[train_idx], y[train_idx])
-                second.fit(frame.iloc[train_idx], y[train_idx])
-                models[city] = BlendModel(first, second)
-            else:
-                built.fit(frame.iloc[train_idx], y[train_idx])
-                models[city] = built
+            built = build_named(name, columns, params, kind, high)
+            built.fit(frame.iloc[train_idx], y[train_idx])
+            models[city] = built
         return models
 
     print("Refitting the shipped price model for the app and the interval", flush=True)
@@ -549,41 +515,15 @@ def run() -> dict:
         def _builder(params=params):
             if shipped == "area_median":
                 raise RuntimeError("area median interval uses its own loop")
-            if shipped == "blend":
-                # Interval is fit on the blend's out-of-fold average.
-                return None
             return build_named(
                 shipped,
                 price_columns,
                 _param_view(params),
                 "log",
                 None,
-                params["xgboost"]["params"],
             )
 
-        if shipped == "blend":
-
-            def _blend_builder(params=params):
-                def builder():
-                    first = make_xgb(
-                        price_columns,
-                        params["xgboost"]["params"]["max_depth"],
-                        params["xgboost"]["params"]["min_child_weight"],
-                        kind="log",
-                        high=None,
-                    )
-                    second = make_catboost(
-                        price_columns,
-                        int(params["xgboost"]["params"]["max_depth"]),
-                        kind="log",
-                        high=None,
-                    )
-                    return _PairBuilder(first, second)
-
-                return builder
-
-            oof = oof_predict(_blend_builder(), frame, y, splits[city]["folds"])
-        elif shipped == "area_median":
+        if shipped == "area_median":
             oof = _oof_area(frame, y, splits[city]["folds"])
         else:
             oof = oof_predict(_builder, frame, y, splits[city]["folds"])
@@ -600,9 +540,8 @@ def run() -> dict:
             price_directions[city] = []
         else:
             price_importance[city] = dollar_effects(model, frame, test_idx)
-            shap_model = model.first if isinstance(model, BlendModel) else model
             try:
-                shap = shap_means(shap_model, frame, test_idx)
+                shap = shap_means(model, frame, test_idx)
             except Exception as exc:
                 print(f"  {city} TreeSHAP skipped: {type(exc).__name__}: {exc}", flush=True)
                 shap = None
@@ -886,14 +825,6 @@ def run() -> dict:
         "simple_model": price_simple,
         "shipped_model": shipped,
         "selection_reason": selection_reason(simple_scores, price_simple),
-        "challenger_reason": challenger_reason(
-            price_simple,
-            price_means[price_simple],
-            price_means["catboost"],
-            price_means["blend"],
-        ),
-        "catboost_shipped": shipped == "catboost",
-        "blend_shipped": shipped == "blend",
         "nights_shipped_model": nights_simple,
         "nights_selection_reason": nights_selection_reason(
             [(name, nights_means[name]) for name in ELIGIBLE_MODELS],
@@ -911,7 +842,6 @@ def run() -> dict:
     pd.DataFrame(prediction_rows).to_csv(REPORTS / "study_predictions.csv", index=False)
     pd.DataFrame(confirm_rows).to_csv(REPORTS / "study_confirmation.csv", index=False)
     print(payload["selection_reason"], flush=True)
-    print(payload["challenger_reason"], flush=True)
     print(payload["nights_reason"], flush=True)
     print("Wrote reports/study_metrics.json", flush=True)
     return payload
@@ -927,22 +857,6 @@ class _FrameArea:
 
     def predict(self, frame: pd.DataFrame) -> np.ndarray:
         return self.inner.predict(frame["neighbourhood_cleansed"], frame["room_type"])
-
-
-class _PairBuilder:
-    """Out-of-fold blend. fit/predict match LogModel so oof_predict can call them."""
-
-    def __init__(self, first, second):
-        self.first = first
-        self.second = second
-
-    def fit(self, frame, y):
-        self.first.fit(frame, y)
-        self.second.fit(frame, y)
-        return self
-
-    def predict(self, frame):
-        return 0.5 * (self.first.predict(frame) + self.second.predict(frame))
 
 
 def _param_view(params: dict) -> dict:
@@ -974,11 +888,8 @@ def _fit_one(name, frame, y, train_idx, columns, kind, high, tuned):
     """Fit one city on one split. Used for the confirmation seeds."""
     from evaluation.study_models import (
         AreaMedian,
-        BlendModel,
-        make_catboost,
         make_forest,
         make_linear,
-        make_network,
         make_ridge,
         make_xgb,
     )
@@ -1010,26 +921,6 @@ def _fit_one(name, frame, y, train_idx, columns, kind, high, tuned):
             kind=kind,
             high=high,
         )
-    elif name == "catboost":
-        model = make_catboost(
-            columns, int(tuned["xgboost"]["params"]["max_depth"]), kind=kind, high=high
-        )
-    elif name == "blend":
-        first = make_xgb(
-            columns,
-            tuned["xgboost"]["params"]["max_depth"],
-            tuned["xgboost"]["params"]["min_child_weight"],
-            kind=kind,
-            high=high,
-        )
-        second = make_catboost(
-            columns, int(tuned["xgboost"]["params"]["max_depth"]), kind=kind, high=high
-        )
-        first.fit(frame.iloc[train_idx], y[train_idx])
-        second.fit(frame.iloc[train_idx], y[train_idx])
-        return BlendModel(first, second)
-    elif name == "neural_net":
-        model = make_network(columns, kind=kind, high=high)
     else:
         raise KeyError(name)
     model.fit(frame.iloc[train_idx], y[train_idx])

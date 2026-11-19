@@ -7,7 +7,6 @@ from data.clean import apply_filters, parse_bathrooms, parse_price_series
 from evaluation.study_models import (
     AreaMedian,
     dollar_effects,
-    make_catboost,
     make_xgb,
     shap_means,
 )
@@ -17,7 +16,6 @@ from evaluation.study_protocol import (
     PRIMARY_SEED,
     choose_nights_target,
     choose_params,
-    choose_shipped,
     choose_simplest,
     nights_cleared,
     nights_selection_reason,
@@ -106,16 +104,6 @@ def test_choose_simplest_prefers_the_simple_model_inside_two_percent():
     )
 
 
-def test_choose_shipped_needs_a_five_percent_win():
-    # 96 is only 4% under 100, and 96 is not 5% under the blend either.
-    assert choose_shipped("xgboost", 100.0, 96.0, 96.0) == "xgboost"
-    # CatBoost clears 5%. The blend does not clear another 5% under CatBoost.
-    assert choose_shipped("xgboost", 100.0, 94.0, 93.0) == "catboost"
-    # The blend clears 5% under whichever single model is ahead.
-    assert choose_shipped("xgboost", 100.0, 94.0, 89.0) == "blend"
-    assert choose_shipped("xgboost", 100.0, 96.0, 95.0) == "blend"
-
-
 def test_nights_bar_and_target_and_params_are_fixed_rules():
     assert nights_cleared(90, 100, 0.10) is True
     assert nights_cleared(91, 100, 0.20) is False
@@ -158,7 +146,7 @@ def test_cells_do_not_depend_on_row_order_and_the_split_is_separated():
     assert close["passed"] is False
 
 
-def test_tiny_tree_fit_explains_in_dollars_and_catboost_fits():
+def test_tiny_tree_fit_explains_in_dollars():
     rng = np.random.default_rng(17)
     n = 80
     bedrooms = rng.integers(1, 4, size=n)
@@ -180,10 +168,6 @@ def test_tiny_tree_fit_explains_in_dollars_and_catboost_fits():
     assert effects[0]["feature"] == "bedrooms"
     shap = shap_means(model, frame, np.arange(60, 80), limit=20)
     assert shap[0]["feature"] == "bedrooms"
-    cat = make_catboost(columns, 2, kind="log", high=None)
-    cat.fit(frame.iloc[:60], y[:60])
-    cat_pred = cat.predict(frame.iloc[60:])
-    assert np.isfinite(cat_pred).all()
     area = AreaMedian().fit(
         pd.Series(["A"] * 60),
         pd.Series(["Entire home/apt"] * 60),
