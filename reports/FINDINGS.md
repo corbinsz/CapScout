@@ -360,6 +360,23 @@ No resume line that says the model predicts how many nights a home will book is 
 
 The price result is a separate study and is not re-opened here.
 
+## A calendar panel for a later label
+
+The holdout above is a model of the review proxy. It is not evidence about real bookings, because the public calendar on one day does not say which unavailable nights were sold. The way to get a real label is to watch the same calendars until nights flip.
+
+The collector takes a fixed panel of 300 listings in each of Austin, San Diego, and Seattle from the Inside Airbnb files already in the repo. Seed 17, stratified by neighbourhood and room type. The ids are `data/calendar_sample.json`. Each day it stores `listing_id`, `date`, `available`, `min_nights`, `price` when present, and `fetched_at`, gzipped, on the `calendar-data` branch. The client waits about 2 seconds between listings, backs off on ordinary server errors, and stops when it is blocked or challenged. It does not log in, solve a captcha, or use a proxy. If the public calendar cannot be read from the runner, the same panel is cut out of Inside Airbnb's published calendar file and the run report says that. One published file has no flip to measure, so that path does not produce a booked-night rate.
+
+The inference, in `data/calendar_labels.py`, follows the daily-scrape rule that a booking is an available night that later becomes unavailable, plus the lead-time and length cuts that separate a short guest stay from a host block:
+
+- Booked: a contiguous run of 1 to 13 nights that was still open on a snapshot inside 45 days of the check-in, then closed, and at least as long as the posted minimum stay.
+- Owner block: 14 or more nights already closed when the check-in was 90 days out. Ninety days is the shortest availability window hosts can set. The same label is used when half or more of the nights that were open close between two snapshots at most 3 days apart.
+- Closed window: 21 or more unavailable nights running through the last date the snapshot publishes, never seen open.
+- Left out of the booked count: nights that were already unavailable on the first snapshot, nights that open again before the date, nights with no snapshot within 2 days, and runs whose lead time or length falls between the two cuts.
+
+The rate is booked nights divided by booked nights plus nights still open at the date. Blocks and censored nights are counted beside it. A one-night owner hold can be called a booking when the minimum stay is 1. A fortnight stay, and a stay booked more than 45 days ahead, stay uncertain. Price is stored and unused, because the public calendar often leaves it blank on open nights and closed nights alike.
+
+The first retrain waits 26 weeks. Nights already shut on the first day are censored. A night first seen beyond the 90-day line is a resolved outcome only once that date arrives, which is about 13 weeks after collection starts. A listing-level rate near 30% needs about 80 offered nights before its standard error is near 5 points (0.3 times 0.7, divided by 0.05 squared, is 84). That is about 12 further weeks. 13 + 12 is 25, and 26 weeks pulls the window off a single peak. The target at that point is the observed rate over the tracked window, not an annualized copy of it. An annual count, comparable to the review proxy, waits for 52 weeks. Occupancy accuracy will be re-tested on a fresh spatial holdout once the 26 weeks exist: a new seed, not seed 31 and not the price seeds, cells frozen before any fit, scored once. The R² figures in the table above are about the review proxy. They are not a forecast of that test.
+
 ## How to reproduce
 
 From the repository root, with the pinned `requirements.txt`:

@@ -22,7 +22,7 @@ A listing that is already in the study file is not repeated. The newest earlier 
 
 ### Not used from Inside Airbnb
 
-- **Calendar and availability.** Inside Airbnb says a night marked unavailable is not necessarily booked. `availability_365` is not a feature and it is not the nights label. A commercial calendar model that tries to separate booked nights from blocked nights is not in this data.
+- **Calendar and availability, as a model feature.** Inside Airbnb says a night marked unavailable is not necessarily booked. `availability_365` is not a feature and it is not the nights label. A separate daily panel, documented in `docs/CALENDAR.md`, stores public availability for 300 listings in each study city on the `calendar-data` branch. Those files are not training columns. The review-proxy nights model does not read them.
 - **The review-based nights estimate is a separate label, not a price feature.** `number_of_reviews_ltm`, divided by a 50% review rate, times a stated 3-night stay (or a longer minimum up to 90 nights), capped at 70% of the year, is the occupancy study's target. The price model does not train on it, and the nights model does not train on the review count, the minimum stay, or the price. Listings with no reviews in the last 12 months are left out of that study. The assumptions are in `docs/OCCUPANCY.md`.
 - **`review_scores_value`.** Guests score value by comparing the stay to the price. The other review scores (cleanliness, location, accuracy, check-in, communication) are in the model. The value score is not.
 - **The review text file.** Sentiment over the raw reviews is a separate download and was not fit. The aspect scores on the listing file were used instead.

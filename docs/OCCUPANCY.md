@@ -58,3 +58,7 @@ A value on a boundary takes the higher grade. This is a rank of gross revenue am
 - San Francisco Budget and Legislative Analyst's Office, analysis of short-term rentals (the 72% and 30.5% review rates Inside Airbnb discusses).
 - Alex Marqusee, San Francisco Planning Department, the descriptive memo the San Francisco model is named for.
 - This repository's earlier note in `data/occupancy.py`, which implemented the monthly version of the same proxy and left listings with no reviews unobserved.
+
+## What would replace this label
+
+A daily calendar panel is now collected for a fixed sample of these three cities. The rules that turn repeated snapshots into a booked-night rate, and the 26 weeks to wait before refitting, are in [CALENDAR.md](CALENDAR.md). This review proxy stays the scored target until that panel exists and a fresh spatial holdout is frozen.
