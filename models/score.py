@@ -11,14 +11,15 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from evaluation.fitting import predict_dollars
-from evaluation.intervals import apply_log_interval
-from features.columns import CENSUS_COLUMNS, OSM_COLUMNS
-from features.frame import AMENITY_FLAGS, attach_base_features
+from evaluation.fitting import predict_dollars, predict_log
+from evaluation.intervals import apply_log_interval, apply_log_radii, cqr_bounds, sigma_of
+from evaluation.protocol import city_dummies
+from features.columns import CENSUS_COLUMNS, LEXICON_COLUMNS, OSM_COLUMNS
+from features.frame import AMENITY_FLAGS, EXTRA_AMENITY_FLAGS, attach_base_features
 from features.place import features_at
 
 from models.artifacts import available, load_artifact
-from models.explain import shap_matrix, top_reasons
+from models.explain import collapse_wording, plain_reason, shap_matrix, top_reasons
 
 
 def model_available(city_key: str) -> bool:
@@ -46,7 +47,18 @@ def _frame_row(features: dict, city_key: str, needed: set[str]) -> pd.Series:
         "host_listings_count": features.get("host_listings_count", np.nan),
         "instant_bookable": features.get("instant_bookable", np.nan),
         "neighbourhood_cleansed": features.get("neighbourhood") or "unknown",
+        "beds": features.get("beds", np.nan),
+        "bathrooms_text": features.get("bathrooms_text", np.nan),
+        "host_since": features.get("host_since", np.nan),
+        "host_response_rate": features.get("host_response_rate", np.nan),
+        "host_acceptance_rate": features.get("host_acceptance_rate", np.nan),
+        "host_response_time": features.get("host_response_time", np.nan),
+        "host_identity_verified": features.get("host_identity_verified", np.nan),
     }
+    if features.get("listing_text") or features.get("description") or features.get("name"):
+        row["name"] = features.get("name") or ""
+        row["description"] = features.get("description") or features.get("listing_text") or ""
+        row["neighborhood_overview"] = features.get("neighborhood_overview") or ""
     frame = attach_base_features(pd.DataFrame([row]), city_key)
     # A missing review count on a file means "no reviews yet". A home that
     # has never been listed is not that. Leave the fields missing.
@@ -63,7 +75,15 @@ def _frame_row(features: dict, city_key: str, needed: set[str]) -> pd.Series:
     if "minimum_nights" not in features:
         frame["minimum_nights_capped"] = np.nan
     if "amenities" not in features:
-        for column in list(AMENITY_FLAGS) + ["amenity_count"]:
+        for column in list(AMENITY_FLAGS) + list(EXTRA_AMENITY_FLAGS) + ["amenity_count"]:
+            frame[column] = np.nan
+    # Empty strings are not an ad. Leave the lexicon missing so the model
+    # treats the wording as unknown rather than as a blank listing.
+    supplied_text = bool(
+        features.get("listing_text") or features.get("description") or features.get("name")
+    )
+    if not supplied_text:
+        for column in LEXICON_COLUMNS:
             frame[column] = np.nan
     place_columns = needed & (set(CENSUS_COLUMNS) | set(OSM_COLUMNS))
     if place_columns:
@@ -97,22 +117,70 @@ def _reasons(artifact: dict, matrix: pd.DataFrame) -> list[dict]:
     else:
         values = shap_matrix(artifact["model"], matrix, artifact["library"])[0]
     observed = matrix.notna().iloc[0].to_numpy()
-    return top_reasons(
-        names,
-        values,
-        k=5,
-        observed=observed,
-        feature_values=matrix.iloc[0].to_numpy(dtype=float),
+    feature_values = matrix.iloc[0].to_numpy(dtype=float)
+    names, values, observed, feature_values = collapse_wording(
+        names, values, observed, feature_values
     )
+    reasons = top_reasons(names, values, k=5, observed=observed, feature_values=feature_values)
+    for reason in reasons:
+        reason["sentence"] = plain_reason(
+            reason["feature"], reason.get("value"), reason["approx_percent"]
+        )
+    return reasons
+
+
+def _interval(
+    artifact: dict, matrix: pd.DataFrame, nightly: float
+) -> tuple[float | None, float | None]:
+    """The band chosen on the development folds, applied to this one row."""
+    method = artifact.get("interval_method") or "log_conformal"
+    params = artifact.get("interval_params") or {}
+    pred = np.array([nightly], dtype=float)
+    if method == "scaled_log" and params:
+        sigma = sigma_of(pred, float(params["a"]), float(params["b"]), float(params["floor"]))
+        low, high = apply_log_radii(pred, float(params["quantile"]) * sigma)
+    elif method == "cqr" and artifact.get("quantile_models") and params:
+        models = artifact["quantile_models"]
+        q_lo = predict_log(models["lo"], matrix, models["library"])
+        q_hi = predict_log(models["hi"], matrix, models["library"])
+        low, high = cqr_bounds(q_lo, q_hi, float(params["qhat"]))
+    else:
+        radius = artifact.get("conformal_log_radius")
+        if radius is None:
+            return None, None
+        low, high = apply_log_interval(pred, float(radius))
+    return float(low[0]), float(high[0])
 
 
 def score_features(features: dict, city_key: str) -> dict:
     artifact = load_artifact(city_key)
     row = _frame_row(features, city_key, set(artifact["columns"]))
+    supplied_text = bool(
+        features.get("listing_text") or features.get("description") or features.get("name")
+    )
+    text_encoder = artifact.get("text_encoder")
+    if text_encoder is not None and supplied_text:
+        reduced = text_encoder.transform([str(row["listing_text"])])[0]
+        for index, name in enumerate(text_encoder.column_names):
+            row[name] = float(reduced[index])
+    elif text_encoder is not None:
+        for name in text_encoder.column_names:
+            row[name] = np.nan
+    kernel = artifact.get("kernel")
+    if kernel is not None:
+        smoothed = kernel.transform(
+            np.array([float(features["latitude"])]),
+            np.array([float(features["longitude"])]),
+            row_index=None,
+        )
+        row["kernel_log_price"] = float(smoothed[0])
+    if artifact.get("pooled"):
+        for name, value in city_dummies(city_key).items():
+            row[name] = value
     columns = list(artifact["columns"])
     matrix = pd.DataFrame([{column: row.get(column, np.nan) for column in columns}])
     mode = artifact.get("spatial_mode") or ("both" if artifact.get("use_spatial") else "none")
-    if mode not in (None, "none", False):
+    if mode in ("smooth", "knn", "both") and artifact.get("encoder") is not None:
         neighbourhood = np.array([features.get("neighbourhood") or "unknown"])
         neigh, bed, knn = artifact["encoder"].transform_new(
             np.array([float(features["latitude"])]),
@@ -126,12 +194,7 @@ def score_features(features: dict, city_key: str) -> dict:
         if mode in ("knn", "both"):
             matrix["knn_log_price"] = knn
     nightly = float(_predict_matrix(artifact, matrix)[0])
-    radius = artifact.get("conformal_log_radius")
-    if radius is None:
-        low = high = None
-    else:
-        low_arr, high_arr = apply_log_interval(np.array([nightly]), float(radius))
-        low, high = float(low_arr[0]), float(high_arr[0])
+    low, high = _interval(artifact, matrix, nightly)
     neighbourhood_name = features.get("neighbourhood") or ""
     occupancy = artifact["occupancy_by_neighbourhood"].get(
         neighbourhood_name, artifact["occupancy_global"]
@@ -149,4 +212,5 @@ def score_features(features: dict, city_key: str) -> dict:
         "occupancy_source": "neighbourhood_median_of_review_proxy",
         "feature_set": artifact.get("feature_set"),
         "library": artifact.get("library"),
+        "interval_method": artifact.get("interval_method") or "log_conformal",
     }

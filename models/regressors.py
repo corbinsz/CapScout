@@ -81,7 +81,9 @@ def make_xgboost(
         objective=objective,
         tree_method="hist",
         random_state=42,
-        n_jobs=-1,
+        # One thread. Histogram splits move the third decimal when every
+        # core is used, and a second run of this study should match the first.
+        n_jobs=1,
         verbosity=0,
         early_stopping_rounds=early_stopping_rounds,
         monotone_constraints=monotone,
@@ -112,7 +114,7 @@ def make_lightgbm(
         reg_lambda=params["reg_lambda"],
         objective=objective,
         random_state=42,
-        n_jobs=-1,
+        n_jobs=1,
         verbosity=-1,
         monotone_constraints=monotone,
         **kwargs,
@@ -148,7 +150,7 @@ def make_catboost(
         loss_function=loss,
         monotone_constraints=monotone,
         random_seed=42,
-        thread_count=-1,
+        thread_count=1,
         allow_writing_files=False,
         verbose=False,
     )
@@ -161,6 +163,6 @@ def make_previous_xgboost() -> XGBRegressor:
         objective="reg:squarederror",
         tree_method="hist",
         random_state=42,
-        n_jobs=-1,
+        n_jobs=1,
         verbosity=0,
     )

@@ -3,9 +3,9 @@
     python -m evaluation.run_eval
     python -m evaluation.run_eval --smoke
 
-The locked test is not read until `score_locked_test`. Feature sets,
-depth, library, monotone constraints, and the blend are chosen from
-development splits only. `--smoke` is a crash check, not a result.
+v3 choices use development folds that exclude the confirmation holdout.
+The locked test and the confirmation holdout are scored once, after that.
+`--smoke` is a crash check, not a result.
 """
 
 from __future__ import annotations
@@ -20,30 +20,27 @@ from data.cities import CITIES
 from data.external import ensure_external
 from data.ingest import load_study_frame
 from features.columns import (
-    KNN_COLUMNS,
     LOCATION_COLUMNS,
-    QUALITY_COLUMNS,
     SIZE_COLUMNS,
-    SMOOTH_COLUMNS,
     pretty,
 )
 from models.artifacts import save_artifact
 from models.explain import shap_matrix
 
 from evaluation.audit import column_audit, split_audit
-from evaluation.blocking import development_splits, locked_split
+from evaluation.blocking import confirmation_split, development_splits, locked_split
+from evaluation.confirm import ensure_confirm_ids
 from evaluation.fitting import (
     design_matrices,
     fit_boosted,
     fit_predict_ridge,
-    fit_quantile,
     median_baseline,
     params_for_depth,
     predict_dollars,
     refit_boosted,
 )
 from evaluation.freeze import ensure_frozen_ids
-from evaluation.intervals import apply_log_interval, conformal_radius, log_abs_residual
+from evaluation.intervals import conformal_radius, cqr_bounds
 from evaluation.leakage_demo import austin_leakage_demo
 from evaluation.metrics import interval_metrics, regression_metrics
 from evaluation.plots import (
@@ -57,27 +54,17 @@ from evaluation.plots import (
     plot_shap,
 )
 from evaluation.protocol import (
-    DEPTHS,
+    CONFIRM_SEED,
     FEATURE_SET_WHY,
     INTERVAL_LEVEL,
-    LIBRARIES,
-    OSM_WITHOUT_CENSUS,
-    STAGE1,
     STUDY_RATIONALE,
     TEST_SEED,
-    resolve_features,
+    V2_BLEND,
+    V2_DEPTH,
     study_cities,
+    v2_features,
 )
-from evaluation.select import (
-    choose_addon,
-    choose_blend,
-    choose_depth,
-    choose_library,
-    choose_monotonic,
-    choose_quality,
-    choose_simpler,
-    feature_label,
-)
+from evaluation.v3 import apply_interval, fit_holdout, select_v3
 
 REPO = Path(__file__).resolve().parents[1]
 REPORTS = REPO / "reports"
@@ -133,7 +120,16 @@ def _record(bucket, tag, city, seed, metrics, pred=None, y_true=None):
 
 
 def _learning_curve(
-    frame, split, train_idx, valid_idx, columns, spatial_mode, library, depth, monotone
+    frame,
+    split,
+    train_idx,
+    valid_idx,
+    columns,
+    spatial_mode,
+    library,
+    depth,
+    monotone,
+    text_mode="none",
 ):
     """One development seed, refit on a shrinking set of training cells.
 
@@ -151,7 +147,7 @@ def _learning_curve(
         chosen = set(rng.choice(train_groups, size=take, replace=False))
         subset = train_idx[np.isin(groups[train_idx], list(chosen))]
         X_train, y_log, X_valid, y_valid, _encoder = design_matrices(
-            frame, subset, valid_idx, columns, spatial_mode
+            frame, subset, valid_idx, columns, spatial_mode, text_mode=text_mode
         )
         model = fit_boosted(
             library, params_for_depth(depth), X_train, y_log, groups[subset], monotone=monotone
@@ -191,10 +187,33 @@ def _blend_shap(models: dict, libraries: list[str], X: pd.DataFrame) -> list[dic
     sample = X.sample(n=min(600, len(X)), random_state=TEST_SEED)
     stacked = [shap_matrix(models[library], sample, library) for library in libraries]
     means = np.mean(np.abs(np.stack(stacked, axis=0)), axis=0).mean(axis=0)
-    order = np.argsort(-means)
-    return [
-        {"feature": str(sample.columns[i]), "mean_abs_shap": float(means[i])} for i in order[:15]
-    ]
+    names, values = _collapse_wording(list(sample.columns), means)
+    order = np.argsort(-np.asarray(values))
+    return [{"feature": names[int(i)], "mean_abs_shap": float(values[int(i)])} for i in order[:15]]
+
+
+def _collapse_wording(names: list[str], means: np.ndarray) -> tuple[list[str], list[float]]:
+    """Sum the TF-IDF components into one wording row.
+
+    A single component is not something you can say out loud. The sum of
+    the mean absolute contributions is how much the block moves the
+    prediction, which is the number the chart should show.
+    """
+    kept_names: list[str] = []
+    kept_values: list[float] = []
+    wording = 0.0
+    seen = False
+    for name, value in zip(names, means, strict=True):
+        if str(name).startswith("text_svd_"):
+            wording += float(value)
+            seen = True
+        else:
+            kept_names.append(str(name))
+            kept_values.append(float(value))
+    if seen:
+        kept_names.append("listing_wording")
+        kept_values.append(wording)
+    return kept_names, kept_values
 
 
 def _residual_bins(y_true, pred) -> list[dict]:
@@ -325,12 +344,14 @@ def _pdp_for(
         for value in grid:
             edited = take.copy()
             edited[name] = value
+            fold = getattr(encoder, "fold", encoder)
             if (
                 name == "bedrooms"
-                and encoder is not None
+                and fold is not None
+                and hasattr(fold, "bedroom_interaction")
                 and "neigh_bed_log_price" in edited.columns
             ):
-                edited["neigh_bed_log_price"] = encoder.bedroom_interaction(
+                edited["neigh_bed_log_price"] = fold.bedroom_interaction(
                     neigh, np.full(len(edited), value)
                 )
             rows.append({"value": float(value), "mean_pred": float(_predict(edited).mean())})
@@ -353,6 +374,7 @@ def _city_radius(fold_residuals: list[np.ndarray]) -> tuple[float, float | None]
 
 
 def run(smoke: bool = False) -> tuple[dict, pd.DataFrame, dict]:
+    """Choose on the selection folds, then score the two holdouts once."""
     cities = ("austin",) if smoke else study_cities()
     seeds = (0,) if smoke else (0, 1, 2, 3, 4)
     if smoke:
@@ -362,207 +384,64 @@ def run(smoke: bool = False) -> tuple[dict, pd.DataFrame, dict]:
         protocol.MAX_TREES = 40
         fitting.MAX_TREES = 40
 
-    print("Freezing the locked test (coordinates and seed only)", flush=True)
-    ensure_frozen_ids(cities)
+    # Freeze both id files for every study city, even during a smoke run.
+    # A smoke run that wrote only Austin would make the next full run look
+    # like the holdout had changed.
+    print("Freezing holdouts (coordinates and seeds only)", flush=True)
+    ensure_frozen_ids(study_cities())
+    ensure_confirm_ids(study_cities())
     print("External data", flush=True)
     ensure_external(cities)
 
     prepared = {}
     print("Loading and splitting", flush=True)
     for city in cities:
-        prepared[city] = _prepare(city, seeds)
-        info = prepared[city]["split"]["info"]
-        stats = prepared[city]["stats"]
+        frame, stats = load_study_frame(city)
+        lat = frame["latitude"].to_numpy(dtype=float)
+        lon = frame["longitude"].to_numpy(dtype=float)
+        hosts = frame["host_id"].to_numpy()
+        split = locked_split(lat, lon, hosts)
+        confirm = confirmation_split(lat, lon, hosts, split["development_idx"], split["groups"])
+        inners = development_splits(split["groups"], confirm["pool_idx"], lat, lon, hosts, seeds)
+        prepared[city] = {
+            "frame": frame,
+            "stats": stats,
+            "split": split,
+            "confirm": confirm,
+            "folds": [(seed, train_idx, valid_idx) for seed, train_idx, valid_idx, _info in inners],
+        }
+        info = split["info"]
         print(
-            f"  {city}: {stats['rows_final']} rows, test {info['n_test']}, "
-            f"dev {info['train_after']} "
-            f"(dropped {info['removed_host']} host, {info['removed_buffer']} buffer), "
-            f"tract polygon {stats['place']['census_polygon_fraction']:.1%}",
+            f"  {city}: {stats['rows_final']} rows, locked test {info['n_test']}, "
+            f"confirmation {confirm['info']['n_confirm']}, "
+            f"selection pool {confirm['info']['n_pool']}",
             flush=True,
         )
 
-    rows: list[dict] = []
-    library_preds: dict[tuple, tuple] = {}
-    mono_preds: dict[tuple, tuple] = {}
-
-    stage1 = STAGE1 if not smoke else STAGE1[:2]
-    print("Stage 1 ablation, XGBoost depth 6", flush=True)
-    diagnostic = [OSM_WITHOUT_CENSUS] if not smoke else []
-    for name, columns, mode in list(stage1) + diagnostic:
-        for city, pack in prepared.items():
-            for seed, train_idx, valid_idx, _info in pack["inners"]:
-                metrics, _pred, _y = _fit_eval(
-                    pack["frame"], pack["split"], train_idx, valid_idx, columns, mode, "xgboost", 6
-                )
-                _record(rows, f"feature:{name}", city, seed, metrics)
-                print(f"  {city} {name} seed {seed}: MAE {metrics['mae']:.2f}", flush=True)
-
-    stage1_means = [
-        (name, _summary(_tagged(rows, f"feature:{name}"))["mae_mean"]) for name, _c, _m in stage1
-    ]
-    stage1_name = choose_simpler(stage1_means)
-    base_columns, _mode = resolve_features(stage1_name, None, False)
-    base_mae = dict(stage1_means)[stage1_name]
-    print(f"Stage 1: {stage1_name} MAE {base_mae:.2f}", flush=True)
-
-    addon = None
-    quality = False
-    if not smoke:
-        print("Stage 2 target encodings, on the stage-1 columns", flush=True)
-        for addon_name, mode in (("target_smooth", "smooth"), ("target_knn", "knn")):
-            for city, pack in prepared.items():
-                for seed, train_idx, valid_idx, _info in pack["inners"]:
-                    metrics, _pred, _y = _fit_eval(
-                        pack["frame"],
-                        pack["split"],
-                        train_idx,
-                        valid_idx,
-                        base_columns,
-                        mode,
-                        "xgboost",
-                        6,
-                    )
-                    _record(rows, f"feature:{addon_name}", city, seed, metrics)
-                    print(
-                        f"  {city} {addon_name} seed {seed}: MAE {metrics['mae']:.2f}", flush=True
-                    )
-        addon_means = [
-            (name, _summary(_tagged(rows, f"feature:{name}"))["mae_mean"])
-            for name in ("target_smooth", "target_knn")
-        ]
-        addon = choose_addon(base_mae, addon_means)
-        columns, spatial_mode = resolve_features(stage1_name, addon, False)
-        current_mae = dict(addon_means)[addon] if addon else base_mae
-        print("Stage 3 listing quality", flush=True)
-        for city, pack in prepared.items():
-            for seed, train_idx, valid_idx, _info in pack["inners"]:
-                metrics, _pred, _y = _fit_eval(
-                    pack["frame"],
-                    pack["split"],
-                    train_idx,
-                    valid_idx,
-                    columns + list(QUALITY_COLUMNS),
-                    spatial_mode,
-                    "xgboost",
-                    6,
-                )
-                _record(rows, "feature:listing_quality", city, seed, metrics)
-                print(f"  {city} listing quality seed {seed}: MAE {metrics['mae']:.2f}", flush=True)
-        quality_mae = _summary(_tagged(rows, "feature:listing_quality"))["mae_mean"]
-        quality = choose_quality(current_mae, quality_mae)
-    columns, spatial_mode = resolve_features(stage1_name, addon, quality)
-    chosen_set = feature_label(stage1_name, addon, quality)
-    print(f"Chosen features: {chosen_set}", flush=True)
-
-    depths = (4,) if smoke else DEPTHS
-    print("Depth search", flush=True)
-    for depth in depths:
-        for city, pack in prepared.items():
-            for seed, train_idx, valid_idx, _info in pack["inners"]:
-                metrics, _pred, _y = _fit_eval(
-                    pack["frame"],
-                    pack["split"],
-                    train_idx,
-                    valid_idx,
-                    columns,
-                    spatial_mode,
-                    "xgboost",
-                    depth,
-                )
-                _record(rows, f"depth:{depth}", city, seed, metrics)
-                print(
-                    f"  {city} xgb depth {depth} seed {seed}: MAE {metrics['mae']:.2f}", flush=True
-                )
-    chosen_depth = choose_depth(
-        [(depth, _summary(_tagged(rows, f"depth:{depth}"))["mae_mean"]) for depth in depths]
-    )
-    print(f"Chosen depth: {chosen_depth}", flush=True)
-
-    libraries = ("xgboost",) if smoke else LIBRARIES
-    print("Libraries", flush=True)
-    for library in libraries:
-        for city, pack in prepared.items():
-            for seed, train_idx, valid_idx, _info in pack["inners"]:
-                metrics, pred, y_true = _fit_eval(
-                    pack["frame"],
-                    pack["split"],
-                    train_idx,
-                    valid_idx,
-                    columns,
-                    spatial_mode,
-                    library,
-                    chosen_depth,
-                )
-                _record(rows, f"library:{library}", city, seed, metrics)
-                library_preds[(city, seed, library)] = (y_true, pred)
-                print(f"  {city} {library} seed {seed}: MAE {metrics['mae']:.2f}", flush=True)
-    library_scores = {
-        library: _summary(_tagged(rows, f"library:{library}"))["mae_mean"] for library in libraries
+    decision = select_v3(prepared, smoke=smoke)
+    spec = {
+        "columns": decision["columns"],
+        "spatial_mode": decision["spatial_mode"],
+        "text_mode": decision["text_mode"],
+        "depth": decision["depth"],
+        "pooled": decision["pooled"],
     }
-    if smoke:
-        library_scores.setdefault("lightgbm", library_scores["xgboost"] * 2)
-        library_scores.setdefault("catboost", library_scores["xgboost"] * 2)
-    chosen_library = choose_library(library_scores)
-    print(f"Chosen library: {chosen_library}", flush=True)
-
-    use_mono = False
-    if not smoke:
-        print("Monotone constraints", flush=True)
-        for city, pack in prepared.items():
-            for seed, train_idx, valid_idx, _info in pack["inners"]:
-                metrics, pred, y_true = _fit_eval(
-                    pack["frame"],
-                    pack["split"],
-                    train_idx,
-                    valid_idx,
-                    columns,
-                    spatial_mode,
-                    chosen_library,
-                    chosen_depth,
-                    monotone=True,
-                )
-                _record(rows, "monotonic", city, seed, metrics)
-                mono_preds[(city, seed)] = (y_true, pred)
-                print(f"  {city} monotone seed {seed}: MAE {metrics['mae']:.2f}", flush=True)
-        mono_mae = _summary(_tagged(rows, "monotonic"))["mae_mean"]
-        use_mono = choose_monotonic(library_scores[chosen_library], mono_mae)
-    else:
-        mono_mae = None
-    print(f"Monotone: {use_mono}", flush=True)
-
-    use_blend = False
-    blend_pair: list[str] = []
-    blend_mae = None
-    if not smoke:
-        ranked = sorted(library_scores, key=library_scores.get)
-        blend_pair = list(ranked[:2])
-        blend_values = []
-        for city, pack in prepared.items():
-            for seed, _train, _valid, _info in pack["inners"]:
-                y_a, pred_a = library_preds[(city, seed, blend_pair[0])]
-                _y_b, pred_b = library_preds[(city, seed, blend_pair[1])]
-                blended = 0.5 * (pred_a + pred_b)
-                metrics = regression_metrics(y_a, blended)
-                _record(rows, "blend", city, seed, metrics)
-                blend_values.append(metrics["mae"])
-        blend_mae = float(np.mean(blend_values))
-        winner_mae = mono_mae if use_mono else library_scores[chosen_library]
-        use_blend = choose_blend(winner_mae, blend_mae)
-    print(f"Blend {blend_pair}: {use_blend} MAE {blend_mae}", flush=True)
-
-    point_library = "blend" if use_blend else chosen_library
-    spatial_columns = list(columns)
-    if spatial_mode == "smooth":
-        spatial_columns += list(SMOOTH_COLUMNS)
-    elif spatial_mode == "knn":
-        spatial_columns += list(KNN_COLUMNS)
+    v2_columns, v2_spatial = v2_features()
+    v2_spec = {
+        "columns": v2_columns,
+        "spatial_mode": v2_spatial,
+        "text_mode": "none",
+        "depth": V2_DEPTH,
+        "pooled": False,
+    }
 
     reference_rows: list[dict] = []
     curve_rows: dict[str, list] = {}
-    print("Baselines, ridge, learning curves", flush=True)
+    print("Baselines and ridge on the selection folds", flush=True)
     for city, pack in prepared.items():
-        for seed, train_idx, valid_idx, _info in pack["inners"]:
-            y = pack["frame"]["price_clean"].to_numpy(dtype=float)
+        frame = pack["frame"]
+        y = frame["price_clean"].to_numpy(dtype=float)
+        for seed, train_idx, valid_idx in pack["folds"]:
             reference_rows.append(
                 {
                     "city": city,
@@ -571,9 +450,9 @@ def run(smoke: bool = False) -> tuple[dict, pd.DataFrame, dict]:
                     **regression_metrics(
                         y[valid_idx],
                         median_baseline(
-                            pack["frame"]["neighbourhood_cleansed"].to_numpy(),
-                            pack["frame"]["room_type"].to_numpy(),
-                            pack["frame"]["bedrooms"].to_numpy(dtype=float),
+                            frame["neighbourhood_cleansed"].to_numpy(),
+                            frame["room_type"].to_numpy(),
+                            frame["bedrooms"].to_numpy(dtype=float),
                             y,
                             train_idx,
                             valid_idx,
@@ -590,9 +469,9 @@ def run(smoke: bool = False) -> tuple[dict, pd.DataFrame, dict]:
                     **regression_metrics(
                         y[valid_idx],
                         median_baseline(
-                            pack["frame"]["neighbourhood_cleansed"].to_numpy(),
-                            pack["frame"]["room_type"].to_numpy(),
-                            pack["frame"]["bedrooms"].to_numpy(dtype=float),
+                            frame["neighbourhood_cleansed"].to_numpy(),
+                            frame["room_type"].to_numpy(),
+                            frame["bedrooms"].to_numpy(dtype=float),
                             y,
                             train_idx,
                             valid_idx,
@@ -601,8 +480,13 @@ def run(smoke: bool = False) -> tuple[dict, pd.DataFrame, dict]:
                     ),
                 }
             )
-            X_train, y_log, X_valid, y_valid, _encoder = design_matrices(
-                pack["frame"], train_idx, valid_idx, columns, spatial_mode
+            X_train, y_log, X_valid, y_valid, _state = design_matrices(
+                frame,
+                train_idx,
+                valid_idx,
+                spec["columns"],
+                spec["spatial_mode"],
+                text_mode=spec["text_mode"],
             )
             reference_rows.append(
                 {
@@ -612,106 +496,72 @@ def run(smoke: bool = False) -> tuple[dict, pd.DataFrame, dict]:
                     **regression_metrics(y_valid, fit_predict_ridge(X_train, y_log, X_valid)),
                 }
             )
-        if not smoke:
-            seed, train_idx, valid_idx, _info = pack["inners"][0]
+        if not smoke and pack["folds"]:
+            seed, train_idx, valid_idx = pack["folds"][0]
             curve_rows[city] = _learning_curve(
-                pack["frame"],
+                frame,
                 pack["split"],
                 train_idx,
                 valid_idx,
-                columns,
-                spatial_mode,
-                chosen_library,
-                chosen_depth,
-                use_mono and not use_blend,
+                spec["columns"],
+                spec["spatial_mode"],
+                "xgboost",
+                spec["depth"],
+                False,
+                text_mode=spec["text_mode"],
             )
 
-    radii = {}
-    dev_coverage = {}
-    for city in cities:
-        folds = []
-        for seed, _train, _valid, _info in prepared[city]["inners"]:
-            if use_blend:
-                y_a, pred_a = library_preds[(city, seed, blend_pair[0])]
-                _y_b, pred_b = library_preds[(city, seed, blend_pair[1])]
-                y_true, pred = y_a, 0.5 * (pred_a + pred_b)
-            elif use_mono:
-                y_true, pred = mono_preds[(city, seed)]
-            else:
-                y_true, pred = library_preds[(city, seed, chosen_library)]
-            folds.append(log_abs_residual(y_true, pred))
-        radii[city], dev_coverage[city] = _city_radius(folds)
-        print(
-            f"  {city} conformal radius {radii[city]:.3f} dev coverage {dev_coverage[city]}",
-            flush=True,
-        )
-
     print("Locked test, once", flush=True)
+    train_idxs = {city: pack["split"]["development_idx"] for city, pack in prepared.items()}
+    test_idxs = {city: pack["split"]["test_idx"] for city, pack in prepared.items()}
+    fitted = fit_holdout(prepared, train_idxs, test_idxs, spec, refit=True)
+    print("Published v2 specification, refit on the same rows", flush=True)
+    v2_fitted = fit_holdout(prepared, train_idxs, test_idxs, v2_spec, refit=True)
+
+    print("Confirmation holdout, once", flush=True)
+    confirm_train = {city: pack["confirm"]["train_idx"] for city, pack in prepared.items()}
+    confirm_eval = {city: pack["confirm"]["confirm_idx"] for city, pack in prepared.items()}
+    confirm_fit = fit_holdout(prepared, confirm_train, confirm_eval, spec, refit=True)
+    confirm_v2 = fit_holdout(prepared, confirm_train, confirm_eval, v2_spec, refit=True)
+
+    interval_method = decision["interval_method"]
     predictions = []
+    confirm_predictions = []
     city_reports = {}
     shap_report = {}
     pdp_report = {}
-    audits = {}
     for city, pack in prepared.items():
         frame = pack["frame"]
         split = pack["split"]
         dev = split["development_idx"]
         test = split["test_idx"]
-        audits[city] = {
+        held = fitted[city]
+        audit = {
             "split": split_audit(frame, dev, test),
-            "columns": column_audit(spatial_columns),
+            "columns": column_audit(held["columns"]),
+            "confirmation": split_audit(
+                frame, pack["confirm"]["train_idx"], pack["confirm"]["confirm_idx"]
+            ),
         }
-        if not audits[city]["split"]["passed"] or not audits[city]["columns"]["passed"]:
-            raise RuntimeError(f"Audit failed for {city}: {audits[city]}")
+        if not audit["split"]["passed"] or not audit["columns"]["passed"]:
+            raise RuntimeError(f"Audit failed for {city}: {audit}")
+        if not audit["confirmation"]["passed"]:
+            raise RuntimeError(f"Confirmation audit failed for {city}: {audit['confirmation']}")
 
-        X_dev, y_log, X_test, y_test, encoder = design_matrices(
-            frame, dev, test, columns, spatial_mode
-        )
+        y_test = held["y"]
+        pred = held["pred"]
+        q_lo = held["q_lo"]
+        q_hi = held["q_hi"]
+        method_bounds = {}
+        for method_name in ("log_conformal", "scaled_log", "cqr"):
+            low_m, high_m = apply_interval(
+                method_name, pred, q_lo, q_hi, decision["interval_final"][method_name][city]
+            )
+            method_bounds[method_name] = (low_m, high_m)
+        low, high = method_bounds[interval_method]
+        raw_low, raw_high = cqr_bounds(q_lo, q_hi, 0.0)
+
         groups = split["groups"][dev]
-        if use_blend:
-            models = {}
-            tree_counts = {}
-            preds = []
-            for library in blend_pair:
-                stopped = fit_boosted(
-                    library, params_for_depth(chosen_depth), X_dev, y_log, groups, monotone=False
-                )
-                n_trees = int(getattr(stopped, "_capscout_trees", None) or 80)
-                model = refit_boosted(
-                    library, params_for_depth(chosen_depth), n_trees, X_dev, y_log, monotone=False
-                )
-                models[library] = model
-                tree_counts[library] = n_trees
-                preds.append(predict_dollars(model, X_test, library))
-            gbm_pred = np.mean(preds, axis=0)
-            point_model = None
-            saved_library = "blend"
-        else:
-            stopped = fit_boosted(
-                chosen_library,
-                params_for_depth(chosen_depth),
-                X_dev,
-                y_log,
-                groups,
-                monotone=use_mono,
-            )
-            n_trees = int(getattr(stopped, "_capscout_trees", None) or 80)
-            point_model = refit_boosted(
-                chosen_library,
-                params_for_depth(chosen_depth),
-                n_trees,
-                X_dev,
-                y_log,
-                monotone=use_mono,
-            )
-            gbm_pred = predict_dollars(point_model, X_test, chosen_library)
-            models = {chosen_library: point_model}
-            tree_counts = {chosen_library: n_trees}
-            saved_library = chosen_library
-
-        # The previous study's specification, scored on this new holdout.
-        # Depth 4, size and location, XGBoost, no new sources. It is a baseline,
-        # not a candidate: nothing above was chosen by looking at this score.
         prev_columns = list(SIZE_COLUMNS) + list(LOCATION_COLUMNS)
         X_prev, y_prev, X_prev_test, _y_prev, _enc_prev = design_matrices(
             frame, dev, test, prev_columns, "none"
@@ -725,7 +575,10 @@ def run(smoke: bool = False) -> tuple[dict, pd.DataFrame, dict]:
         )
         prev_pred = predict_dollars(prev_model, X_prev_test, "xgboost")
 
-        ridge_pred = fit_predict_ridge(X_dev, y_log, X_test)
+        X_dev, y_log, X_test_ridge, _y_ridge, _ridge_state = design_matrices(
+            frame, dev, test, spec["columns"], spec["spatial_mode"], text_mode=spec["text_mode"]
+        )
+        ridge_pred = fit_predict_ridge(X_dev, y_log, X_test_ridge)
         y = frame["price_clean"].to_numpy(dtype=float)
         base_pred = median_baseline(
             frame["neighbourhood_cleansed"].to_numpy(),
@@ -745,48 +598,37 @@ def run(smoke: bool = False) -> tuple[dict, pd.DataFrame, dict]:
             test,
             by_bedroom=True,
         )
-        low, high = apply_log_interval(gbm_pred, radii[city])
-        q_library = blend_pair[0] if use_blend else chosen_library
-        q_trees = tree_counts[q_library]
-        if smoke:
-            q10 = q90 = gbm_pred
-            q_cross = 0.0
-        else:
-            q10_model = fit_quantile(
-                q_library, params_for_depth(chosen_depth), q_trees, X_dev, y_log, 0.1
-            )
-            q90_model = fit_quantile(
-                q_library, params_for_depth(chosen_depth), q_trees, X_dev, y_log, 0.9
-            )
-            q10 = predict_dollars(q10_model, X_test, q_library)
-            q90 = predict_dollars(q90_model, X_test, q_library)
-            q_cross = float(np.mean(q10 > q90))
-        q_low = np.minimum(q10, q90)
-        q_high = np.maximum(q10, q90)
-
+        chosen_candidate = next(
+            item for item in decision["interval_candidates"] if item["name"] == interval_method
+        )
         locked = {
-            "gbm": regression_metrics(y_test, gbm_pred),
+            "gbm": regression_metrics(y_test, pred),
+            "v2_refit": regression_metrics(y_test, v2_fitted[city]["pred"]),
             "previous_spec": regression_metrics(y_test, prev_pred),
             "ridge": regression_metrics(y_test, ridge_pred),
             "baseline_room": regression_metrics(y_test, base_pred),
             "baseline_room_bed": regression_metrics(y_test, base_bed_pred),
             "interval": {
-                "method": "log_residual_conformal",
+                "method": interval_method,
                 "nominal": INTERVAL_LEVEL,
-                "radius_log": radii[city],
-                "development_coverage": dev_coverage[city],
+                "development_coverage": chosen_candidate["by_city"][city]["coverage"],
+                "development_upper_coverage": chosen_candidate["by_city"][city]["upper_coverage"],
                 **interval_metrics(y_test, low, high),
             },
+            "interval_methods": {
+                name: interval_metrics(y_test, bounds[0], bounds[1])
+                for name, bounds in method_bounds.items()
+            },
             "quantile_interval": {
-                "library": q_library,
+                "library": "xgboost",
                 "alphas": [0.1, 0.9],
-                "cross_rate": q_cross,
-                **interval_metrics(y_test, q_low, q_high),
+                "note": "Uncalibrated quantile band. The conformalized version is interval_methods.cqr.",
+                **interval_metrics(y_test, raw_low, raw_high),
             },
         }
         print(
-            f"  {city} test {saved_library} R2 {locked['gbm']['r2']:.3f} "
-            f"MAE {locked['gbm']['mae']:.2f} coverage {locked['interval']['coverage']:.3f}",
+            f"  {city} test R2 {locked['gbm']['r2']:.3f} MAE {locked['gbm']['mae']:.2f} "
+            f"coverage {locked['interval']['coverage']:.3f}",
             flush=True,
         )
         for i, row_idx in enumerate(test):
@@ -795,11 +637,12 @@ def run(smoke: bool = False) -> tuple[dict, pd.DataFrame, dict]:
                     "city": city,
                     "listing_id": str(int(frame.at[row_idx, "id"])),
                     "y_true": float(y_test[i]),
-                    "pred_gbm": float(gbm_pred[i]),
+                    "pred_gbm": float(pred[i]),
                     "pred_lo": float(low[i]),
                     "pred_hi": float(high[i]),
-                    "pred_q10": float(q_low[i]),
-                    "pred_q90": float(q_high[i]),
+                    "pred_q10": float(raw_low[i]),
+                    "pred_q90": float(raw_high[i]),
+                    "pred_v2_refit": float(v2_fitted[city]["pred"][i]),
                     "pred_previous": float(prev_pred[i]),
                     "pred_ridge": float(ridge_pred[i]),
                     "pred_baseline": float(base_pred[i]),
@@ -810,6 +653,27 @@ def run(smoke: bool = False) -> tuple[dict, pd.DataFrame, dict]:
                     "bedrooms": float(frame.at[row_idx, "bedrooms"]),
                 }
             )
+        confirm_y = confirm_fit[city]["y"]
+        confirm_pred = confirm_fit[city]["pred"]
+        c_low, c_high = apply_interval(
+            interval_method,
+            confirm_pred,
+            confirm_fit[city]["q_lo"],
+            confirm_fit[city]["q_hi"],
+            decision["interval_final"][interval_method][city],
+        )
+        for i, row_idx in enumerate(pack["confirm"]["confirm_idx"]):
+            confirm_predictions.append(
+                {
+                    "city": city,
+                    "listing_id": str(int(frame.at[row_idx, "id"])),
+                    "y_true": float(confirm_y[i]),
+                    "pred_gbm": float(confirm_pred[i]),
+                    "pred_lo": float(c_low[i]),
+                    "pred_hi": float(c_high[i]),
+                    "pred_v2_refit": float(confirm_v2[city]["pred"][i]),
+                }
+            )
         dev_occ = frame.iloc[dev]
         dev_occ = dev_occ[np.isfinite(dev_occ["occupancy_rate"])]
         occ_map = (
@@ -818,19 +682,29 @@ def run(smoke: bool = False) -> tuple[dict, pd.DataFrame, dict]:
             .astype(float)
             .to_dict()
         )
+        state = held["state"]
         artifact = {
-            "model": point_model,
-            "models": models if use_blend else None,
-            "library": saved_library,
-            "blend_libraries": blend_pair if use_blend else None,
-            "depth": chosen_depth,
-            "monotonic": bool(use_mono and not use_blend),
-            "n_trees": tree_counts,
-            "encoder": encoder,
-            "columns": list(columns),
-            "spatial_mode": spatial_mode,
-            "feature_set": chosen_set,
-            "conformal_log_radius": float(radii[city]),
+            "model": None,
+            "models": held["models"],
+            "library": "blend",
+            "blend_libraries": list(V2_BLEND),
+            "depth": spec["depth"],
+            "monotonic": False,
+            "n_trees": held["tree_counts"],
+            "encoder": state.fold,
+            "kernel": state.kernel,
+            "text_encoder": state.text,
+            "columns": list(held["columns"]),
+            "spatial_mode": spec["spatial_mode"],
+            "text_mode": spec["text_mode"],
+            "pooled": bool(spec["pooled"]),
+            "feature_set": decision["feature_set"],
+            "conformal_log_radius": float(
+                decision["interval_final"]["log_conformal"][city]["radius"]
+            ),
+            "interval_method": interval_method,
+            "interval_params": decision["interval_final"][interval_method][city],
+            "quantile_models": held["q_models"] if interval_method == "cqr" else None,
             "interval_level": INTERVAL_LEVEL,
             "occupancy_by_neighbourhood": {str(k): float(v) for k, v in occ_map.items()},
             "occupancy_global": float(dev_occ["occupancy_rate"].median()) if len(dev_occ) else 0.5,
@@ -840,57 +714,83 @@ def run(smoke: bool = False) -> tuple[dict, pd.DataFrame, dict]:
         }
         if not smoke:
             save_artifact(city, artifact)
-        if use_blend:
-            shap_report[city] = _blend_shap(models, blend_pair, X_test)
-        else:
-            shap_report[city] = _shap_rows(point_model, X_test, chosen_library)
-        neighbourhood = frame["neighbourhood_cleansed"].to_numpy()[dev]
-        X_dev_pdp = X_dev.copy()
-        pdp_report[city] = _pdp_for(
-            point_model,
-            chosen_library,
-            models,
-            blend_pair if use_blend else None,
-            X_dev_pdp,
-            encoder,
-            neighbourhood,
-            list(X_dev.columns),
+        shap_report[city] = _blend_shap(held["models"], list(V2_BLEND), held["matrix_valid"])
+        X_pdp, _y_pdp, _x_ignore, _y_ignore, _pdp_state = design_matrices(
+            frame,
+            dev,
+            dev[:1],
+            spec["columns"],
+            spec["spatial_mode"],
+            text_mode=spec["text_mode"],
+            text_encoder=state.text,
         )
+        if spec["pooled"]:
+            from features.columns import city_dummy
+
+            for key in cities:
+                X_pdp[city_dummy(key)] = 1.0 if key == city else 0.0
+            X_pdp = X_pdp[held["columns"]]
+        neighbourhood = frame["neighbourhood_cleansed"].to_numpy()[dev]
+        pdp_report[city] = _pdp_for(
+            None,
+            "xgboost",
+            held["models"],
+            list(V2_BLEND),
+            X_pdp,
+            state,
+            neighbourhood,
+            list(X_pdp.columns),
+        )
+        confirm_metrics = {
+            "gbm": regression_metrics(confirm_y, confirm_pred),
+            "v2_refit": regression_metrics(confirm_y, confirm_v2[city]["pred"]),
+            "interval": {
+                "method": interval_method,
+                "nominal": INTERVAL_LEVEL,
+                **interval_metrics(confirm_y, c_low, c_high),
+            },
+            "n_train": int(len(pack["confirm"]["train_idx"])),
+            **{
+                key: pack["confirm"]["info"][key]
+                for key in ("n_confirm", "removed_host", "removed_buffer", "train_after")
+            },
+        }
         city_reports[city] = {
             "display": CITIES[city]["display"],
             "snapshot": pack["stats"]["snapshot"],
             "cleaning": pack["stats"],
             "split": split["info"],
+            "confirmation_split": pack["confirm"]["info"],
             "locked_test": locked,
-            "residuals_by_predicted_quintile": _residual_bins(y_test, gbm_pred),
-            "locked_test_by_room_type": _room_errors(frame, test, gbm_pred),
+            "confirmation": confirm_metrics,
+            "residuals_by_predicted_quintile": _residual_bins(y_test, pred),
+            "locked_test_by_room_type": _room_errors(frame, test, pred),
             "interval_by_predicted_bin": [],
             "shap": shap_report[city],
             "partial_dependence": pdp_report[city],
-            "audit": audits[city],
+            "audit": audit,
         }
 
     prediction_frame = pd.DataFrame(predictions)
+    confirm_frame = pd.DataFrame(confirm_predictions)
     for city in cities:
         city_reports[city]["interval_by_predicted_bin"] = _coverage_bins(
             prediction_frame[prediction_frame["city"] == city]
         )
 
+    short_tags = {
+        "v2": "v3:v2",
+        "detail": "v3:alone:listing_detail",
+        "lexicon": "v3:alone:text_lexicon",
+        "wording": "v3:alone:text_svd",
+        "kernel": "v3:alone:kernel_price",
+        "selected": "v3:selected",
+    }
     ablation = {}
-    feature_tags = [name for name, _c, _m in stage1]
-    if not smoke:
-        feature_tags += ["osm_without_census", "target_smooth", "target_knn", "listing_quality"]
     for city in cities:
         ablation[city] = {}
-        for name in feature_tags:
-            ablation[city][name] = _summary(_tagged(rows, f"feature:{name}", city))
-
-    if use_blend:
-        selected_tag = "blend"
-    elif use_mono:
-        selected_tag = "monotonic"
-    else:
-        selected_tag = f"library:{chosen_library}"
+        for name, tag in short_tags.items():
+            ablation[city][name] = _summary(_tagged(decision["rows"], tag, city))
 
     comparison = {}
     for city in cities:
@@ -900,71 +800,94 @@ def run(smoke: bool = False) -> tuple[dict, pd.DataFrame, dict]:
                 row for row in reference_rows if row["city"] == city and row["model"] == model_name
             ]
             comparison[city][model_name] = _summary(part)
-        for library in libraries:
-            comparison[city][library] = _summary(_tagged(rows, f"library:{library}", city))
-        comparison[city]["gbm"] = _summary(_tagged(rows, selected_tag, city))
+        comparison[city]["v2"] = _summary(_tagged(decision["rows"], "v3:v2", city))
+        comparison[city]["gbm"] = _summary(_tagged(decision["rows"], "v3:selected", city))
 
-    leakage = austin_leakage_demo(prepared["austin"]["frame"]) if "austin" in prepared else None
+    archive_path = REPORTS / "v2_metrics.json"
+    published = None
+    if archive_path.exists():
+        archive = json.loads(archive_path.read_text())
+        published = {
+            city: {
+                "gbm": archive["cities"][city]["locked_test"]["gbm"],
+                "interval_coverage": archive["cities"][city]["locked_test"]["interval"]["coverage"],
+                "interval_median_width": archive["cities"][city]["locked_test"]["interval"][
+                    "median_width"
+                ],
+            }
+            for city in archive["cities"]
+            if city in cities
+        }
+
+    scored_columns = fitted[cities[0]]["columns"]
     result = {
         "study_cities": list(cities),
         "rationale": STUDY_RATIONALE,
         "protocol": {
             "test_seed": TEST_SEED,
+            "confirm_seed": CONFIRM_SEED,
             "previous_study_seed": 42,
             "inner_seeds": list(seeds),
-            "stage1": stage1_name,
-            "addon": addon,
-            "listing_quality": quality,
-            "chosen_feature_set": chosen_set,
+            "v2_feature_set": "plus_census+listing_quality",
+            "v3_kept": decision["kept"],
+            "v3_base_mae": decision["base_mae"],
+            "v3_trials": decision["trials"],
+            "alone_development_mae": decision["alone"],
+            "chosen_depth": decision["depth"],
+            "depth_development_mae": decision["depth_mae"],
+            "pooled": decision["pooled"],
+            "pooled_development_mae": decision["pooled_mae"],
+            "per_city_development_mae": decision["per_city_mae"],
+            "interval_method": interval_method,
+            "interval_candidates": decision["interval_candidates"],
+            "library": "blend",
+            "blend_libraries": list(V2_BLEND),
+            "monotonic": False,
+            "spatial_mode": spec["spatial_mode"],
+            "text_mode": spec["text_mode"],
+            "feature_set": decision["feature_set"],
+            "static_columns": decision["columns"],
+            "columns": scored_columns,
             "feature_set_why": FEATURE_SET_WHY,
-            "stage1_development_mae": {name: mae for name, mae in stage1_means},
-            "feature_set_development_mae": {
-                name: _summary(_tagged(rows, f"feature:{name}"))["mae_mean"]
-                for name in feature_tags
-            },
-            "chosen_depth": chosen_depth,
-            "depth_development_mae": {
-                str(depth): _summary(_tagged(rows, f"depth:{depth}"))["mae_mean"]
-                for depth in depths
-            },
-            "library_development_mae": library_scores,
-            "xgboost_development_mae": library_scores.get("xgboost"),
-            "lightgbm_development_mae": library_scores.get("lightgbm"),
-            "catboost_development_mae": library_scores.get("catboost"),
-            "library": point_library,
-            "component_library": chosen_library,
-            "monotonic_within_bar": bool(use_mono),
-            "monotonic": bool(use_mono and not use_blend),
-            "monotonic_development_mae": mono_mae,
-            "blend": bool(use_blend),
-            "blend_libraries": blend_pair,
-            "blend_development_mae": blend_mae,
-            "spatial_mode": spatial_mode,
-            "columns": spatial_columns,
-            "ablation_depth": 6,
             "selection_rule": (
-                "Stage 1 keeps the simplest cumulative prefix within 1% of the best. "
-                "A target encoding or listing-quality block is added only if it improves "
-                "development MAE by at least 1%. Shallower trees win within 1%. "
-                "LightGBM or CatBoost replaces XGBoost only if it is at least 2% better. "
-                "Monotone constraints are kept when they are within 1%. "
-                "An equal-weight blend of the two best libraries is kept only if it is at least 1% better. "
-                "osm_without_census is reported and is not eligible."
+                "v2's published specification is the starting point and is not re-searched. "
+                "Add-ons are tried in a fixed order on development folds that exclude the "
+                "seed-11 confirmation cells. Each stays only if it cuts mean MAE by at least 1%. "
+                "Depth is then re-checked, shallower within 1%. A pooled model replaces the "
+                "per-city blend only if it is at least 1% better. The interval stays the "
+                "log-residual band unless a challenger improves expensive-listing coverage "
+                "on those same folds without getting much wider. The locked test is scored "
+                "once after that, and it is not an input to any of those choices. "
+                "The confirmation holdout is also scored once and is not an input."
             ),
         },
+        "published_v2": published,
         "cities": city_reports,
         "development_ablation": ablation,
         "development_comparison": comparison,
         "learning_curves": curve_rows,
         "partial_dependence": pdp_report,
-        "leakage_demo": leakage,
+        "leakage_demo": (
+            austin_leakage_demo(prepared["austin"]["frame"]) if "austin" in prepared else None
+        ),
         "audit_passed": all(
-            report["audit"]["split"]["passed"] and report["audit"]["columns"]["passed"]
+            report["audit"]["split"]["passed"]
+            and report["audit"]["columns"]["passed"]
+            and report["audit"]["confirmation"]["passed"]
             for report in city_reports.values()
         ),
         "smoke": smoke,
-        "feature_labels": {name: pretty(name) for name in spatial_columns},
+        "feature_labels": {name: pretty(name) for name in scored_columns},
+        "confirmation_note": (
+            f"Seed {CONFIRM_SEED} holds out development cells that were inside v2's "
+            "cross-validation, so it is not a blind test of the v2 specification. "
+            "It is a blind test of every choice made in this round. Seed 7 was published "
+            "with v2, so this round does not use it to choose anything. It is scored once, "
+            "on the same rows, with the new model trained on the same development listings v2 used."
+        ),
     }
+    if not smoke:
+        confirm_frame.to_csv(REPORTS / "confirmation_predictions.csv", index=False)
     return result, prediction_frame, shap_report
 
 
@@ -1001,7 +924,7 @@ def main() -> None:
     plot_model_comparison(
         result["development_comparison"],
         FIGURES / "model_comparison.png",
-        ["baseline_room", "ridge", "xgboost", "lightgbm", "catboost", "gbm"],
+        ["baseline_room", "ridge", "v2", "gbm"],
     )
     if result["learning_curves"]:
         plot_learning_curves(result["learning_curves"], FIGURES / "learning_curves.png")

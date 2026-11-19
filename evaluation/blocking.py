@@ -12,6 +12,8 @@ from sklearn.neighbors import BallTree
 
 from evaluation.protocol import (
     BUFFER_KM,
+    CONFIRM_GROUP_FRACTION,
+    CONFIRM_SEED,
     INNER_GROUP_FRACTION,
     INNER_SEEDS,
     SPATIAL_STEP_DEGREES,
@@ -92,6 +94,42 @@ def locked_split(lat: np.ndarray, lon: np.ndarray, hosts: np.ndarray) -> dict:
         "test_idx": test_idx,
         "info": info,
         "index": index,
+    }
+
+
+def confirmation_split(
+    lat: np.ndarray,
+    lon: np.ndarray,
+    hosts: np.ndarray,
+    development_idx: np.ndarray,
+    groups: np.ndarray,
+) -> dict:
+    """Hold out development cells for the confirmation check.
+
+    The locked test is not in `development_idx`, so this split cannot
+    touch it. `pool_idx` is what model selection is allowed to see.
+    `train_idx` is that pool after the host purge and the 1 km buffer
+    against the confirmation cells, which is the training set for the
+    one confirmation score.
+    """
+    dev = np.asarray(development_idx, dtype=int)
+    rel_pool, rel_confirm = holdout_groups(groups[dev], CONFIRM_GROUP_FRACTION, CONFIRM_SEED)
+    confirm_idx = dev[rel_confirm]
+    pool_idx = dev[rel_pool]
+    train_idx, info = protect_train(lat, lon, hosts, pool_idx, confirm_idx)
+    info.update(
+        {
+            "n_confirm": int(len(confirm_idx)),
+            "n_pool": int(len(pool_idx)),
+            "confirm_seed": CONFIRM_SEED,
+            "confirm_group_fraction": CONFIRM_GROUP_FRACTION,
+        }
+    )
+    return {
+        "confirm_idx": confirm_idx,
+        "pool_idx": pool_idx,
+        "train_idx": train_idx,
+        "info": info,
     }
 
 

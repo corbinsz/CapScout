@@ -22,8 +22,13 @@ def regression_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, floa
     y_pred = np.maximum(y_pred, 0.0)
     rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
     ape = np.abs(y_true - y_pred) / y_true
+    # One shared room is not an R². sklearn warns and returns NaN; skip the call.
+    if len(y_true) < 2:
+        r2 = float("nan")
+    else:
+        r2 = float(r2_score(y_true, y_pred))
     return {
-        "r2": float(r2_score(y_true, y_pred)),
+        "r2": r2,
         "mae": float(mean_absolute_error(y_true, y_pred)),
         "rmse": rmse,
         "mape": float(np.mean(ape) * 100.0),

@@ -16,8 +16,12 @@ Other snapshots are on disk and were screened. They are not in the model. Hawaii
 
 ### Not used from Inside Airbnb
 
-- **Calendar.** Inside Airbnb says a night marked unavailable is not necessarily booked. Treating it as occupancy would invent a label, and availability also depends on the price being predicted, so it would be a leak. It is not a feature.
-- **Neighbourhood medians of price, and nearest-listing prices,** except as an experiment that was fit inside the training fold and did not clear the bar. See the findings. They are not in the scored model.
+- **Calendar, availability, estimated occupancy, and estimated revenue.** Inside Airbnb says a night marked unavailable is not necessarily booked. Those fields also move with the price being predicted, so they would be a leak. They are not features.
+- **`review_scores_value`.** Guests score value by comparing the stay to the price. The other review scores (cleanliness, location, accuracy, check-in, communication) are in the model. The value score is not.
+- **The review text file.** Sentiment over the raw reviews is a separate download and was not fit. The aspect scores on the listing file were used instead.
+- **Photos.** `picture_url` points at a host's image. The photograph is not part of the CC BY listing table and was not downloaded.
+- **Neighbourhood medians of price, nearest-listing prices, and a 5 km Gaussian smooth of training prices,** except as experiments fit inside the training fold. None of them cleared the bar. See the findings. They are not in the scored model.
+- **Listing text.** The title, description, and neighbourhood blurb were turned into a fixed lexicon and a fold-fit TF-IDF. Neither cleared the bar. The text is still built by the feature code so the negative result can be rerun. It is not in the scored model.
 
 ## U.S. Census Bureau, ACS 2024 5-year
 
@@ -66,4 +70,4 @@ Distance to downtown uses the city reference point in `data/cities.py`. Distance
 
 ## What the scored model actually uses
 
-Census tract attributes, plus the listing's own size, coordinates, distances, and ad-level fields (amenities, reviews, host). OpenStreetMap columns were built and measured and left out. The findings record the comparison.
+Census tract attributes, plus the listing's own size, coordinates, distances, amenities, review scores, and host fields. The later round added beds, a shared-bath flag, host tenure and response, the separate review scores other than value, and a few more amenity flags. OpenStreetMap columns, listing text, and smoothed nearby prices were built and measured and left out. The findings record the comparison.

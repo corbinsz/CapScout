@@ -57,7 +57,7 @@ def austin_leakage_demo(frame: pd.DataFrame) -> dict:
             learning_rate=0.08,
             tree_method="hist",
             random_state=42,
-            n_jobs=-1,
+            n_jobs=1,
             verbosity=0,
         )
         model.fit(features.iloc[train_idx], leaky_median[train_idx])

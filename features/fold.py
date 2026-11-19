@@ -52,6 +52,66 @@ def _radians(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
 
 
 @dataclass
+class KernelSmoother:
+    """Distance-weighted mean of training log prices.
+
+    Neighbourhood means failed in v2 because a held-out block often has a
+    neighbourhood the training cells never saw, and the feature then
+    collapses to the citywide mean. A kernel still has training listings
+    a few kilometres away after the 1 km buffer, and the weight falls off
+    with distance instead of stopping at a neighbourhood border.
+
+    The bandwidth and the neighbour cap are fixed in the protocol. They
+    were not searched. A row passed back through `transform` with
+    `row_index` set does not get to use its own price.
+    """
+
+    bandwidth_km: float = 5.0
+    n_neighbors: int = 80
+    global_log_price: float = 0.0
+    _train_log: np.ndarray | None = field(default=None, repr=False)
+    _tree: BallTree | None = field(default=None, repr=False)
+
+    def fit(self, lat: np.ndarray, lon: np.ndarray, log_price: np.ndarray) -> KernelSmoother:
+        log_price = np.asarray(log_price, dtype=float)
+        self.global_log_price = float(np.mean(log_price))
+        self._train_log = log_price
+        self._tree = BallTree(_radians(lat, lon), metric="haversine")
+        return self
+
+    def transform(
+        self,
+        lat: np.ndarray,
+        lon: np.ndarray,
+        *,
+        row_index: np.ndarray | None,
+    ) -> np.ndarray:
+        if self._tree is None or self._train_log is None:
+            raise RuntimeError("KernelSmoother.fit must be called before transform")
+        n_train = len(self._train_log)
+        drop_self = row_index is not None
+        k_query = min(self.n_neighbors + (1 if drop_self else 0), n_train)
+        if k_query < 1:
+            return np.full(len(np.asarray(lat)), self.global_log_price)
+        dist, idx = self._tree.query(_radians(lat, lon), k=k_query)
+        dist = np.atleast_2d(np.asarray(dist, dtype=float))
+        idx = np.atleast_2d(np.asarray(idx, dtype=int))
+        dist_km = dist * EARTH_RADIUS_KM
+        # Three bandwidths is where a Gaussian has already fallen to about
+        # one percent. Past that, the neighbour is a different part of town.
+        weights = np.exp(-0.5 * (dist_km / self.bandwidth_km) ** 2)
+        weights = np.where(dist_km <= 3.0 * self.bandwidth_km, weights, 0.0)
+        values = self._train_log[idx]
+        if drop_self:
+            own = np.asarray(row_index, dtype=int)[:, None]
+            weights = np.where(idx == own, 0.0, weights)
+        weight_sum = weights.sum(axis=1)
+        with np.errstate(invalid="ignore"):
+            smooth = (weights * values).sum(axis=1) / np.maximum(weight_sum, 1e-12)
+        return np.where(weight_sum > 1e-8, smooth, self.global_log_price)
+
+
+@dataclass
 class FoldEncoder:
     """Neighbourhood smoothing and a haversine comparable index."""
 

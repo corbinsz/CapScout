@@ -13,17 +13,43 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from features.columns import KNN_COLUMNS, MONOTONE_DOWN, MONOTONE_UP, SMOOTH_COLUMNS
-from features.fold import FoldEncoder
+from features.fold import FoldEncoder, KernelSmoother
+from features.text import FoldText
 from lightgbm import early_stopping
 from models.regressors import FIXED_PARAMS, make_catboost, make_lightgbm, make_xgboost
 from sklearn.linear_model import RidgeCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from evaluation.protocol import EARLY_STOPPING_ROUNDS, KNN_K, MAX_TREES, TARGET_PRIOR
+from evaluation.protocol import (
+    EARLY_STOPPING_ROUNDS,
+    KERNEL_BANDWIDTH_KM,
+    KERNEL_NEIGHBORS,
+    KNN_K,
+    MAX_TREES,
+    N_TEXT_COMPONENTS,
+    TARGET_PRIOR,
+    TEXT_MAX_FEATURES,
+    TEXT_MIN_DF,
+)
 from evaluation.splits import holdout_groups
 
 SPATIAL_COLUMNS = SMOOTH_COLUMNS + KNN_COLUMNS
+
+
+class DesignState:
+    """Fold-fit pieces that have to travel with the matrix.
+
+    `fold` is the neighbourhood / nearest-listing encoder. `kernel` is the
+    distance-weighted price smoother. `text` is the TF-IDF compression.
+    Any of them can be missing. The trees never see this object; they see
+    the columns it already wrote into the frame.
+    """
+
+    def __init__(self) -> None:
+        self.fold: FoldEncoder | None = None
+        self.kernel: KernelSmoother | None = None
+        self.text: FoldText | None = None
 
 
 def params_for_depth(depth: int) -> dict:
@@ -61,34 +87,41 @@ def design_matrices(
     eval_idx: np.ndarray,
     columns: list[str],
     spatial_mode: str | bool,
-) -> tuple[pd.DataFrame, np.ndarray, pd.DataFrame, np.ndarray, FoldEncoder | None]:
-    """Train/eval matrices. Price encodings are fit on train_idx only.
+    text_mode: str = "none",
+    text_encoder: FoldText | None = None,
+) -> tuple[pd.DataFrame, np.ndarray, pd.DataFrame, np.ndarray, DesignState]:
+    """Train/eval matrices. Price encodings and text SVD are fit on train_idx only.
 
-    `spatial_mode` is "none", "smooth", or "knn". True is accepted as
-    "smooth" plus knn so an older caller still builds every spatial column.
+    `spatial_mode` is "none", "smooth", "knn", or "kernel". True is accepted
+    as "smooth" plus knn so an older caller still builds every neighbourhood
+    column. `text_mode` "svd" fits a TF-IDF compression on the training
+    listings' own ad copy. Pass `text_encoder` to reuse one already fit on
+    a wider training set (the pooled model shares a vocabulary across cities).
     """
     mode = _spatial_mode(spatial_mode)
+    if text_mode not in {"none", "svd"}:
+        raise ValueError(f"Unknown text mode: {text_mode}")
     y = frame["price_clean"].to_numpy(dtype=float)
     log_y = np.log1p(y[train_idx])
     X_train = _as_frame(frame.iloc[train_idx][list(columns)].copy())
     X_eval = _as_frame(frame.iloc[eval_idx][list(columns)].copy())
-    encoder = None
-    if mode != "none":
-        encoder = FoldEncoder(k=KNN_K, prior=TARGET_PRIOR)
-        encoder.fit(
+    state = DesignState()
+    if mode in {"smooth", "knn", "both"}:
+        state.fold = FoldEncoder(k=KNN_K, prior=TARGET_PRIOR)
+        state.fold.fit(
             frame["latitude"].to_numpy()[train_idx],
             frame["longitude"].to_numpy()[train_idx],
             frame["neighbourhood_cleansed"].to_numpy()[train_idx],
             log_y,
             frame["bedrooms"].to_numpy()[train_idx],
         )
-        train_spatial = encoder.transform_train(
+        train_spatial = state.fold.transform_train(
             frame["latitude"].to_numpy()[train_idx],
             frame["longitude"].to_numpy()[train_idx],
             frame["neighbourhood_cleansed"].to_numpy()[train_idx],
             frame["bedrooms"].to_numpy()[train_idx],
         )
-        eval_spatial = encoder.transform_new(
+        eval_spatial = state.fold.transform_new(
             frame["latitude"].to_numpy()[eval_idx],
             frame["longitude"].to_numpy()[eval_idx],
             frame["neighbourhood_cleansed"].to_numpy()[eval_idx],
@@ -103,7 +136,43 @@ def design_matrices(
         ):
             X_train[name] = train_values
             X_eval[name] = eval_values
-    return X_train, log_y, X_eval, y[eval_idx], encoder
+    if mode == "kernel":
+        state.kernel = KernelSmoother(
+            bandwidth_km=KERNEL_BANDWIDTH_KM, n_neighbors=KERNEL_NEIGHBORS
+        )
+        state.kernel.fit(
+            frame["latitude"].to_numpy()[train_idx],
+            frame["longitude"].to_numpy()[train_idx],
+            log_y,
+        )
+        X_train["kernel_log_price"] = state.kernel.transform(
+            frame["latitude"].to_numpy()[train_idx],
+            frame["longitude"].to_numpy()[train_idx],
+            row_index=np.arange(len(train_idx)),
+        )
+        X_eval["kernel_log_price"] = state.kernel.transform(
+            frame["latitude"].to_numpy()[eval_idx],
+            frame["longitude"].to_numpy()[eval_idx],
+            row_index=None,
+        )
+    if text_mode == "svd":
+        state.text = text_encoder or FoldText(
+            n_components=N_TEXT_COMPONENTS,
+            max_features=TEXT_MAX_FEATURES,
+            min_df=TEXT_MIN_DF,
+        )
+        train_text = frame["listing_text"].to_numpy()[train_idx]
+        if text_encoder is None:
+            state.text.fit(train_text)
+        train_reduced = state.text.transform(train_text)
+        eval_reduced = state.text.transform(frame["listing_text"].to_numpy()[eval_idx])
+        for index, name in enumerate(state.text.column_names):
+            X_train[name] = train_reduced[:, index]
+            X_eval[name] = eval_reduced[:, index]
+    # Trees want numbers. A stray object column would be read as a category.
+    X_train = X_train.apply(pd.to_numeric, errors="coerce")
+    X_eval = X_eval.apply(pd.to_numeric, errors="coerce")
+    return X_train, log_y, X_eval, y[eval_idx], state
 
 
 def _spatial_mode(spatial_mode: str | bool) -> str:
@@ -111,7 +180,7 @@ def _spatial_mode(spatial_mode: str | bool) -> str:
         return "both"
     if spatial_mode is False or spatial_mode is None:
         return "none"
-    if spatial_mode not in {"none", "smooth", "knn", "both"}:
+    if spatial_mode not in {"none", "smooth", "knn", "both", "kernel"}:
         raise ValueError(f"Unknown spatial mode: {spatial_mode}")
     return spatial_mode
 
