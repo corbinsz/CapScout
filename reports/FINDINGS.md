@@ -6,7 +6,7 @@ This is a personal project. The rate is the advertised rate, not the price a gue
 
 ## The data
 
-The rows are Inside Airbnb listing snapshots, CC BY 4.0. Austin is 2025-09-16. San Diego and Seattle are 2025-03-16. The files are downloaded with `python -m data.download austin san-diego seattle` and are not committed. Prices that look like `$1,234.00` are parsed by removing the dollar sign and the comma. A bathroom written as "Half-bath" with no digit is 0.5. On these three files, after the price filters, the numeric bathroom column was already filled, so that rule changed zero kept rows. It is still the parser.
+The rows are Inside Airbnb listing snapshots, CC BY 4.0, credit Inside Airbnb. Austin is the 2025-09-16 snapshot. San Diego and Seattle are the 2025-03-16 snapshots. The files are downloaded with `python -m data.download austin san-diego seattle` and are not committed. Prices that look like `$1,234.00` are parsed by removing the dollar sign and the comma. A bathroom written as "Half-bath" with no digit is 0.5. On these three files, after the price filters, the numeric bathroom column was already filled, so that rule changed zero kept rows. It is still the parser.
 
 Every cut below is a fixed rule, not a percentile of the file. Counts are sequential.
 
@@ -44,13 +44,13 @@ Before any model was fit, 20% of the 3 km grid cells were held out with seed 17.
 
 Checked on the primary split: no shared cell, no shared host, and the closest training and test homes are at least 1 km apart. Austin's test is 2,101 listings in 31 cells, with 3,281 left to train. San Diego's test is 817 listings in 23 cells, with 5,571 left to train. Seattle's test is 730 listings in 8 cells, with 2,585 left to train.
 
-Features and the small hyperparameter grids were chosen with 5-fold grouped cross-validation on the training cells only. The primary holdout was scored once. The simplest eligible model within 2% of the best holdout error is the one that ships. A neural net is a comparison and cannot ship. CatBoost, and a 50/50 blend, ship only if they beat the simple model by 5% on the average of the three city errors.
+Features and the small hyperparameter grids were chosen with 5-fold grouped cross-validation on the training cells only. The primary holdout was scored once. The simplest eligible model within 2% of the best holdout error is the one that ships. The eligible models are the local median rate, linear regression, ridge regression, a random forest, and XGBoost.
 
 Seeds 19, 29, and 37 are a second check. Same features, same settings, new cells. They were not used to change the choice.
 
 ## What went into the model
 
-The nightly rate uses a short list: bedrooms, bathrooms, beds, guests, whether the bath is shared, room type, house versus condo, latitude, longitude, distance to downtown, distance to the airport, a handful of amenities (count, air conditioning, parking, washer, kitchen, pool, hot tub, waterfront), review score, log of the review count, and superhost. Unknown superhost stays missing. It is not coded as "no."
+The nightly rate started from a short list: bedrooms, bathrooms, beds, guests, whether the bath is shared, room type, house versus condo, latitude, longitude, distance to downtown, distance to the airport, a handful of amenities (count, air conditioning, parking, washer, kitchen, pool, hot tub, waterfront), review score, log of the review count, and superhost. Unknown superhost stays missing. It is not coded as "no." After ridge was chosen, three more columns were added under the rule in the feature section below: a public-place index, distance to the coast in San Diego and Seattle, and bedrooms times guests.
 
 A probe XGBoost on the training folds had average error of about $60.03 with the home only, $58.24 after amenities, $55.43 after reviews, and $54.89 after census. Census was the best. The 2% band around it still included the reviews list, which is shorter, so census stayed out.
 
@@ -62,34 +62,60 @@ The nights models predict nights directly. On the training folds a log target av
 
 ## The nightly rate
 
-Every model below was scored once on the primary holdout. The average gives each city equal weight. The area-typical rate is the training median for that neighbourhood and room type, with a fallback when fewer than 8 training listings support the group.
+Every model below was scored once on the primary holdout, on the columns before the added features. The average gives each city equal weight. The local median rate is the training median for that neighbourhood and room type, with a fallback when fewer than 8 training listings support the group.
 
 | Model | Austin, TX | San Diego, CA | Seattle, WA | Average |
 | --- | ---: | ---: | ---: | ---: |
-| Area-typical rate | $112.75 | $91.62 | $49.40 | $84.59 |
+| Local median rate | $112.75 | $91.62 | $49.40 | $84.59 |
 | Linear regression | $73.26 | $56.89 | $36.26 | $55.47 |
 | Ridge regression | $72.13 | $57.27 | $36.13 | $55.18 |
 | Random forest | $72.09 | $55.98 | $35.92 | $54.67 |
 | XGBoost | $71.81 | $53.88 | $36.89 | $54.19 |
-| Neural net (comparison only) | $84.85 | $63.41 | $41.53 | $63.26 |
-| CatBoost | $74.64 | $53.41 | $36.37 | $54.81 |
-| 50/50 XGBoost and CatBoost | $71.35 | $53.42 | $36.31 | $53.69 |
 
 The lowest average error was $54.19 a night, from XGBoost. Ridge regression was $55.18, inside the 2% band (up to $55.28), and it is the simplest model in that band.
 
-CatBoost averaged $54.81 and the equal blend averaged $53.69. Neither beat Ridge regression's $55.18 by the pre-set 5% margin, which would have required $52.42 or less. CatBoost was fit once, at the depth and learning rate already chosen for XGBoost, not on its own search. Neither CatBoost nor the blend is in the app.
-
 Ridge is linear regression with a penalty that shrinks the weights. The penalty was chosen on the training folds, preferring the stronger penalty when it was within 1% of the best. Austin and San Diego use 100. Seattle uses 10. The model predicts the log of the rate and is converted back to dollars. Predictions are floored at zero and are not capped, so an expensive guess stays visible.
 
-XGBoost is a little better in San Diego ($53.88 versus $57.27) and essentially tied in Austin and Seattle. Across the three cities the gap is about one dollar. That is inside the 2% rule, so the simpler model ships. The neural net was worse, at $63.26 on average.
+XGBoost is a little better in San Diego ($53.88 versus $57.27) and essentially tied in Austin and Seattle. Across the three cities the gap is about one dollar. That is inside the 2% rule, so the simpler model ships.
 
-Primary holdout, with a 95% interval from resampling the held-out cells 1,000 times.
+Primary holdout on those columns, with a 95% interval from resampling the held-out cells 1,000 times.
 
-| City | Listings | Cells | R² | R² interval | MAE | MAE interval | Median % error | Median % interval | Area-typical MAE | Error removed |
+| City | Listings | Cells | R² | R² interval | MAE | MAE interval | Median % error | Median % interval | Local median MAE | Error removed |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Austin, TX | 2,101 | 31 | 0.511 | 0.449 to 0.665 | $72.13 | $56.38 to $85.13 | 25.9% | 22.7% to 28.1% | $112.75 | 36.0% |
 | San Diego, CA | 817 | 23 | 0.601 | 0.517 to 0.673 | $57.27 | $45.40 to $75.88 | 21.5% | 19.2% to 24.5% | $91.62 | 37.5% |
 | Seattle, WA | 730 | 8 | 0.522 | 0.489 to 0.592 | $36.13 | $31.43 to $40.24 | 19.9% | 17.3% to 22.4% | $49.40 | 26.9% |
+
+## The shipped holdout
+
+The headline is the ridge model after the feature bundle was adopted, scored once on the same frozen holdout. Counting every home once, R² is 0.555 (0.492 to 0.663), the median error is 23.0% (20.6% to 25.4%), and the average miss is $60.13 ($48.94 to $69.54) against $95.34 for the local median rate. That is 36.9% less error (33.8% to 42.1%). The holdout is 3,648 homes. Seattle's part of the interval resamples only 8 held-out cells.
+
+| City | R² | Average miss | Median error | Less error than the local median rate |
+| --- | ---: | ---: | ---: | ---: |
+| Every home once | 0.555 | $60.13 | 23.0% | 36.9% |
+| Austin, TX | 0.520 | $70.32 | 25.4% | 37.6% |
+| San Diego, CA | 0.639 | $55.31 | 20.6% | 39.6% |
+| Seattle, WA | 0.521 | $36.21 | 20.2% | 26.7% |
+| Each city once | 0.560 | $53.95 | 22.1% | 36.2% |
+
+Austin's interval is R² 0.457 to 0.667 and a miss of $54.49 to $84.09, on 2,101 homes in 31 cells. San Diego is R² 0.572 to 0.689 and $44.39 to $72.99, on 817 homes in 23 cells. Seattle is R² 0.498 to 0.601 and $31.43 to $40.74, on 730 homes in 8 cells. The measured coverage of the range is 79.0% in Austin, 81.8% in San Diego, and 81.5% in Seattle. Median width is about $149, $106, and $85. The band was not widened after that look.
+
+Counting each city once, the shipped miss is $53.95 against $84.59, which is 36.2% less error (33.4% to 41.6%).
+
+## The columns the model was chosen on
+
+These paragraphs are the score before the added features. They are why ridge was chosen. They are not the shipped score above.
+
+Counting every holdout home once is the pooled result on these columns. The miss is $61.60 a night, against $95.34 for the local median rate, which is 35.4% less error. R² is 0.542, and the median error is 23.6%. The holdout is 3,648 homes. Resampling cells inside each city 1,000 times, then stacking the draws, gives a 95% interval of R² 0.480 to 0.659, a miss of $50.26 to $71.34, a local-median miss of $79.54 to $109.27, a median error of 21.2% to 25.6%, and 32.1% to 41.0% less error. Seattle's part of that interval resamples only 8 held-out cells.
+
+The city rows stay beside that pool. Austin, San Diego, and Seattle are different markets: the median advertised rate on this holdout is $146 in Austin, $153 in San Diego, and $111 in Seattle, and the holdouts are 2,101, 817, and 730 homes. One score for all three would let Austin's prices, and its larger sample, speak for the other two cities.
+
+Counting each city once is the overall the model was chosen on. Ridge's average miss is $55.18 a night, against $84.59 for the local median rate, which is 34.8% less error. The average of the three R² values is 0.545, and the average of the three median percent errors is 22.5%. Resampling each city's holdout cells 1,000 times, then averaging the three cities, gives a 95% interval of R² 0.506 to 0.611, a miss of $48.86 to $63.45, a local-median miss of $77.07 to $100.80, a median percent error of 21.0% to 24.1%, and 31.6% to 40.4% less error.
+
+| Summary | R² | Model miss | Local median rate | Median % error | Less error |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Every home once | 0.542 (0.480 to 0.659) | $61.60 ($50.26 to $71.34) | $95.34 ($79.54 to $109.27) | 23.6% (21.2% to 25.6%) | 35.4% (32.1% to 41.0%) |
+| Each city once | 0.545 (0.506 to 0.611) | $55.18 ($48.86 to $63.45) | $84.59 ($77.07 to $100.80) | 22.5% (21.0% to 24.1%) | 34.8% (31.6% to 40.4%) |
 
 The same specification on seeds 19, 29, and 37:
 
@@ -99,11 +125,62 @@ The same specification on seeds 19, 29, and 37:
 | San Diego, CA | 0.601 | 0.650, 0.650, 0.182 (spread 0.468) | $57.27 | $69.37, $74.25, $62.31 (spread $11.94) |
 | Seattle, WA | 0.522 | 0.465, 0.544, 0.492 (spread 0.079) | $36.13 | $39.79, $36.18, $32.46 (spread $7.33) |
 
-Seattle is stable. Austin's other seeds are a bit easier in dollars than the primary, so quoting $72.13 is not flattering. San Diego's R² falls to 0.182 on one of the three seeds. The model is useful against the area-typical rate, and it is not a number you should quote as if every map of the city would give 0.60.
+Seattle is stable on those columns. Austin's other seeds are a bit easier in dollars than the primary, so quoting $72.13 is not flattering. San Diego's R² falls to 0.182 on one of the three seeds. Those seeds were not re-run after the features below were added. Do not quote San Diego's later 0.639 as if the other seeds had agreed.
 
-The app's range is the 10th to 90th percentile of out-of-fold residuals, in five bands of the predicted price, fit on the training folds only. It covered 79.0% of Austin's holdout, 82.0% of San Diego's, and 81.8% of Seattle's. Median width was about $155, $115, and $83. The band was not widened to chase 80%.
+The range on those earlier columns covered 79.0% of Austin's holdout, 82.0% of San Diego's, and 81.8% of Seattle's, with median widths about $155, $115, and $83. The shipped range, refit on the training folds of the adopted model, is the one in the section above.
 
-On real holdout homes, putting one feature back to the training median moves the rate most for size and location. In Austin the largest average moves are bathrooms (about $52), distance to downtown (about $51), bedrooms (about $46), and guest capacity (about $39). In San Diego, longitude and bedrooms lead. In Seattle, bedrooms and the two distances lead. A separate check that flips one flag from no to yes, holding everything else typical, says a shared room or a private room lowers the rate and a waterfront flag raises it. Shared rooms are uncommon, so that swing is a coefficient, not a typical home. The app uses the first method: change one filled-in fact back to typical, and read the dollars.
+## The pre-registered feature try
+
+The rule, written into the scoring script before it printed a result: adopt the bundle only if grouped spatial cross-validation on the training cells improves the equal-city average error by at least 2%. The bundle is an inverse-distance attraction index from a fixed public list (six landmarks per city, distance floored at 0.25 km), distance to the nearest point on a fixed shoreline list in San Diego and Seattle, and bedrooms times guests. Austin has no coast, so that column is omitted there. Each piece is reported on its own and is not adopted by itself. The holdout is not used to choose.
+
+The ridge penalties stay at the values already chosen: 100 in Austin, 100 in San Diego, and 10 in Seattle. Equal-city mean absolute error on the training folds:
+
+| Columns | CV error | Change |
+| --- | ---: | ---: |
+| Shipped columns, before the bundle | $57.27 | |
+| Attraction index alone | $56.54 | 1.3% lower |
+| Coast distance alone | $57.33 | 0.1% higher |
+| Bedrooms × guests alone | $56.73 | 0.9% lower |
+| All three together | $56.01 | 2.2% lower |
+
+The bundle clears 2%, so it is in the shipped model. By city, the bundle's training-fold error is $53.06 in Austin (from $55.14), $74.16 in San Diego (from $76.33), and $40.83 in Seattle (from $40.34). Seattle alone is a little worse. The rule uses the equal-city mean, and that mean cleared the bar. The holdout was then scored once. Those are the numbers in "The shipped holdout."
+
+## Where the error sits
+
+On the shipped holdout, the share of homes within 20% of the advertised rate is 44.2% for ridge and 29.6% for the local median rate. Within 30% the shares are 62.3% and 42.3%. By city, within 20%: Austin 40.7% versus 27.5%, San Diego 48.5% versus 29.9%, Seattle 49.7% versus 35.3%. Within 30%: Austin 58.5% versus 38.3%, San Diego 66.5% versus 43.1%, Seattle 68.4% versus 52.9%.
+
+Error by advertised-price tier, all 3,648 homes. Bias is prediction minus actual, so a negative number is an underprediction.
+
+| Tier | Homes | Advertised rate | Average absolute error | Bias |
+| --- | ---: | --- | ---: | ---: |
+| Lowest quartile | 925 | $27 to $96 | $25 | +$22 |
+| Second quartile | 912 | $97 to $138 | $29 | +$14 |
+| Third quartile | 903 | $139 to $220 | $46 | +$1 |
+| Highest quartile | 908 | $221 to $1,833 | $142 | −$77 |
+| Top 10% | 365 | $368 to $1,833 | $233 | −$153 |
+
+Ridge overpredicts the cheaper homes and underpredicts the expensive ones. The top 10% of homes account for 38.7% of the absolute error. The same pattern shows up in each city: the highest quartile's bias is about −$97 in Austin, −$62 in San Diego, and −$41 in Seattle.
+
+Blanking review score, review count, and superhost at test time, and letting the imputer fill the training median, changes the equal-city average error from $53.95 to $53.83. Austin moves by +$0.28, San Diego by −$0.66, and Seattle by +$0.03. Dropping those three columns and refitting on the training cells only, with the adopted columns otherwise kept, raises the equal-city training-fold error from $56.01 to $56.95, about 1.7% worse. That is not a 2% improvement, so the columns stay. The holdout was not used to make that call.
+
+## How the study evolved
+
+Earlier pipelines used other seeds, including 0 through 4, 7, 11, 23, 31, and 42. Those seeds are now forbidden so a later run cannot quietly reuse a split that was already looked at. The code and reports from those pipelines are on the git tag `archive-pre-v7`, which points at the main commit before this cleanup. They are not in this tree.
+
+Seed 17, and the held-out cell ids in `evaluation/study_ids.json`, were fixed before the choice among the local median rate, linear regression, ridge, random forest, and XGBoost. The confirmation seeds were not part of that choice. The feature bundle above was the one later change, and it was allowed only by the 2% training-cell rule.
+
+## A later snapshot
+
+Inside Airbnb has a newer listing file for each city: Austin 2026-09-17, San Diego 2026-09-20, and Seattle 2026-09-20. The shipped ridge model was scored on rows that pass the same cleaning and whose listing id and host id are both absent from the training rows. The local median rate is the one fit on the training rows, not a median from the new file. This is a check, not a new model choice.
+
+| City | Snapshot | Homes | R² | Average miss | Median error | Local median miss | Less error |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Austin | 2026-09-17 | 4,794 | 0.287 | $145.95 | 40.8% | $198.70 | 26.5% |
+| San Diego | 2026-09-20 | 3,855 | 0.438 | $135.52 | 32.5% | $196.09 | 30.9% |
+| Seattle | 2026-09-20 | 3,093 | −0.017 | $124.53 | 43.2% | $155.47 | 19.9% |
+| Every home once | | 11,742 | 0.328 | $136.89 | 38.8% | $186.46 | 26.6% |
+
+A year later, on homes and hosts the model did not train on, the error is much larger and Seattle's R² is slightly negative. The model still has less average error than the training-set local median rate. Prices moved, and a stale neighbourhood median is a weak baseline. This is not the 0.555 from the frozen holdout.
 
 ## Booked nights
 
@@ -111,7 +188,7 @@ Same holdout, same 2% rule, simpler models only. The comparison is the average m
 
 | Model | Austin, TX | San Diego, CA | Seattle, WA | Average |
 | --- | ---: | ---: | ---: | ---: |
-| Area-typical rate | 72.0 | 76.5 | 72.8 | 73.8 |
+| Local median nights | 72.0 | 76.5 | 72.8 | 73.8 |
 | Linear regression | 68.9 | 70.2 | 68.7 | 69.3 |
 | Ridge regression | 68.6 | 70.3 | 68.8 | 69.2 |
 | Random forest | 67.9 | 70.5 | 68.7 | 69.0 |
@@ -119,17 +196,15 @@ Same holdout, same 2% rule, simpler models only. The comparison is the average m
 
 The lowest average error was 69.0 nights, from Random forest. Linear regression was 69.3 nights, inside the 2% band (up to 70.4 nights), and it is the simplest model in that band.
 
-A small neural net was also scored. Its average miss was about 69.0 nights, tied with the forest. It was not eligible to ship.
+The bar, written down before this run and unchanged from the previous nights study, is an R² of at least 0.10 in every city and an average miss at least 10% lower than the local median nights. Both have to hold.
 
-The bar, written down before this run and unchanged from the previous nights study, is an R² of at least 0.10 in every city and an average miss at least 10% lower than the area-typical nights. Both have to hold.
-
-| City | R² | R² interval | MAE (nights) | MAE interval | Median % error | Area-typical MAE | Error removed | Cleared |
+| City | R² | R² interval | MAE (nights) | MAE interval | Median % error | Local median MAE | Error removed | Cleared |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Austin, TX | 0.014 | -0.013 to 0.055 | 68.9 | 64.8 to 70.8 | 54.2% | 72.0 | 4.4% | No |
 | San Diego, CA | 0.118 | 0.042 to 0.144 | 70.2 | 66.6 to 71.4 | 39.9% | 76.5 | 8.1% | No |
 | Seattle, WA | 0.062 | -0.006 to 0.120 | 68.7 | 64.8 to 70.8 | 40.0% | 72.8 | 5.7% | No |
 
-The nights model did not clear the pre-set bar in every city. The bar was an average miss at least 10% lower than the area-typical nights, and an R² of at least 0.10. The app labels nights as a rough estimate.
+The nights model did not clear the pre-set bar in every city. The bar was an average miss at least 10% lower than the local median nights, and an R² of at least 0.10. The app labels nights as a rough estimate.
 
 San Diego clears the R² half (0.118, and the interval stays above zero) and misses the 10% error cut (8.1%). Austin and Seattle miss both. The other seeds do not rescue it. Their R² values stay near the primary ones, and the dollar-style spread in nights is only about 1 to 3 nights.
 
@@ -139,15 +214,15 @@ San Diego clears the R² half (0.118, and the interval stays above zero) and mis
 | San Diego, CA | 0.118 | 0.100, 0.095, 0.060 (spread 0.039) | 70.2 | 71.2, 70.8, 73.1 (spread 2.3) |
 | Seattle, WA | 0.062 | 0.073, 0.063, 0.056 (spread 0.016) | 68.7 | 70.5, 71.7, 71.9 (spread 1.4) |
 
-That is an honest failure of the label more than of the model. A linear model, a forest, and XGBoost all sit within about a night of each other, and all of them sit close to the area median. The home's size and amenities do not tell you the review-based nights. The app still shows the number, labeled as a rough estimate, because hiding it would pretend the question was not asked.
+That is an honest failure of the label more than of the model. A linear model, a forest, and XGBoost all sit within about a night of each other, and all of them sit close to the local median nights. The home's size and amenities do not tell you the review-based nights. The app still shows the number, labeled as a rough estimate, because hiding it would pretend the question was not asked.
 
-Yearly revenue, predicted rate times predicted nights, has holdout R² 0.266, 0.276, and 0.161, and average misses of about $13,388, $14,093, and $9,107. The grade cuts are the 20th, 40th, 60th, and 80th percentiles of training revenue. On the holdout the letter matched the review-based revenue's letter 31.8% of the time in Austin, 31.0% in San Diego, and 30.4% in Seattle. Better than a coin flip among five letters, and not something to call accurate.
+Yearly revenue, predicted rate times predicted nights, has holdout R² 0.281, 0.267, and 0.162 on the shipped model, and average misses of about $13,335, $14,094, and $9,099. The grade cuts are the 20th, 40th, 60th, and 80th percentiles of training revenue from that model. On the holdout the letter matched the review-based revenue's letter 34.0% of the time in Austin, 33.4% in San Diego, and 34.4% in Seattle. The grade is a rank of the rough revenue estimate. It is not a profit grade.
 
 ## What to say, and what not to say
 
-Say that a simple model, which a person who knows linear regression can explain, matches the best tree model for the nightly rate within about a dollar on average, and beats the usual local rate by roughly a quarter to a third of the error. Say the test was geographic, frozen first, and checked on other seeds. Say the nights figure is rough and missed a bar that was not moved.
+Say that ridge regression, a linear model, was chosen because it was inside 2% of XGBoost on the columns used for that choice, and that three pre-registered features then cleared a 2% training-cell bar and were scored once. On that score, counting every home once, the average error is 36.9% lower than the local median rate. Say the test was geographic and frozen first. Say the nights figure is rough and missed a bar that was not moved. Say expensive homes are underpredicted, and that a later snapshot is weaker.
 
-Do not say the model knows the booked nights. Do not say the range is an 80% promise. Austin's measured coverage is 79.0%. Do not quote San Diego's 0.601 as if the other seeds agreed. Do not say CatBoost or a blend is in the app. They were tried, and they did not clear the 5% bar.
+Do not say the model knows the booked nights. Do not say the range is an 80% promise. Austin's measured coverage on the shipped model is 79.0%. Do not quote San Diego's 0.639 as if the other seeds had been re-run after the added features. Those seeds describe the earlier columns, where San Diego's R² ran from 0.182 to 0.650.
 
 ## A calendar panel for a later label
 

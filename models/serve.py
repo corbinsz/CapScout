@@ -1,7 +1,7 @@
 """Score one home with the shipped simple-study artifact.
 
 Blank fields stay missing. The model's imputer fills those with the training
-median, which is a typical home, not a claim that the field is zero.
+median, which is the median training home, not a claim that the field is zero.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from evaluation.study_models import apply_interval
 from features.columns import pretty
 from features.frame import _amenity_frame
 from features.geo import distance_to_airport_km, distance_to_center_km
+from features.places import attraction_index, distance_to_coast_km
 
 from models.artifacts import load_artifact
 from models.grade import annual_revenue, grade_revenue, gross_yield
@@ -60,9 +61,9 @@ def load_comp_frame(city_key: str) -> pd.DataFrame:
     return frame[columns].reset_index(drop=True)
 
 
-def score_home(city_key: str, spec: dict) -> dict:
+def score_home(city_key: str, spec: dict, artifact: dict | None = None) -> dict:
     """Nightly rate, range, nights, revenue, grade, and plain reasons."""
-    artifact = load_artifact(city_key)
+    artifact = load_artifact(city_key) if artifact is None else artifact
     if artifact.get("kind") != "simple-study":
         raise RuntimeError(f"{city_key} artifact is not the simple study model")
     price_model = artifact["model"]
@@ -111,6 +112,9 @@ def _feature_row(city_key: str, spec: dict, price_columns: list[str], nights_col
     _put(values, "longitude", lon)
     _put(values, "distance_to_center_km", _one(distance_to_center_km(lat, lon, city_key)))
     _put(values, "distance_to_airport_km", _one(distance_to_airport_km(lat, lon, city_key)))
+    _put(values, "attraction_index", _one(attraction_index([lat], [lon], city_key)))
+    if "distance_to_coast_km" in values:
+        _put(values, "distance_to_coast_km", _one(distance_to_coast_km([lat], [lon], city_key)))
     for column in ("bedrooms", "bathrooms", "accommodates", "beds"):
         if spec.get(column) is not None:
             _put(values, column, float(spec[column]))
@@ -127,6 +131,16 @@ def _feature_row(city_key: str, spec: dict, price_columns: list[str], nights_col
         _put(values, "is_superhost", _yes(spec["host_is_superhost"]))
     if spec.get("bath_is_shared") is not None:
         _put(values, "bath_is_shared", _yes(spec["bath_is_shared"]))
+    bedrooms = values.get("bedrooms")
+    guests = values.get("accommodates")
+    if (
+        "bedrooms_x_accommodates" in values
+        and bedrooms is not None
+        and guests is not None
+        and np.isfinite(bedrooms)
+        and np.isfinite(guests)
+    ):
+        _put(values, "bedrooms_x_accommodates", float(bedrooms) * float(guests))
     if any(column.startswith("census_") for column in columns):
         _put_census(values, city_key, lat, lon)
     row = pd.DataFrame([values])
@@ -206,11 +220,11 @@ def _reasons(model, row: pd.DataFrame) -> list[dict]:
         value = row.iloc[0][column]
         if not np.isfinite(value):
             continue
-        typical = float(model.medians_[column])
-        if abs(float(value) - typical) < 1e-9:
+        median = float(model.medians_[column])
+        if abs(float(value) - median) < 1e-9:
             continue
         altered = row.copy()
-        altered[column] = typical
+        altered[column] = median
         delta = base - float(model.predict(altered)[0])
         if abs(delta) < 1.0:
             continue
@@ -219,26 +233,36 @@ def _reasons(model, row: pd.DataFrame) -> list[dict]:
                 "feature": column,
                 "label": pretty(column),
                 "dollars": delta,
-                "sentence": _sentence(column, float(value), typical, delta),
+                "sentence": _sentence(column, float(value), median, delta),
             }
         )
     reasons.sort(key=lambda item: abs(item["dollars"]), reverse=True)
     return reasons[:5]
 
 
-def _sentence(column: str, value: float, typical: float, delta: float) -> str:
+def _sentence(column: str, value: float, median: float, delta: float) -> str:
     name = pretty(column)
-    if column.startswith(("is_", "has_")) or column in FLAG_COLUMNS:
+    if column == "distance_to_center_km":
+        fact = (
+            f"{name} is {_num(value)} km. "
+            f"The median training home is about {_num(median)} km from downtown"
+        )
+    elif column == "attraction_index":
+        fact = (
+            f"The public-place score is {_num(value)}. "
+            f"The median training home's score is {_num(median)}"
+        )
+    elif column.startswith(("is_", "has_")) or column in FLAG_COLUMNS:
         now = "yes" if value >= 0.5 else "no"
-        usual = "yes" if typical >= 0.5 else "no"
-        fact = f"{name} is {now}. A typical training home is {usual}"
+        usual = "yes" if median >= 0.5 else "no"
+        fact = f"{name} is {now}. The median training home is {usual}"
     else:
-        fact = f"{name} is {_num(value)}. A typical training home is {_num(typical)}"
+        fact = f"{name} is {_num(value)}. The median training home is {_num(median)}"
     amount = f"${abs(delta):,.0f}"
     if delta > 0:
-        move = f"Putting it back to that typical value lowers the nightly rate by {amount}."
+        move = f"Putting it back to that median lowers the nightly rate by {amount}."
     else:
-        move = f"Putting it back to that typical value raises the nightly rate by {amount}."
+        move = f"Putting it back to that median raises the nightly rate by {amount}."
     return f"{fact}. {move}"
 
 

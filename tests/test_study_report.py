@@ -16,13 +16,13 @@ from evaluation.study_format import (
     price_result_table,
 )
 from evaluation.study_models import bootstrap_metrics
+from evaluation.study_overall import findings_overall, readme_overall_table
 from evaluation.study_protocol import (
     CONFIRM_SEEDS,
     ELIGIBLE_MODELS,
     NIGHTS_FORBIDDEN,
     PRICE_FORBIDDEN,
     choose_params,
-    choose_shipped,
     choose_simplest,
     nights_cleared,
 )
@@ -34,6 +34,21 @@ README = (ROOT / "README.md").read_text()
 FINDINGS = (ROOT / "reports" / "FINDINGS.md").read_text()
 PREDICTIONS = pd.read_csv(ROOT / "reports" / "study_predictions.csv")
 CONFIRMATION = pd.read_csv(ROOT / "reports" / "study_confirmation.csv")
+
+
+def test_overall_figures_match_the_holdout_and_the_docs():
+    section = findings_overall(PREDICTIONS)
+    table = readme_overall_table(PREDICTIONS)
+    assert section in FINDINGS
+    assert table in README
+    assert "CC BY 4.0" in README
+    assert "2025-09-16" in README
+    assert "2025-03-16" in README
+    assert "CC BY 4.0" in FINDINGS
+    assert "2025-09-16" in FINDINGS
+    assert "2025-03-16" in FINDINGS
+    assert "$55.18" in section and "$84.59" in section
+    assert "$61.60" in section and "$95.34" in section
 
 
 def test_docs_quote_the_rendered_tables_and_the_reasons():
@@ -50,7 +65,6 @@ def test_docs_quote_the_rendered_tables_and_the_reasons():
         assert table in FINDINGS
     for key in (
         "selection_reason",
-        "challenger_reason",
         "nights_selection_reason",
         "nights_reason",
         "nights_target_sentence",
@@ -86,18 +100,8 @@ def test_holdout_csv_matches_the_json_and_the_rules():
             assert abs(nights["r2"] - nights_saved["r2"]) < 1e-6
         price_means.append((name, sum(maes) / len(maes)))
     assert choose_simplest(price_means) == METRICS["simple_model"] == METRICS["shipped_model"]
-    assert (
-        choose_shipped(
-            METRICS["simple_model"],
-            METRICS["price_mean_mae"][METRICS["simple_model"]],
-            METRICS["price_mean_mae"]["catboost"],
-            METRICS["price_mean_mae"]["blend"],
-        )
-        == METRICS["shipped_model"]
-    )
     assert METRICS["shipped_model"] == "ridge"
-    assert METRICS["blend_shipped"] is False
-    assert METRICS["catboost_shipped"] is False
+    assert set(METRICS["price_mean_mae"]) == set(ELIGIBLE_MODELS)
     nights_means = [(name, METRICS["nights_mean_mae"][name]) for name in ELIGIBLE_MODELS]
     assert choose_simplest(nights_means) == METRICS["nights_shipped_model"] == "linear"
     cleared = []
@@ -142,8 +146,12 @@ def test_artifact_is_the_simple_model_and_docs_have_no_deployed_site():
     assert artifact["nights_library"] == "linear"
     assert artifact["nights_rough_estimate"] is True
     assert type(artifact["model"].estimator.named_steps["model"]).__name__ == "Ridge"
-    config = json.loads((ROOT / "vercel.json").read_text())
-    assert config["git"]["deploymentEnabled"] is False
+    assert "attraction_index" in artifact["columns"]
+    assert not (ROOT / "vercel.json").exists()
+    adopted = pd.read_csv(ROOT / "reports" / "study_adopted_predictions.csv")
+    shipped = readme_overall_table(adopted)
+    assert shipped in README
+    assert shipped in FINDINGS
     for path in (ROOT / "README.md", ROOT / "reports" / "FINDINGS.md", ROOT / "DATA.md"):
         text = path.read_text().lower()
         assert "vercel.app" not in text
@@ -151,4 +159,12 @@ def test_artifact_is_the_simple_model_and_docs_have_no_deployed_site():
         assert "streamlit.app" not in text
     app = (ROOT / "app" / "streamlit_app.py").read_text()
     assert "fonts.googleapis" not in app
-    assert "catboost" not in app.lower()
+    for path in (
+        ROOT / "README.md",
+        ROOT / "reports" / "FINDINGS.md",
+        ROOT / "app" / "streamlit_app.py",
+    ):
+        text = path.read_text().lower()
+        assert "catboost" not in text
+        assert "neural net" not in text
+        assert "neural_net" not in text

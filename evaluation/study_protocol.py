@@ -9,16 +9,15 @@ What is allowed to choose a model
     Grouped cross-validation on the training cells chooses the feature
     prefix and the small hyperparameter grids. The primary holdout is scored
     once. The simplest eligible model within 2% of the best holdout MAE is
-    the one that ships. A neural net is scored as a comparison and cannot
-    ship. CatBoost, and a 50/50 blend, ship only if they beat the simple
-    model by 5% on the average of the three city MAEs.
+    the one that ships. The eligible models are the local median rate,
+    linear regression, ridge regression, a random forest, and XGBoost.
 
 What is not allowed
     The confirmation seeds are not used to pick a feature, a parameter, or
     a model. They are a second run of the same frozen choice. The nights
     bar is the same bar as the previous nights study: every city needs an
     R² of at least 0.10 and an average miss at least 10% lower than the
-    area-typical nights. It is not lowered after the fact.
+    local median nights. It is not lowered after the fact.
 """
 
 from __future__ import annotations
@@ -53,9 +52,6 @@ FEATURE_MARGIN = 0.02
 MODEL_MARGIN = 0.02
 PARAM_MARGIN = 0.01
 
-# CatBoost or a blend must beat the simple model by this fraction.
-CHALLENGER_MARGIN = 0.05
-
 # Same nights bar as the previous study. Both have to hold in every city.
 NIGHTS_R2_BAR = 0.10
 NIGHTS_MAE_RATIO = 0.90
@@ -71,8 +67,7 @@ N_BOOTSTRAP = 1000
 BOOTSTRAP_SEED = 17
 INTERVAL_MIN_BIN = 40
 
-# Eligible price and nights models, simplest first. The neural net is not
-# in this list. CatBoost is not in this list.
+# Eligible price and nights models, simplest first.
 ELIGIBLE_MODELS = (
     "area_median",
     "linear",
@@ -82,14 +77,11 @@ ELIGIBLE_MODELS = (
 )
 
 MODEL_NAMES = {
-    "area_median": "Area-typical rate",
+    "area_median": "Local median rate",
     "linear": "Linear regression",
     "ridge": "Ridge regression",
     "random_forest": "Random forest",
     "xgboost": "XGBoost",
-    "neural_net": "Neural net (comparison only)",
-    "catboost": "CatBoost",
-    "blend": "50/50 XGBoost and CatBoost",
 }
 
 HOME_COLUMNS = [
@@ -230,26 +222,6 @@ def choose_nights_target(raw_mae: float, log_mae: float, margin: float = FEATURE
     return "raw"
 
 
-def choose_shipped(
-    simple_name: str,
-    simple_mae: float,
-    catboost_mae: float,
-    blend_mae: float,
-    margin: float = CHALLENGER_MARGIN,
-) -> str:
-    """CatBoost replaces the simple model only with a 5% MAE win. The blend
-    then has to beat whichever single model is ahead, by the same margin.
-    """
-    name = simple_name
-    mae = float(simple_mae)
-    if float(catboost_mae) <= mae * (1.0 - margin) + 1e-9:
-        name = "catboost"
-        mae = float(catboost_mae)
-    if float(blend_mae) <= mae * (1.0 - margin) + 1e-9:
-        name = "blend"
-    return name
-
-
 def nights_cleared(mae: float, baseline_mae: float, r2: float) -> bool:
     """True only when both halves of the nights bar hold."""
     if baseline_mae <= 0:
@@ -276,32 +248,6 @@ def selection_reason(scores: list[tuple[str, float]], chosen: str) -> str:
     )
 
 
-def challenger_reason(simple_name: str, simple_mae: float, cat_mae: float, blend_mae: float) -> str:
-    """Says explicitly whether CatBoost or the blend cleared the 5% bar."""
-    shipped = choose_shipped(simple_name, simple_mae, cat_mae, blend_mae)
-    simple_label = MODEL_NAMES.get(simple_name, simple_name)
-    need = simple_mae * (1.0 - CHALLENGER_MARGIN)
-    if shipped == simple_name:
-        return (
-            f"CatBoost averaged ${cat_mae:,.2f} and the equal blend averaged "
-            f"${blend_mae:,.2f}. Neither beat {simple_label}'s ${simple_mae:,.2f} "
-            f"by the pre-set 5% margin, which would have required ${need:,.2f} or less. "
-            "CatBoost was fit once, at the depth and learning rate already chosen for "
-            "XGBoost, not on its own search. Neither CatBoost nor the blend is in the app."
-        )
-    if shipped == "catboost":
-        return (
-            f"CatBoost averaged ${cat_mae:,.2f}, at least 5% under {simple_label}'s "
-            f"${simple_mae:,.2f}. The blend averaged ${blend_mae:,.2f} and did not beat "
-            "CatBoost by another 5%, so the app uses CatBoost."
-        )
-    return (
-        f"The equal blend averaged ${blend_mae:,.2f}. That is at least 5% under the "
-        f"best single model still in the running after {simple_label} "
-        f"(${simple_mae:,.2f}) and CatBoost (${cat_mae:,.2f}). The app uses the blend."
-    )
-
-
 def nights_selection_reason(scores: list[tuple[str, float]], chosen: str) -> str:
     """Same 2% rule as the nightly rate, worded in nights rather than dollars."""
     named = [(MODEL_NAMES.get(name, name), mae) for name, mae in scores]
@@ -325,10 +271,10 @@ def nights_reason(cleared: bool) -> str:
     if cleared:
         return (
             "The nights model cleared the pre-set bar in every city: the average miss "
-            "is at least 10% lower than the area-typical nights, and R² is at least 0.10."
+            "is at least 10% lower than the local median nights, and R² is at least 0.10."
         )
     return (
         "The nights model did not clear the pre-set bar in every city. The bar was an "
-        "average miss at least 10% lower than the area-typical nights, and an R² of at "
+        "average miss at least 10% lower than the local median nights, and an R² of at "
         "least 0.10. The app labels nights as a rough estimate."
     )

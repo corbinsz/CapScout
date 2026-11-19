@@ -2,7 +2,7 @@
 
 Neighbourhood price encodings and nearest-neighbour prices are NOT built
 here. Those use other listings' prices, so they have to be fit inside each
-training fold (see features.fold). Building them on the full city and then
+training fold. Building them on the full city and then
 splitting would leak the test listings' prices into the features.
 """
 
@@ -13,6 +13,7 @@ import pandas as pd
 from data.cities import CITIES
 
 from features.geo import distance_to_airport_km, distance_to_center_km
+from features.places import attach_place_features
 from features.text import compose_listing_text, lexicon_frame
 
 # Exclusive property buckets. "other" is the dropped level (all flags zero),
@@ -363,6 +364,7 @@ def attach_base_features(df: pd.DataFrame, city_key: str) -> pd.DataFrame:
     lexicon = lexicon_frame(out["listing_text"])
     for column in lexicon.columns:
         out[column] = lexicon[column].to_numpy()
+    attach_place_features(out, city_key)
     return out
 
 

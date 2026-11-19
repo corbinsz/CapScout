@@ -25,7 +25,7 @@ def nights_mae(value: float) -> str:
 
 def price_comparison_table(metrics: dict) -> str:
     """Holdout MAE by model. The average gives each city equal weight."""
-    names = list(ELIGIBLE_MODELS) + ["neural_net", "catboost", "blend"]
+    names = list(ELIGIBLE_MODELS)
     header = "| Model | " + " | ".join(metrics["cities"][city]["display"] for city in STUDY_CITIES)
     header += " | Average |"
     rule = "| --- | " + " | ".join("---:" for _ in STUDY_CITIES) + " | ---: |"
@@ -45,7 +45,7 @@ def price_comparison_table(metrics: dict) -> str:
 def price_result_table(metrics: dict) -> str:
     """Chosen model on the primary holdout, with cell-bootstrap intervals."""
     lines = [
-        "| City | Listings | Cells | R² | R² interval | MAE | MAE interval | Median % error | Median % interval | Area-typical MAE | Error removed |",
+        "| City | Listings | Cells | R² | R² interval | MAE | MAE interval | Median % error | Median % interval | Local median MAE | Error removed |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for city in STUDY_CITIES:
@@ -105,7 +105,9 @@ def nights_comparison_table(metrics: dict) -> str:
     rule = "| --- | " + " | ".join("---:" for _ in STUDY_CITIES) + " | ---: |"
     lines = [header, rule]
     for name in ELIGIBLE_MODELS:
-        cells = [MODEL_NAMES[name]]
+        # The price-table name calls this baseline a rate. Here it is a nights count.
+        label = "Local median nights" if name == "area_median" else MODEL_NAMES[name]
+        cells = [label]
         values = []
         for city in STUDY_CITIES:
             mae = metrics["cities"][city]["nights"]["holdout"][name]["mae"]
@@ -118,7 +120,7 @@ def nights_comparison_table(metrics: dict) -> str:
 
 def nights_result_table(metrics: dict) -> str:
     lines = [
-        "| City | R² | R² interval | MAE (nights) | MAE interval | Median % error | Area-typical MAE | Error removed | Cleared |",
+        "| City | R² | R² interval | MAE (nights) | MAE interval | Median % error | Local median MAE | Error removed | Cleared |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     shipped = metrics["nights_shipped_model"]

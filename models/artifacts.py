@@ -6,6 +6,7 @@ stays out of the file.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 
 import joblib
@@ -22,13 +23,15 @@ def save_artifact(city_key: str, payload: dict) -> Path:
     path = artifact_path(city_key)
     path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(payload, path, compress=3)
+    load_artifact.cache_clear()
     return path
 
 
+@lru_cache(maxsize=8)
 def load_artifact(city_key: str) -> dict:
     path = artifact_path(city_key)
     if not path.exists():
-        raise FileNotFoundError(f"No model for {city_key}. Run: python -m evaluation.run_eval")
+        raise FileNotFoundError(f"No model for {city_key}. Run: python -m evaluation.run_study")
     return joblib.load(path)
 
 

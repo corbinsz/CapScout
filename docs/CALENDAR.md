@@ -1,6 +1,6 @@
 # Calendar snapshots and the booked-night rules
 
-The nights model in this repo predicts a review-count proxy. Held-out R² on that proxy is about 0.08. This note is the measurement plan for a label made of nights that were actually on a calendar. It is not a new score. The panel has to accumulate first.
+The nights model in this repo predicts a review-count proxy. Held-out R² on that proxy is 0.014 in Austin, 0.118 in San Diego, and 0.062 in Seattle. This note is the measurement plan for a label made of nights that were actually on a calendar. It is not a new score. The panel has to accumulate first.
 
 ## What is collected
 
@@ -89,7 +89,7 @@ over nights whose date is on or before the last snapshot. Owner blocks, the clos
 
 - The calendar still does not name the guest. An owner who blocks a weekend inside 45 days, on a listing whose minimum stay is 1 or 2, is counted as a booking. That is the main false positive.
 - A real stay of 14 nights or more is an owner block when it was closed far out, and uncertain when it was closed near the date. Long stays are the main false negative. Calling them bookings would also call month-long host holds bookings.
-- Stays booked more than 45 days ahead are uncertain, so the rate undercounts early bookers. San Diego in summer and Austin around a festival book earlier than a typical city weekend. The rate is a short-lead fill rate of nights we saw still open, not a full occupancy.
+- Stays booked more than 45 days ahead are uncertain, so the rate undercounts early bookers. San Diego in summer and Austin around a festival book earlier than a city weekend in the middle of the calendar. The rate is a short-lead fill rate of nights we saw still open, not a full occupancy.
 - Nights already closed on the first snapshot are censored or blocks. The first weeks of the panel are a poor occupancy estimate because the near calendar is whatever was left.
 - Preparation time of a night or two that flips in the same snapshot as the stay becomes part of that stay's length. We do not have the host's preparation setting, so we do not peel those nights off.
 - Two back-to-back stays that close on the same day become one run. Visit counts would be low. Night counts are the target, so the merge is the smaller error.
@@ -106,7 +106,7 @@ A night that is already unavailable on day one is censored. A night that is firs
 
 After that, offered nights show up about one per day. For a rate near 30%, the listing's own standard error is near 5 points once there are about 80 offered nights: 0.3 × 0.7 / 0.05² = 84. Twelve weeks supplies that many, if the calendar was mostly open when we first saw it. 13 + 12 = 25. The extra week makes 26, a half year, so the window is not only one holiday peak.
 
-At 26 weeks, fit a model of this observed booked-night rate. Do not multiply it by 52/26 and call it a year. Score it once, on a fresh spatial holdout: a new seed, not seed 17 and not seed 31, with the held-out cells written down before the fit. Seed 17 is the rate study's primary holdout, and it is also the number used to draw this panel. The panel draw is not that holdout. The comparison is this label against a neighbourhood median on that holdout. The old R² near 0.08 is about the review proxy and is not the bar for the new label. An annual night count, comparable to the review proxy's "nights per year," waits until 52 weeks of the panel exist.
+At 26 weeks, fit a model of this observed booked-night rate. Do not multiply it by 52/26 and call it a year. Score it once, on a fresh spatial holdout: a new seed, not seed 17 and not seed 31, with the held-out cells written down before the fit. Seed 17 is the rate study's primary holdout, and it is also the number used to draw this panel. The panel draw is not that holdout. The comparison is this label against a neighbourhood median on that holdout. The review-proxy R² values, 0.014 in Austin, 0.118 in San Diego, and 0.062 in Seattle, are not the bar for the new label. An annual night count, comparable to the review proxy's "nights per year," waits until 52 weeks of the panel exist.
 
 ```bash
 python scripts/collect_calendars.py --out-dir calendars

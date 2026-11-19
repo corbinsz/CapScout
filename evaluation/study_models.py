@@ -5,9 +5,6 @@ nightly rate, then turned back into dollars. The nights model uses the
 target chosen on the training folds. Predictions of nights are clipped to
 the same 0–255.5 range as the label. Price predictions are clipped at zero
 only, so an expensive guess stays visible.
-
-CatBoost is imported inside the function that builds it. The app does not
-import it unless a saved model actually contains it.
 """
 
 from __future__ import annotations
@@ -17,7 +14,6 @@ import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LinearRegression, Ridge
-from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBRegressor
@@ -32,7 +28,7 @@ from evaluation.study_protocol import (
 
 
 class AreaMedian:
-    """Typical rate for the neighbourhood and room type, with a fixed fallback.
+    """Median rate for the neighbourhood and room type, with a fixed fallback.
 
     Order: neighbourhood and room type, then the room type in the whole city,
     then the neighbourhood, then the citywide median. A group is used only
@@ -118,21 +114,6 @@ class LogModel:
         return pred
 
 
-class BlendModel:
-    """Equal average of two dollar predictions. The weights are not fit."""
-
-    def __init__(self, first: LogModel, second: LogModel):
-        self.first = first
-        self.second = second
-        self.columns = list(first.columns)
-        self.medians_ = dict(first.medians_)
-        self.kind = first.kind
-        self.high = first.high
-
-    def predict(self, frame: pd.DataFrame) -> np.ndarray:
-        return 0.5 * (self.first.predict(frame) + self.second.predict(frame))
-
-
 def _tree_pipe(model) -> Pipeline:
     return Pipeline(
         [
@@ -195,35 +176,6 @@ def make_forest(
         n_jobs=4,
     )
     return LogModel(_tree_pipe(forest), columns, kind=kind, high=high)
-
-
-def make_network(columns: list[str], *, kind: str, high: float | None) -> LogModel:
-    network = MLPRegressor(
-        hidden_layer_sizes=(32,),
-        activation="relu",
-        alpha=1e-3,
-        max_iter=300,
-        random_state=MODEL_RANDOM_STATE,
-        early_stopping=False,
-    )
-    return LogModel(_linear_pipe(network), columns, kind=kind, high=high)
-
-
-def make_catboost(columns: list[str], depth: int, *, kind: str, high: float | None) -> LogModel:
-    from catboost import CatBoostRegressor
-
-    model = CatBoostRegressor(
-        iterations=N_ESTIMATORS,
-        depth=int(depth),
-        learning_rate=LEARNING_RATE,
-        l2_leaf_reg=1.0,
-        random_seed=MODEL_RANDOM_STATE,
-        verbose=False,
-        allow_writing_files=False,
-        loss_function="RMSE",
-        thread_count=4,
-    )
-    return LogModel(_tree_pipe(model), columns, kind=kind, high=high)
 
 
 def cv_mae(
@@ -416,7 +368,7 @@ def shap_means(
 
 
 def direction_checks(model, frame: pd.DataFrame, train_idx: np.ndarray) -> list[dict]:
-    """Move one feature from a low value to a high value, holding the rest typical."""
+    """Move one feature from a low value to a high value, holding the rest at the training median."""
     medians = model.medians_
     base = pd.DataFrame([{column: medians[column] for column in model.columns}])
     train = frame.iloc[train_idx]

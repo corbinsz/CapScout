@@ -1,0 +1,355 @@
+{
+  "cities": {
+    "austin": {
+      "n": 2101,
+      "n_cells": 31,
+      "r2": 0.5198421304987165,
+      "mae": 70.3217168722812,
+      "median_ape": 25.43769808284077,
+      "baseline_mae": 112.75178486435031,
+      "error_removed": 0.3763139363435885,
+      "coverage": 0.7900999524036173,
+      "median_width": 149.23954000591922,
+      "bootstrap": {
+        "r2": {
+          "point": 0.5198421304987165,
+          "low": 0.4570688699958091,
+          "high": 0.6672675276995491
+        },
+        "mae": {
+          "point": 70.3217168722812,
+          "low": 54.492059798679904,
+          "high": 84.08779685240103
+        },
+        "median_ape": {
+          "point": 25.43769808284077,
+          "low": 21.942681908576052,
+          "high": 27.527855846379566
+        },
+        "baseline_mae": {
+          "point": 112.75178486435031,
+          "low": 92.963315776839,
+          "high": 147.40621253625523
+        },
+        "error_removed": {
+          "point": 0.3763139363435885,
+          "low": 0.33569830725689515,
+          "high": 0.467445277073455
+        }
+      },
+      "grade_cuts": {
+        "p20": 8123.477331926906,
+        "p40": 11795.403916358451,
+        "p60": 15013.422759004434,
+        "p80": 20151.54693413639
+      },
+      "columns": [
+        "bedrooms",
+        "bathrooms",
+        "accommodates",
+        "beds",
+        "bath_is_shared",
+        "is_private_room",
+        "is_shared_room",
+        "is_hotel_room",
+        "is_house",
+        "is_condo",
+        "latitude",
+        "longitude",
+        "distance_to_center_km",
+        "distance_to_airport_km",
+        "amenity_count",
+        "has_ac",
+        "has_parking",
+        "has_washer",
+        "has_kitchen",
+        "has_pool",
+        "has_hottub",
+        "has_waterfront",
+        "review_score",
+        "log_reviews",
+        "is_superhost",
+        "attraction_index",
+        "bedrooms_x_accommodates"
+      ]
+    },
+    "san-diego": {
+      "n": 817,
+      "n_cells": 23,
+      "r2": 0.639126058861718,
+      "mae": 55.31088276491957,
+      "median_ape": 20.604208765052995,
+      "baseline_mae": 91.61505507955937,
+      "error_removed": 0.3962686294639338,
+      "coverage": 0.817625458996328,
+      "median_width": 106.33069820976064,
+      "bootstrap": {
+        "r2": {
+          "point": 0.639126058861718,
+          "low": 0.571598615593495,
+          "high": 0.6894217703887814
+        },
+        "mae": {
+          "point": 55.31088276491957,
+          "low": 44.38974317413444,
+          "high": 72.98760124962331
+        },
+        "median_ape": {
+          "point": 20.604208765052995,
+          "low": 18.847106444946164,
+          "high": 23.2424006591671
+        },
+        "baseline_mae": {
+          "point": 91.61505507955937,
+          "low": 74.81135865394978,
+          "high": 115.30929912958482
+        },
+        "error_removed": {
+          "point": 0.3962686294639338,
+          "low": 0.3395104621954275,
+          "high": 0.4416513890627083
+        }
+      },
+      "grade_cuts": {
+        "p20": 15754.163833309965,
+        "p40": 21461.038449865173,
+        "p60": 28106.96015811031,
+        "p80": 38966.52221486518
+      },
+      "columns": [
+        "bedrooms",
+        "bathrooms",
+        "accommodates",
+        "beds",
+        "bath_is_shared",
+        "is_private_room",
+        "is_shared_room",
+        "is_hotel_room",
+        "is_house",
+        "is_condo",
+        "latitude",
+        "longitude",
+        "distance_to_center_km",
+        "distance_to_airport_km",
+        "amenity_count",
+        "has_ac",
+        "has_parking",
+        "has_washer",
+        "has_kitchen",
+        "has_pool",
+        "has_hottub",
+        "has_waterfront",
+        "review_score",
+        "log_reviews",
+        "is_superhost",
+        "attraction_index",
+        "distance_to_coast_km",
+        "bedrooms_x_accommodates"
+      ]
+    },
+    "seattle": {
+      "n": 730,
+      "n_cells": 8,
+      "r2": 0.5211247248632743,
+      "mae": 36.211544525579015,
+      "median_ape": 20.191595973037987,
+      "baseline_mae": 49.4013698630137,
+      "error_removed": 0.2669931091791398,
+      "coverage": 0.815068493150685,
+      "median_width": 85.48698777265902,
+      "bootstrap": {
+        "r2": {
+          "point": 0.5211247248632743,
+          "low": 0.4982577286955813,
+          "high": 0.6005966145636977
+        },
+        "mae": {
+          "point": 36.211544525579015,
+          "low": 31.427870395171563,
+          "high": 40.74093129150704
+        },
+        "median_ape": {
+          "point": 20.191595973037987,
+          "low": 17.226587164781577,
+          "high": 22.804315839422856
+        },
+        "baseline_mae": {
+          "point": 49.4013698630137,
+          "low": 44.251701466844345,
+          "high": 56.05113500857981
+        },
+        "error_removed": {
+          "point": 0.2669931091791398,
+          "low": 0.22640452737772007,
+          "high": 0.3446550781613656
+        }
+      },
+      "grade_cuts": {
+        "p20": 14367.764024956436,
+        "p40": 17915.624577394443,
+        "p60": 21418.135339273416,
+        "p80": 27163.01719002604
+      },
+      "columns": [
+        "bedrooms",
+        "bathrooms",
+        "accommodates",
+        "beds",
+        "bath_is_shared",
+        "is_private_room",
+        "is_shared_room",
+        "is_hotel_room",
+        "is_house",
+        "is_condo",
+        "latitude",
+        "longitude",
+        "distance_to_center_km",
+        "distance_to_airport_km",
+        "amenity_count",
+        "has_ac",
+        "has_parking",
+        "has_washer",
+        "has_kitchen",
+        "has_pool",
+        "has_hottub",
+        "has_waterfront",
+        "review_score",
+        "log_reviews",
+        "is_superhost",
+        "attraction_index",
+        "distance_to_coast_km",
+        "bedrooms_x_accommodates"
+      ]
+    }
+  },
+  "overall": {
+    "each_city_once": {
+      "r2": {
+        "point": 0.5600309714079029,
+        "low": 0.5253077402292488,
+        "high": 0.6204139288309608
+      },
+      "mae": {
+        "point": 53.948048054259935,
+        "low": 47.72076939875659,
+        "high": 62.22380269795569
+      },
+      "median_ape": {
+        "point": 22.07783427364392,
+        "low": 20.51875808896754,
+        "high": 23.67259775905608
+      },
+      "baseline_mae": {
+        "point": 84.58940326897446,
+        "low": 77.06518850463556,
+        "high": 100.80338999923624
+      },
+      "error_removed": {
+        "point": 0.36223633257326815,
+        "low": 0.3342206561201766,
+        "high": 0.4157169401408705
+      }
+    },
+    "every_home_once": {
+      "r2": {
+        "point": 0.554877099051416,
+        "low": 0.4922522172284696,
+        "high": 0.6627890764118637
+      },
+      "mae": {
+        "point": 60.134140863836286,
+        "low": 48.93799150897515,
+        "high": 69.54069422432586
+      },
+      "median_ape": {
+        "point": 22.959508549307365,
+        "low": 20.640557856115713,
+        "high": 25.35463352174398
+      },
+      "baseline_mae": {
+        "point": 95.34100877192982,
+        "low": 79.54313920723568,
+        "high": 109.27103454134192
+      },
+      "error_removed": {
+        "point": 0.36927307946063076,
+        "low": 0.3378443278601462,
+        "high": 0.4210993530163433
+      },
+      "n": {
+        "point": 3648.0,
+        "low": 1838.8,
+        "high": 6064.025
+      }
+    }
+  },
+  "out_of_time": {
+    "austin": {
+      "snapshot": "2026-09-17",
+      "n": 4794,
+      "r2": 0.2871155287946039,
+      "mae": 145.95414750582484,
+      "median_ape": 40.77889917890585,
+      "baseline_mae": 198.70304964539005,
+      "error_removed": 0.26546599175856683
+    },
+    "san-diego": {
+      "snapshot": "2026-09-20",
+      "n": 3855,
+      "r2": 0.43752327960491,
+      "mae": 135.5194245125232,
+      "median_ape": 32.52795649108237,
+      "baseline_mae": 196.08703501945527,
+      "error_removed": 0.3088812603083254
+    },
+    "seattle": {
+      "snapshot": "2026-09-20",
+      "n": 3093,
+      "r2": -0.017170896340160446,
+      "mae": 124.52847742978051,
+      "median_ape": 43.15424303365129,
+      "baseline_mae": 155.46720982864534,
+      "error_removed": 0.19900487332965738
+    },
+    "every_home": {
+      "n": 11742,
+      "r2": 0.3278396581349349,
+      "mae": 136.88452949489115,
+      "median_ape": 38.84425070009962,
+      "baseline_mae": 186.4552904104922,
+      "error_removed": 0.26585869892169933
+    }
+  },
+  "review_drop_cv": {
+    "full": 56.01474200828854,
+    "dropped": 56.94677126982887,
+    "improvement": -0.01663899945129473,
+    "by_city_full": [
+      53.05512728636139,
+      74.15589979727943,
+      40.83319894122479
+    ],
+    "by_city_drop": [
+      54.22801760110288,
+      74.73041112467504,
+      41.88188508370868
+    ]
+  },
+  "revenue_grade": {
+    "austin": {
+      "revenue_r2": 0.2807188733071533,
+      "revenue_mae": 13334.894506681072,
+      "grade_match": 0.3403141361256545
+    },
+    "san-diego": {
+      "revenue_r2": 0.2670854393167238,
+      "revenue_mae": 14094.337434598809,
+      "grade_match": 0.33414932680538556
+    },
+    "seattle": {
+      "revenue_r2": 0.1615815806568741,
+      "revenue_mae": 9098.626821836813,
+      "grade_match": 0.34383561643835614
+    }
+  }
+}

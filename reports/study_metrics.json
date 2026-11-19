@@ -140,30 +140,23 @@
     "linear": 55.47058825668663,
     "ridge": 55.17669862345034,
     "random_forest": 54.66755641573596,
-    "xgboost": 54.194133341441464,
-    "neural_net": 63.26400017724703,
-    "catboost": 54.807718964257965,
-    "blend": 53.69243915829187
+    "xgboost": 54.194133341441464
   },
   "nights_mean_mae": {
     "area_median": 73.77625866133833,
     "linear": 69.26680926193046,
     "ridge": 69.21271333079146,
     "random_forest": 69.03540421451716,
-    "xgboost": 69.16630154790566,
-    "neural_net": 69.04009233411453
+    "xgboost": 69.16630154790566
   },
   "simple_model": "ridge",
   "shipped_model": "ridge",
   "selection_reason": "The lowest average error was $54.19 a night, from XGBoost. Ridge regression was $55.18, inside the 2% band (up to $55.28), and it is the simplest model in that band.",
-  "challenger_reason": "CatBoost averaged $54.81 and the equal blend averaged $53.69. Neither beat Ridge regression's $55.18 by the pre-set 5% margin, which would have required $52.42 or less. CatBoost was fit once, at the depth and learning rate already chosen for XGBoost, not on its own search. Neither CatBoost nor the blend is in the app.",
-  "catboost_shipped": false,
-  "blend_shipped": false,
   "nights_shipped_model": "linear",
   "nights_selection_reason": "The lowest average error was 69.0 nights, from Random forest. Linear regression was 69.3 nights, inside the 2% band (up to 70.4 nights), and it is the simplest model in that band.",
   "nights_cleared_bar": false,
   "nights_rough_estimate": true,
-  "nights_reason": "The nights model did not clear the pre-set bar in every city. The bar was an average miss at least 10% lower than the area-typical nights, and an R\u00b2 of at least 0.10. The app labels nights as a rough estimate.",
+  "nights_reason": "The nights model did not clear the pre-set bar in every city. The bar was an average miss at least 10% lower than the local median nights, and an R\u00b2 of at least 0.10. The app labels nights as a rough estimate.",
   "audit_passed": true,
   "cities": {
     "austin": {
@@ -224,30 +217,6 @@
             "rmse": 123.25939488365388,
             "mape": 35.647611475954086,
             "median_ape": 26.643814240253068,
-            "n": 2101
-          },
-          "neural_net": {
-            "r2": 0.04357680190875379,
-            "mae": 84.84765507148681,
-            "rmse": 196.60746963618945,
-            "mape": 38.7564368421558,
-            "median_ape": 27.924599291181806,
-            "n": 2101
-          },
-          "catboost": {
-            "r2": 0.5904061691971767,
-            "mae": 74.63587455217558,
-            "rmse": 128.66240540776292,
-            "mape": 39.113640809667054,
-            "median_ape": 27.103233120315156,
-            "n": 2101
-          },
-          "blend": {
-            "r2": 0.631446657690071,
-            "mae": 71.34774553926316,
-            "rmse": 122.04644680656128,
-            "mape": 36.64998939413706,
-            "median_ape": 26.635865417184807,
             "n": 2101
           }
         },
@@ -787,14 +756,6 @@
             "mape": 190.6487035961939,
             "median_ape": 53.08200412326389,
             "n": 2101
-          },
-          "neural_net": {
-            "r2": 0.0004436542858318182,
-            "mae": 68.69468979770825,
-            "rmse": 82.60167167731865,
-            "mape": 182.61915488917236,
-            "median_ape": 54.080397483197004,
-            "n": 2101
           }
         },
         "cv_mae": {
@@ -1078,30 +1039,6 @@
             "rmse": 95.17141704947723,
             "mape": 24.979083694877115,
             "median_ape": 20.163741903648738,
-            "n": 817
-          },
-          "neural_net": {
-            "r2": 0.5432065208390011,
-            "mae": 63.41420776803833,
-            "rmse": 110.49615714982059,
-            "mape": 30.59096867052748,
-            "median_ape": 22.053110987283713,
-            "n": 817
-          },
-          "catboost": {
-            "r2": 0.6622117349642322,
-            "mae": 53.4129978955968,
-            "rmse": 95.01879213843777,
-            "mape": 25.165798558724088,
-            "median_ape": 19.733885746232378,
-            "n": 817
-          },
-          "blend": {
-            "r2": 0.6641115585036086,
-            "mae": 53.418017763750235,
-            "rmse": 94.7512081275241,
-            "mape": 24.99063540027613,
-            "median_ape": 19.86252798008753,
             "n": 817
           }
         },
@@ -1641,14 +1578,6 @@
             "mape": 162.130024305568,
             "median_ape": 39.93004935128348,
             "n": 817
-          },
-          "neural_net": {
-            "r2": 0.1166727510021458,
-            "mae": 70.45690221304822,
-            "rmse": 80.64425600403274,
-            "mape": 163.3726264620888,
-            "median_ape": 39.809796855940135,
-            "n": 817
           }
         },
         "cv_mae": {
@@ -1932,30 +1861,6 @@
             "rmse": 75.77082019260006,
             "mape": 26.434717911408928,
             "median_ape": 20.46843658289995,
-            "n": 730
-          },
-          "neural_net": {
-            "r2": 0.5359663559077721,
-            "mae": 41.53013769221593,
-            "rmse": 73.74647454884743,
-            "mape": 29.796123356121807,
-            "median_ape": 23.034586919029458,
-            "n": 730
-          },
-          "catboost": {
-            "r2": 0.5295588335677812,
-            "mae": 36.374284445001514,
-            "rmse": 74.25388617392571,
-            "mape": 25.919571052416924,
-            "median_ape": 20.691270804777336,
-            "n": 730
-          },
-          "blend": {
-            "r2": 0.5239937758205628,
-            "mae": 36.311554171862205,
-            "rmse": 74.69178607204024,
-            "mape": 25.927343824969242,
-            "median_ape": 20.784641647570577,
             "n": 730
           }
         },
@@ -2494,14 +2399,6 @@
             "rmse": 80.47474580389364,
             "mape": 132.79900962471368,
             "median_ape": 39.81516141947468,
-            "n": 730
-          },
-          "neural_net": {
-            "r2": 0.05369176383330887,
-            "mae": 67.96868499158714,
-            "rmse": 79.35919395256423,
-            "mape": 126.73473877947809,
-            "median_ape": 40.19314283776808,
             "n": 730
           }
         },

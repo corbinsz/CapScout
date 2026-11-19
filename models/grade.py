@@ -7,7 +7,15 @@ is used only for the gross ratio.
 
 from __future__ import annotations
 
-from evaluation.occupancy_protocol import GRADE_ORDER
+# Cuts of estimated annual revenue inside the city. Training rows only.
+# A is the top fifth, F is the bottom fifth. Not fit to a test metric.
+GRADE_ORDER = (
+    ("A", "Strong", "p80"),
+    ("B", "Above average", "p60"),
+    ("C", "Middle", "p40"),
+    ("D", "Below average", "p20"),
+    ("F", "Weak", None),
+)
 
 
 def grade_revenue(revenue: float, cuts: dict[str, float]) -> dict[str, str | float]:

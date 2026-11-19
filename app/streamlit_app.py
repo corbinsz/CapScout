@@ -2,9 +2,9 @@
 
     streamlit run app/streamlit_app.py
 
-Pick a city, enter an address or a pin, and read a nightly rate with a range,
-a nights estimate, yearly revenue, a grade, the main reasons, and nearby ads.
-This file does not deploy anything.
+Pick a city, enter a home, and read the validated nightly rate first.
+Nights booked, yearly revenue, and the letter grade sit below that, labeled
+as rough estimates. This file does not deploy anything.
 """
 
 from __future__ import annotations
@@ -17,24 +17,32 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import altair as alt
 import folium
 import pandas as pd
 import requests
 import streamlit as st
 from app.locate import LocateError, check_pin, locate_address
 from data.cities import CITIES, STUDY_CITIES
+from models.artifacts import load_artifact
 from models.serve import load_comp_frame, nearby_comps, score_home
 from streamlit_folium import st_folium
 
 REPORTS = ROOT / "reports"
+FIGURES = REPORTS / "figures"
+EXAMPLES = {
+    "Downtown Austin": ("austin", 30.2672, -97.7431),
+    "Pacific Beach": ("san-diego", 32.797, -117.255),
+    "Capitol Hill": ("seattle", 47.623, -122.319),
+}
 AMENITY_CHOICES = {
-    "Air conditioning": "Air conditioning",
-    "Parking": "Free parking on premises",
-    "Washer": "Washer",
-    "Kitchen": "Kitchen",
-    "Pool": "Pool",
-    "Hot tub": "Hot tub",
-    "Waterfront": "Waterfront",
+    "Air conditioning": "has_ac",
+    "Parking": "has_parking",
+    "Washer": "has_washer",
+    "Kitchen": "has_kitchen",
+    "Pool": "has_pool",
+    "Hot tub": "has_hottub",
+    "Waterfront": "has_waterfront",
 }
 
 st.set_page_config(page_title="CapScout", page_icon="◈", layout="wide")
@@ -50,15 +58,7 @@ st.markdown(
       .block-container { padding-top: 1.2rem; max-width: 1180px; }
       .wordmark { font-family: Georgia, serif; font-size: 2.15rem; margin: 0; }
       .eyebrow { letter-spacing: 0.14em; text-transform: uppercase; font-size: 0.72rem; color: #6d6456; margin: 0 0 0.2rem; }
-      .card { background: #fffdf8; border: 1px solid #e4d8c4; border-radius: 18px; padding: 1.15rem 1.25rem 1.2rem; }
-      .stay-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.8rem; margin: 0.8rem 0; }
-      @media (max-width: 860px) { .stay-grid { grid-template-columns: 1fr; } }
-      .price { font-family: Georgia, serif; font-size: 3.2rem; line-height: 0.95; margin: 0.1rem 0 0.35rem; }
-      .price span { font-family: "Segoe UI", sans-serif; font-size: 1rem; color: #6d6456; margin-left: 0.35rem; }
       .muted { color: #6d6456; font-size: 0.92rem; line-height: 1.45; }
-      .reason { margin: 0.65rem 0 0.1rem; }
-      .comp { display: flex; justify-content: space-between; gap: 1rem; padding: 0.55rem 0; border-top: 1px solid #efe6d6; }
-      .pill { display: inline-block; background: #e7f3ef; color: #0f6e56; border-radius: 99px; padding: 0.15rem 0.55rem; font-size: 0.78rem; font-weight: 600; }
       h1, h2, h3 { font-family: Georgia, serif; }
     </style>
     """,
@@ -72,21 +72,27 @@ def _fetch(url: str, params: dict) -> dict:
     return response.json()
 
 
+@st.cache_resource(show_spinner=False)
+def _model(city: str) -> dict:
+    """Load one city's saved model once per process."""
+    return load_artifact(city)
+
+
 @st.cache_data(show_spinner=False)
 def _comps_source(city: str) -> pd.DataFrame:
     return load_comp_frame(city)
 
 
-@st.cache_data(show_spinner=False)
-def _study() -> dict | None:
-    path = REPORTS / "study_metrics.json"
-    if not path.exists():
-        return None
-    return json.loads(path.read_text())
-
-
 def _money(value: float) -> str:
     return f"${value:,.0f}"
+
+
+def _place_name(name: str) -> str:
+    """A neighbourhood label. Austin stores ZIP codes in this field."""
+    text = str(name).strip()
+    if text.isdigit():
+        return f"ZIP {text}"
+    return text
 
 
 def _predict_page() -> None:
@@ -95,15 +101,30 @@ def _predict_page() -> None:
     )
     st.markdown('<p class="wordmark">CapScout</p>', unsafe_allow_html=True)
     st.markdown(
-        '<p class="muted">A nightly rate, a range around it, a rough guess of nights booked '
-        "in a year, the yearly revenue those two imply, and a letter grade for that revenue "
-        "inside the city. Not a quote and not a count of bookings.</p>",
+        '<p class="muted">The nightly rate below is the validated estimate. '
+        "Nights booked, yearly revenue, and the letter grade are rough estimates "
+        "from a review-based nights model that missed its bar.</p>",
         unsafe_allow_html=True,
     )
     if "city" not in st.session_state:
         st.session_state.city = STUDY_CITIES[0]
         st.session_state.lat = float(CITIES[STUDY_CITIES[0]]["latitude"])
         st.session_state.lon = float(CITIES[STUDY_CITIES[0]]["longitude"])
+    if "pending_pin" in st.session_state:
+        pending_lat, pending_lon = st.session_state.pop("pending_pin")
+        st.session_state.lat = pending_lat
+        st.session_state.lon = pending_lon
+
+    st.caption("Examples")
+    buttons = st.columns(3)
+    for column, (label, (city, lat, lon)) in zip(buttons, EXAMPLES.items(), strict=True):
+        if column.button(label, use_container_width=True):
+            st.session_state.city = city
+            st.session_state.coords_city = city
+            st.session_state.lat = lat
+            st.session_state.lon = lon
+            st.session_state.pop("scored", None)
+            st.rerun()
 
     left, right = st.columns([0.92, 1.08], gap="large")
     with left:
@@ -111,14 +132,14 @@ def _predict_page() -> None:
             "City",
             STUDY_CITIES,
             format_func=lambda key: CITIES[key]["display"],
-            index=list(STUDY_CITIES).index(st.session_state.city),
+            key="city",
         )
-        if city != st.session_state.city:
-            st.session_state.city = city
-            st.session_state.lat = float(CITIES[city]["latitude"])
-            st.session_state.lon = float(CITIES[city]["longitude"])
-            st.session_state.pop("scored", None)
-            st.rerun()
+        if st.session_state.get("coords_city") != city:
+            if st.session_state.get("coords_city") is not None:
+                st.session_state.lat = float(CITIES[city]["latitude"])
+                st.session_state.lon = float(CITIES[city]["longitude"])
+                st.session_state.pop("scored", None)
+            st.session_state.coords_city = city
         address = st.text_input("Address", placeholder="1100 Congress Ave")
         if st.button("Locate address", use_container_width=True):
             try:
@@ -129,47 +150,58 @@ def _predict_page() -> None:
                 st.session_state.lat = found["latitude"]
                 st.session_state.lon = found["longitude"]
                 st.caption(found["label"])
-        c1, c2, c3 = st.columns(3)
-        bedrooms = c1.number_input("Bedrooms", min_value=0, max_value=10, value=2, step=1)
-        bathrooms = c2.number_input("Bathrooms", min_value=0.0, max_value=12.0, value=1.0, step=0.5)
-        guests = c3.number_input("Guests", min_value=1, max_value=16, value=4, step=1)
-        room = st.selectbox(
-            "Room type",
-            ["Entire home/apt", "Private room", "Shared room", "Hotel room"],
-        )
-        building = st.selectbox(
-            "Building",
-            ["Not specified", "House", "Condo", "Townhouse", "Guest unit", "Cabin"],
-        )
-        extras = _optional_inputs()
-        knows_price = st.checkbox("Add a purchase price for a rough gross yield")
-        home_price = None
-        if knows_price:
-            home_price = float(
-                st.number_input("Purchase price ($)", min_value=10000, value=500000, step=5000)
+                st.rerun()
+        with st.form("home"):
+            c1, c2, c3 = st.columns(3)
+            bedrooms = c1.number_input("Bedrooms", min_value=0, max_value=10, value=2, step=1)
+            bathrooms = c2.number_input(
+                "Bathrooms", min_value=0.0, max_value=12.0, value=1.0, step=0.5
             )
-        lat = st.number_input("Latitude", value=float(st.session_state.lat), format="%.5f")
-        lon = st.number_input("Longitude", value=float(st.session_state.lon), format="%.5f")
-        st.session_state.lat = float(lat)
-        st.session_state.lon = float(lon)
-        go = st.button("Estimate this home", type="primary", use_container_width=True)
+            guests = c3.number_input("Guests", min_value=1, max_value=16, value=4, step=1)
+            room = st.selectbox(
+                "Room type",
+                ["Entire home/apt", "Private room", "Shared room", "Hotel room"],
+            )
+            building = st.selectbox(
+                "Building",
+                ["Not specified", "House", "Condo", "Townhouse", "Guest unit", "Cabin"],
+            )
+            extras = _optional_inputs()
+            knows_price = st.checkbox("Add a purchase price for a rough gross yield")
+            home_price = None
+            if knows_price:
+                home_price = float(
+                    st.number_input("Purchase price ($)", min_value=10000, value=500000, step=5000)
+                )
+            with st.expander("Advanced"):
+                lat = st.number_input("Latitude", key="lat", format="%.5f")
+                lon = st.number_input("Longitude", key="lon", format="%.5f")
+            go = st.form_submit_button("Estimate this home", type="primary")
 
+    pin_lat = float(st.session_state.lat)
+    pin_lon = float(st.session_state.lon)
     comps = nearby_comps(
-        _comps_source(city),
-        float(st.session_state.lat),
-        float(st.session_state.lon),
-        room,
-        float(bedrooms),
+        _comps_source(st.session_state.city), pin_lat, pin_lon, room, float(bedrooms)
     )
     with right:
-        _map(city, float(st.session_state.lat), float(st.session_state.lon), comps)
+        _map(st.session_state.city, pin_lat, pin_lon, comps)
 
     if go:
+        use_lat, use_lon = float(lat), float(lon)
+        if address.strip():
+            try:
+                found = locate_address(address, city, _fetch)
+            except LocateError as exc:
+                st.warning(exc.message)
+                use_lat, use_lon = float(lat), float(lon)
+            else:
+                use_lat, use_lon = found["latitude"], found["longitude"]
+                st.caption(found["label"])
         try:
-            check_pin(float(lat), float(lon), city)
+            check_pin(use_lat, use_lon, city)
             spec = {
-                "latitude": float(lat),
-                "longitude": float(lon),
+                "latitude": use_lat,
+                "longitude": use_lon,
                 "bedrooms": int(bedrooms),
                 "bathrooms": float(bathrooms),
                 "accommodates": int(guests),
@@ -179,11 +211,12 @@ def _predict_page() -> None:
             if building != "Not specified":
                 spec["property_type"] = building
             spec.update(extras)
-            if len(comps):
-                spec["neighbourhood"] = str(comps.iloc[0]["neighbourhood_cleansed"])
-            st.session_state.scored = score_home(city, spec)
+            shown = nearby_comps(_comps_source(city), use_lat, use_lon, room, float(bedrooms))
+            if len(shown):
+                spec["neighbourhood"] = str(shown.iloc[0]["neighbourhood_cleansed"])
+            st.session_state.scored = score_home(city, spec, _model(city))
             st.session_state.scored_city = city
-            st.session_state.shown_comps = comps
+            st.session_state.shown_comps = shown
         except LocateError as exc:
             st.session_state.pop("scored", None)
             st.error(exc.message)
@@ -193,13 +226,12 @@ def _predict_page() -> None:
             )
 
     if st.session_state.get("scored") and st.session_state.get("scored_city") == city:
-        _stay(st.session_state.scored)
-        _result(st.session_state.scored, st.session_state.get("shown_comps", comps))
+        _rate(st.session_state.scored, st.session_state.get("shown_comps", comps))
+        _rough(st.session_state.scored)
     else:
         st.markdown(
-            '<p class="muted">Locate an address or enter a latitude and longitude, then estimate. '
-            "Leave amenities and reviews blank for a home that has never been listed. "
-            "Blank fields use a typical value, not zero.</p>",
+            '<p class="muted">Pick an example, type an address, or open Advanced and enter a '
+            "latitude and longitude, then estimate. Blank fields use the training median, not zero.</p>",
             unsafe_allow_html=True,
         )
 
@@ -209,19 +241,12 @@ def _optional_inputs() -> dict:
     with st.expander("If this home already has a listing"):
         st.caption(
             "Optional. Leave these alone for a home that has never been listed. "
-            "A blank is a typical value, not a zero."
+            "A blank is the training median, not a zero."
         )
         if st.checkbox("I know the amenities"):
             picked = st.multiselect("Amenities", list(AMENITY_CHOICES))
-            # The seven yes/no fields only. The total amenity count stays unknown.
             features["amenity_flags"] = {
-                "has_ac": "Air conditioning" in picked,
-                "has_parking": "Parking" in picked,
-                "has_washer": "Washer" in picked,
-                "has_kitchen": "Kitchen" in picked,
-                "has_pool": "Pool" in picked,
-                "has_hottub": "Hot tub" in picked,
-                "has_waterfront": "Waterfront" in picked,
+                column: label in picked for label, column in AMENITY_CHOICES.items()
             }
         reviews = st.selectbox("Reviews", ["Unknown", "No reviews yet", "Has reviews"])
         if reviews == "No reviews yet":
@@ -254,14 +279,13 @@ def _map(city: str, lat: float, lon: float, comps: pd.DataFrame) -> None:
             fill_color="#a33b24",
             tooltip=f"{_money(row.price_clean)} · {row.km:.1f} km",
         ).add_to(fmap)
-    out = st_folium(fmap, height=460, returned_objects=["last_clicked"], key=f"map-{city}")
+    out = st_folium(fmap, height=420, returned_objects=["last_clicked"], key=f"map-{city}")
     click = (out or {}).get("last_clicked")
     if click:
         token = (round(float(click["lat"]), 5), round(float(click["lng"]), 5))
         if token != st.session_state.get("click_token"):
             st.session_state.click_token = token
-            st.session_state.lat = token[0]
-            st.session_state.lon = token[1]
+            st.session_state.pending_pin = token
             st.rerun()
     if len(comps) == 0:
         st.caption(
@@ -273,157 +297,219 @@ def _map(city: str, lat: float, lon: float, comps: pd.DataFrame) -> None:
         )
 
 
-def _stay(scored: dict) -> None:
-    nights = scored["booked_nights"]
-    revenue = scored["annual_revenue"]
-    rough = " Rough estimate." if scored["nights_rough_estimate"] else ""
-    area = scored.get("area_median_nights")
-    area_bit = ""
-    if area is not None and scored.get("area_name"):
-        area_bit = f" The usual nights figure near {scored['area_name']} is about {area:.0f}."
-    elif area is not None:
-        area_bit = f" The citywide usual nights figure is about {area:.0f}."
-    yield_bit = ""
-    if scored.get("gross_yield") is not None:
-        yield_bit = (
-            f" Rough gross yield {scored['gross_yield']:.1%} on the purchase price you entered. "
-            "That is predicted revenue divided by that price, before mortgage, taxes, fees, and repairs."
-        )
-    note = (
-        f"On held-out blocks the average miss was {scored['nights_holdout_mae']:.0f} nights "
-        f"(R² {scored['nights_holdout_r2']:.2f}), against {scored['nights_baseline_mae']:.0f} "
-        "for the usual nights in the area. "
-    )
-    if scored["nights_rough_estimate"]:
-        note += (
-            "That missed a bar set before the test, so this number stays a rough estimate. "
-            "The label itself comes from review counts, not from a calendar of bookings."
-        )
-    st.markdown(
-        '<div class="stay-grid">'
-        '<div class="card"><p class="eyebrow">Booked nights</p>'
-        f'<p class="price" style="font-size:2.4rem">{nights:.0f}<span>nights / year</span></p>'
-        f'<p class="muted">{rough.strip() or "Review-based estimate."}{area_bit}</p></div>'
-        '<div class="card"><p class="eyebrow">Estimated yearly revenue</p>'
-        f'<p class="price" style="font-size:2.4rem">{_money(revenue)}</p>'
-        '<p class="muted">Predicted rate times predicted nights. Not what a host would clear.</p></div>'
-        '<div class="card"><p class="eyebrow">Grade in this city</p>'
-        f'<p class="price" style="font-size:2.4rem">{scored["grade"]}'
-        f'<span>{scored["grade_words"]}</span></p>'
-        '<p class="muted">Where that gross sits among the training homes. Not a profit grade.</p></div>'
-        "</div>"
-        f'<p class="muted">{note}{yield_bit}</p>',
-        unsafe_allow_html=True,
-    )
-
-
-def _result(scored: dict, comps: pd.DataFrame) -> None:
+def _rate(scored: dict, comps: pd.DataFrame) -> None:
     rate = scored["nightly_rate"]
     low, high = scored["interval_low"], scored["interval_high"]
     coverage = scored["interval_coverage"]
-    left, right = st.columns([1.08, 0.92], gap="large")
-    with left:
-        reasons = (
-            "".join(
-                f'<p class="reason"><strong>{item["label"]}</strong>. {item["sentence"]}</p>'
-                for item in scored["reasons"]
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Nightly rate", _money(rate))
+    m2.metric("Low end of the range", _money(low))
+    m3.metric("High end of the range", _money(high))
+    st.caption(
+        f"Ridge regression, a linear model. The band was built as an 80% range from training residuals. "
+        f"On held-out blocks it covered {coverage:.0%} of homes. "
+        "That is the measured coverage, not a promise for this address."
+    )
+    _comparison(rate, low, high, comps)
+    _reasons(scored)
+
+
+def _comparison(rate: float, low: float, high: float, comps: pd.DataFrame) -> None:
+    st.markdown("#### This estimate and five nearby ads")
+    rows = [{"Home": "This estimate", "Rate": rate, "Low": low, "High": high}]
+    table_rows = []
+    if len(comps) == 0:
+        st.caption("Download the city snapshot to see nearby ads.")
+    else:
+        for row in comps.itertuples(index=False):
+            place = _place_name(str(row.neighbourhood_cleansed).replace("<", ""))
+            label = f"{place} · {row.km:.1f} km"
+            price = float(row.price_clean)
+            rows.append({"Home": label, "Rate": price, "Low": price, "High": price})
+            table_rows.append(
+                {
+                    "Place": place,
+                    "Advertised rate": _money(price),
+                    "Bedrooms": int(row.bedrooms) if pd.notna(row.bedrooms) else None,
+                    "Distance": f"{row.km:.1f} km",
+                }
             )
-            or '<p class="muted">No single filled-in fact moved this estimate by a dollar or more.</p>'
+    frame = pd.DataFrame(rows)
+    bars = (
+        alt.Chart(frame)
+        .mark_bar(color="#0f6e56")
+        .encode(
+            y=alt.Y("Home:N", sort=None, title=None),
+            x=alt.X("Rate:Q", title="Nightly rate ($)"),
+            tooltip=["Home", alt.Tooltip("Rate:Q", format="$,.0f")],
         )
-        blank = ""
-        if scored["blank_fields"]:
-            blank = (
-                " Fields left blank, including amenities and reviews when you did not fill them in, "
-                "use a typical training value rather than zero."
-            )
-        st.markdown(
-            '<div class="card"><p class="eyebrow">Estimated nightly rate</p>'
-            f'<p class="price">{_money(rate)}<span>per night</span></p>'
-            f'<p class="muted">Range {_money(low)} to {_money(high)}. '
-            f"On held-out blocks this range covered {coverage:.0%} of homes. "
-            "That is the measured coverage, not a promise for this address.</p>"
-            f'<p class="muted">The rate model is {scored["library"].replace("_", " ")}.</p>'
-            "</div>"
-            '<div class="card" style="margin-top:0.9rem"><p class="eyebrow">Why this rate</p>'
-            f"{reasons}"
-            '<p class="muted">Each line puts one fact back to the typical training value and '
-            f"reads the dollar change. It was not used to pick the model.{blank}</p></div>",
-            unsafe_allow_html=True,
+    )
+    span = (
+        alt.Chart(frame.iloc[[0]])
+        .mark_rule(color="#1c1915", strokeWidth=2)
+        .encode(y="Home:N", x="Low:Q", x2="High:Q")
+    )
+    st.altair_chart(bars + span, use_container_width=True)
+    if table_rows:
+        st.dataframe(pd.DataFrame(table_rows), hide_index=True, use_container_width=True)
+        median = float(pd.Series([row["Rate"] for row in rows[1:]]).median())
+        st.caption(
+            f"The five ads have a median advertised rate of {_money(median)}. "
+            f"The estimate is {_money(rate)}, and the black line is its range."
         )
-    with right:
-        if len(comps) == 0:
-            body = '<p class="muted">Download the city snapshot to see nearby ads.</p>'
-        else:
-            prices = [float(row.price_clean) for row in comps.itertuples(index=False)]
-            median = float(pd.Series(prices).median())
-            rows = []
-            for row in comps.itertuples(index=False):
-                neighbourhood = str(row.neighbourhood_cleansed).replace("<", "")
-                rows.append(
-                    f'<div class="comp"><div><strong>{_money(row.price_clean)}</strong>'
-                    f'<div class="muted">{neighbourhood}</div></div>'
-                    f'<div style="text-align:right"><span class="pill">{row.km:.1f} km</span>'
-                    f'<div class="muted">{int(row.bedrooms)} bd</div></div></div>'
-                )
-            body = (
-                f'<p class="muted">Same room type when there are enough, within one bedroom. '
-                f"Median of these five: {_money(median)}. The estimate is {_money(rate)}.</p>"
-                + "".join(rows)
-            )
-        st.markdown(
-            '<div class="card"><p class="eyebrow">Nearby advertised rates</p>' + body + "</div>",
-            unsafe_allow_html=True,
+
+
+def _reasons(scored: dict) -> None:
+    reasons = scored["reasons"]
+    st.markdown("#### Why this rate")
+    st.caption(
+        "Each bar is the dollar change from putting one filled-in fact back to the training median. "
+        "Ridge regression, a linear model, is what produces the rate."
+    )
+    if not reasons:
+        st.caption("No single filled-in fact moved this estimate by a dollar or more.")
+        return
+    frame = pd.DataFrame(
+        {
+            "Fact": [item["label"] for item in reasons],
+            "Dollars": [item["dollars"] for item in reasons],
+        }
+    )
+    chart = (
+        alt.Chart(frame)
+        .mark_bar()
+        .encode(
+            y=alt.Y("Fact:N", sort=None, title=None),
+            x=alt.X("Dollars:Q", title="Change in the nightly rate ($)"),
+            color=alt.condition(alt.datum.Dollars > 0, alt.value("#0f6e56"), alt.value("#a33b24")),
+            tooltip=["Fact", alt.Tooltip("Dollars:Q", format="$,.0f")],
         )
+    )
+    st.altair_chart(chart, use_container_width=True)
+    for item in reasons:
+        st.markdown(f"**{item['label']}.** {item['sentence']}")
+    if scored["blank_fields"]:
+        st.caption(
+            "Fields left blank, including amenities and reviews when you did not fill them in, "
+            "use the training median rather than zero."
+        )
+
+
+def _rough(scored: dict) -> None:
+    st.markdown("#### Rough estimates (not validated)")
+    st.caption(
+        "These three use the nights model. It did not clear a bar set before the test, "
+        "and the nights label is built from reviews, not from a count of bookings. "
+        "The letter grade ranks this rough yearly revenue inside the city. It is not a profit grade."
+    )
+    nights = scored["booked_nights"]
+    revenue = scored["annual_revenue"]
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Nights booked", f"{nights:.0f}")
+    c2.metric("Yearly revenue", _money(revenue))
+    c3.metric("Grade", f"{scored['grade']} · {scored['grade_words']}")
+    area = scored.get("area_median_nights")
+    if area is not None and scored.get("area_name"):
+        place = _place_name(scored["area_name"])
+        st.caption(f"The median nights figure for {place} is about {area:.0f}.")
+    elif area is not None:
+        st.caption(f"The citywide median nights figure is about {area:.0f}.")
+    note = (
+        f"On held-out blocks the average miss was {scored['nights_holdout_mae']:.0f} nights "
+        f"(R² {scored['nights_holdout_r2']:.2f}), against {scored['nights_baseline_mae']:.0f} "
+        "for the local median nights. "
+    )
+    if scored["nights_rough_estimate"]:
+        note += "That missed the bar, so this number stays a rough estimate."
+    if nights < 0.5:
+        note += (
+            " This guess landed at the bottom of the scale. Do not read zero nights "
+            "as a forecast that the home would never book."
+        )
+    if scored.get("gross_yield") is not None:
+        note += (
+            f" Rough gross yield {scored['gross_yield']:.1%} on the purchase price you entered. "
+            "That is predicted revenue divided by that price, before mortgage, taxes, fees, and repairs."
+        )
+    st.caption(note)
+
+
+def _within(y: pd.Series, pred: pd.Series, tol: float) -> float:
+    return float((y.sub(pred).abs() / y.clip(lower=1e-9) <= tol).mean())
 
 
 def _results_page() -> None:
-    payload = _study()
     st.markdown('<p class="eyebrow">Primary holdout · scored once</p>', unsafe_allow_html=True)
     st.markdown('<p class="wordmark">What the model actually did</p>', unsafe_allow_html=True)
-    if not payload:
+    adopted_path = REPORTS / "study_adopted.json"
+    pred_path = REPORTS / "study_adopted_predictions.csv"
+    if adopted_path.exists() and pred_path.exists():
+        adopted = json.loads(adopted_path.read_text())
+        predictions = pd.read_csv(pred_path)
+        homes = adopted["overall"]["every_home_once"]
+        st.metric(
+            "Every home once, R²",
+            f"{homes['r2']['point']:.3f}",
+            help="Pooled holdout. Seattle's interval resamples 8 cells.",
+        )
+        share = _within(predictions["y_price"], predictions["price_ridge"], 0.20)
+        base = _within(predictions["y_price"], predictions["price_area_median"], 0.20)
+        rows = [
+            {
+                "Slice": "Every home once",
+                "Homes": f"{int(homes['n']['point']):,}",
+                "Within ±20%": f"{100 * share:.1f}%",
+                "Local median within ±20%": f"{100 * base:.1f}%",
+                "Median error": f"{homes['median_ape']['point']:.1f}%",
+                "Less error": f"{100 * homes['error_removed']['point']:.1f}%",
+            }
+        ]
+        labels = {
+            "austin": "Austin, TX",
+            "san-diego": "San Diego, CA",
+            "seattle": "Seattle, WA",
+        }
+        for city, block in adopted["cities"].items():
+            part = predictions[predictions["city"] == city]
+            rows.append(
+                {
+                    "Slice": labels.get(city, city),
+                    "Homes": f"{block['n']:,}",
+                    "Within ±20%": f"{100 * _within(part['y_price'], part['price_ridge'], 0.20):.1f}%",
+                    "Local median within ±20%": (
+                        f"{100 * _within(part['y_price'], part['price_area_median'], 0.20):.1f}%"
+                    ),
+                    "Median error": f"{block['median_ape']:.1f}%",
+                    "Less error": f"{100 * block['error_removed']:.1f}%",
+                }
+            )
+        for name in (
+            "pred_vs_actual.png",
+            "error_by_tier.png",
+            "ridge_coefficients.png",
+            "model_comparison.png",
+        ):
+            path = FIGURES / name
+            if path.exists():
+                st.image(str(path))
+        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        st.caption(
+            "Within ±20% is the share of held-out homes whose prediction is within 20% of the "
+            "advertised rate. The local median column is the same share for the neighbourhood "
+            "and room-type median. Seattle's bootstrap uses 8 held-out cells."
+        )
+    payload_path = REPORTS / "study_metrics.json"
+    if not payload_path.exists():
         st.info("No study report yet. From the repo root: python -m evaluation.run_study")
         return
+    payload = json.loads(payload_path.read_text())
+    st.markdown("#### How ridge was chosen")
     st.markdown(payload["selection_reason"])
-    st.markdown(payload["challenger_reason"])
-    rows = []
-    shipped = payload["shipped_model"]
-    for city in payload["cities"]:
-        block = payload["cities"][city]
-        hold = block["price"]["holdout"][shipped]
-        boot = block["price"]["bootstrap"]
-        rows.append(
-            {
-                "City": block["display"],
-                "R²": f"{hold['r2']:.3f}",
-                "R² interval": f"{boot['r2']['low']:.3f} to {boot['r2']['high']:.3f}",
-                "MAE": f"${hold['mae']:,.2f}",
-                "MAE interval": f"${boot['mae']['low']:,.2f} to ${boot['mae']['high']:,.2f}",
-                "Median % error": f"{hold['median_ape']:.1f}%",
-            }
-        )
-    st.table(pd.DataFrame(rows))
-    st.markdown(payload["nights_reason"])
-    st.markdown(payload["nights_selection_reason"])
-    night_rows = []
-    nights_name = payload["nights_shipped_model"]
-    for city in payload["cities"]:
-        block = payload["cities"][city]
-        hold = block["nights"]["holdout"][nights_name]
-        night_rows.append(
-            {
-                "City": block["display"],
-                "R²": f"{hold['r2']:.3f}",
-                "MAE nights": f"{hold['mae']:.1f}",
-                "Usual nights MAE": f"{block['nights']['holdout']['area_median']['mae']:.1f}",
-                "Cleared the bar": "Yes" if block["nights"]["cleared_bar"] else "No",
-            }
-        )
-    st.table(pd.DataFrame(night_rows))
     st.caption(
-        "The other seeds were not used to pick the model. "
-        "San Diego's nightly-rate R² moves a lot across those seeds. "
-        "The headline numbers are the primary holdout."
+        "That comparison used the columns before the added place and size features. "
+        "The charts above are the model after those features were adopted."
     )
+    st.markdown(payload["nights_reason"])
 
 
 def main() -> None:
