@@ -30,6 +30,12 @@ OCCUPANCY_CAP = 0.70
 # documented rule (use minimum nights as the stay length) would pin every
 # such row to the 70% cap. Fall back to the city average instead.
 MAX_MIN_NIGHTS = 90
+# Inside Airbnb's written fallback when a city has no published average
+# stay. The hand-set figures in data/cities.py are not that statement.
+STATED_STAY_NIGHTS = 3.0
+DAYS_IN_YEAR = 365.0
+# 70% of a year. The same cap as the monthly rate, on an annual count.
+ANNUAL_NIGHTS_CAP = OCCUPANCY_CAP * DAYS_IN_YEAR
 
 
 def san_francisco_occupancy(
@@ -53,3 +59,29 @@ def san_francisco_occupancy(
     observed = np.isfinite(reviews) & (reviews > 0)
     occupancy = np.where(observed, occupancy, np.nan)
     return occupancy
+
+
+def booked_nights_ltm(
+    reviews_ltm: np.ndarray | pd.Series,
+    minimum_nights: np.ndarray | pd.Series,
+    average_stay_nights: float = STATED_STAY_NIGHTS,
+) -> np.ndarray:
+    """Estimated booked nights over the last 12 months.
+
+    ``reviews_ltm`` is Inside Airbnb's ``number_of_reviews_ltm``. Bookings
+    are reviews divided by the 50% review rate. Stay length is the stated
+    average, or the listing's minimum nights when that minimum is longer
+    and not above ``MAX_MIN_NIGHTS``. The count is capped at 70% of 365.
+    Zero or missing reviews are unobserved, not zero nights.
+    """
+    reviews = np.asarray(reviews_ltm, dtype=float)
+    minimum = np.asarray(minimum_nights, dtype=float)
+    stay = np.full(reviews.shape, float(average_stay_nights), dtype=float)
+    use_minimum = (
+        np.isfinite(minimum) & (minimum > average_stay_nights) & (minimum <= MAX_MIN_NIGHTS)
+    )
+    stay = np.where(use_minimum, minimum, stay)
+    nights = (reviews / REVIEW_RATE) * stay
+    nights = np.minimum(nights, ANNUAL_NIGHTS_CAP)
+    observed = np.isfinite(reviews) & (reviews > 0)
+    return np.where(observed, nights, np.nan)

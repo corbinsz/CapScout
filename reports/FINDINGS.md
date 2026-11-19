@@ -2,7 +2,7 @@ CapScout is a personal project built in spare time for learning. It is not a com
 
 # What the nightly-rate model actually does
 
-This is a study guide, not a product pitch. The question is the same one as the last round: given a public Airbnb listing in one city, how close can we get to the nightly price on that listing, without training on the house next door or on the same host?
+This is a study guide, not a product pitch. The nightly-rate question is unchanged: given a public Airbnb listing in one city, how close can we get to the nightly price on that listing, without training on the house next door or on the same host? The price numbers below are the ones already published. A separate question, booked nights, is at the end. It did not clear its bar.
 
 The short answer is on a new spatial holdout, seed 23, frozen before any model in this round was fit and scored once at the end. The point model is the v3 blend. Nothing in this round beat it by the pre-set bar.
 
@@ -228,7 +228,8 @@ Checked in code and recorded in `reports/metrics.json`:
 
 `streamlit run app/streamlit_app.py` serves `127.0.0.1` only. It is a way to read one prediction and the test report. It is not a second evaluation and it is not deployed.
 
-- The nightly rate is the v3 blend. This round did not replace it.
+- The nightly rate is the v3 blend. The nights round did not replace it.
+- Booked nights, annual revenue, and the A–F grade come from the separate nights model. The grade is the percentile rule in the booked-nights section. A purchase price, if typed, is divided into the predicted revenue and labeled a rough gross yield.
 - The band is the quintile interval from this round.
 - The reasons are SHAP values on that row, turned into a sentence and an approximate percent.
 - Nearby rates are Inside Airbnb advertised prices. They are not inputs to the model.
@@ -249,6 +250,116 @@ Checked in code and recorded in `reports/metrics.json`:
 - The saved model has not seen the seed-23 listings. That is intentional. It has seen the seed-7 and seed-11 listings, because those are part of the training population for the final-holdout model. The seed-7 score itself uses a different fit that has not seen them.
 - Three cities, one protocol. Nothing here is a national model.
 
+## Booked nights
+
+The price model is untouched. This section is a different label, a different seed, and a different bar.
+
+The question is how many nights a home would book in a year. Public calendars cannot answer it. A night marked unavailable is blocked or booked, and the file does not say which. AirDNA-style products try to separate those with data this study does not have. The label here is the Inside Airbnb San Francisco model, applied to the last twelve months of reviews:
+
+Reviews in the last year, divided by a 50% review rate, times a stay of 3 nights. If the listing's minimum stay is longer than 3 and at most 90, that minimum is the stay instead. The result is capped at 255.5 nights, which is 70% of 365. The 50%, the 3 nights, and the 70% cap are Inside Airbnb's published choices. The 3 nights is their fallback when a city has no statement of average stay that this study was willing to treat as a measurement. The hand-set 3.2 and 4.0 figures elsewhere in the city file were not used. A listing with no reviews in the last year is left out. It is not coded as zero nights.
+
+That label is a model of who left a review, scaled into nights. It is not a count of bookings. Guests who do not review are invisible. The minimum stay is part of the formula and is not a feature, so two similar houses with different house rules do not have to get the same label, and the model is not allowed to read the rule. Review counts, review scores, availability, host performance, and price are not features either. The model sees the house: size, room type, location, the census tract, the building type, and amenities.
+
+| City | Listings with a label | Share at the 255.5-night cap | Median nights | Held out | Training rows used |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Austin | 7,832 | 12.3% | 90 | 2,420 | 2,577 |
+| San Diego | 8,571 | 17.6% | 124 | 2,655 | 2,970 |
+| Seattle | 4,696 | 23.6% | 144 | 765 | 2,193 |
+
+The training rows are what remain after the host purge and the 1 km buffer. In Austin and San Diego that remainder is about the size of the holdout. The buffer is doing what it did for price. It is not a bug in the split.
+
+### The holdout and the bar
+
+Seed 31 holds out 20% of the 0.03-degree cells on the listings that have a label. The ids are in `evaluation/occupancy_ids.json`. They contain no nights and no prices. The seed is not 0, 1, 2, 3, 4, 7, 11, or 23, and it was not searched. The file was written before any nights model was fit.
+
+The bar was written down first. A city clears it only when the holdout MAE is at most 90% of the neighbourhood-median MAE and the holdout R² is at least 0.10. Both are required. A 1% feature rule would have called a useless model a win. Development folds, seeds 0 through 4, choose the feature prefix. The holdout is scored once.
+
+The prefix rule is the same 1% simplicity rule as the price study, on log nights, XGBoost, depth 4. Mean development MAE, cities weighted equally:
+
+| Prefix | Mean development MAE |
+| --- | ---: |
+| Size and room type | 75.45 |
+| Plus location | 75.46 |
+| Plus census | 75.72 |
+| Plus building type | 75.11 |
+| Plus amenities and beds | 73.15 |
+
+Amenities cleared 1% against the building-type prefix. Location and census did not help. An unlogged target then cut that development MAE from 73.15 to 70.79, which is more than 1%, so the scored model predicts nights directly rather than log nights. An equal CatBoost and XGBoost blend reached 70.45 against XGBoost's 70.79. That is about half a percent. The blend was not kept. The holdout model is XGBoost, depth 4, on the amenity prefix, in nights.
+
+Adding `number_of_reviews_ltm` on development seed 0, which is not allowed, dropped MAE from 69.9 to 26.4 in Austin, from 79.5 to 27.6 in San Diego, and from 72.2 to 26.3 in Seattle. The column is an input to the label. It was not eligible, and it is not in the model.
+
+### What the holdout said
+
+| City | R² | MAE | RMSE | Median APE | Neighbourhood median MAE | Room-type median MAE | Error removed | Test listings |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Austin | 0.073 | 70.0 | 82.4 | 52.9% | 76.9 | 77.0 | 8.9% | 2,420 |
+| San Diego | 0.098 | 72.0 | 82.8 | 45.3% | 78.9 | 79.4 | 8.7% | 2,655 |
+| Seattle | 0.078 | 71.6 | 81.6 | 42.2% | 79.5 | 78.5 | 9.9% | 765 |
+
+MAE is nights per year. "Error removed" is against the neighbourhood median, which is the baseline named in the bar. The neighbourhood-by-room-type median is reported beside it. In Seattle that second baseline is a little stronger (78.5 against 79.5). The model still beats it. It does not beat either one by the 10% the bar asked for, and R² stays under 0.10 in every city. The model did not clear the bar. Seattle's 9.9% is not 10%, and its R² is 0.078.
+
+Development R² for the model that was kept, mean ± standard deviation across seeds 0–4:
+
+| City | R² | MAE |
+| --- | ---: | ---: |
+| Austin | 0.046 ± 0.036 | 66.22 ± 3.15 |
+| San Diego | 0.049 ± 0.013 | 74.34 ± 2.28 |
+| Seattle | 0.056 ± 0.019 | 71.79 ± 3.08 |
+
+The neighbourhood median's development R² is negative in every city. A spatial split makes an area median a weak baseline, which is the same fact as in the price study. Beating a weak baseline by 9% is still a small R². Percentage error is a poor summary here: many labels are a handful of nights, so one 70-night miss is a huge percent. The median absolute percent error is the 52.9%, 45.3%, and 42.2% in the table.
+
+A typical miss of about 70 nights, on a label whose median is 90, 124, or 144, is not a forecast a person should budget with.
+
+### Low, medium, and high
+
+The same features were also trained as a three-class model. The cuts are the training tertiles of the nights label, so the test labels do not set the boundaries. Low is at or under 48 nights in Austin, 72 in San Diego, and 96 in Seattle. High is over 132, 186, and 210. The baseline predicts the training majority class in that neighbourhood, and the city majority when the neighbourhood is new.
+
+| City | Accuracy | Neighbourhood accuracy | Balanced accuracy | Baseline balanced | Cleared |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Austin | 43.1% | 32.6% | 42.6% | 34.2% | yes |
+| San Diego | 43.0% | 32.7% | 42.8% | 30.8% | yes |
+| Seattle | 41.2% | 40.1% | 40.2% | 35.0% | no |
+
+The class bar was also written down first: accuracy at least 8 points above the neighbourhood class, and a higher balanced accuracy. Austin and San Diego clear it. Seattle does not. The probabilities are not a calibration success. When the model says "medium," the average predicted probability is about 0.44 to 0.45, and the share that are actually medium is 36% in Austin, 35% in San Diego, and 30% in Seattle. The middle band is over-confident. No calibrator was fit after that look.
+
+### Revenue
+
+Estimated annual revenue is the predicted nightly rate times the predicted nights. The rate is the published price specification, refit so the seed-31 listings, their hosts, and anything within 1 km are out of that fit. The saved price artifact is not replaced, and the seed-23 price table is not a product of this refit. The target revenue is the advertised rate times the review-based nights.
+
+| City | Revenue R² | Revenue MAE | R² if the nights were known | R² if the rate were known |
+| --- | ---: | ---: | ---: | ---: |
+| Austin | 0.133 | $12,906 | 0.681 | 0.264 |
+| San Diego | -0.034 | $18,720 | 0.766 | -0.027 |
+| Seattle | 0.117 | $10,470 | 0.739 | 0.323 |
+
+Knowing the nights and predicting only the rate looks like the price model: R² 0.681, 0.766, and 0.739 on this split. Knowing the rate and predicting only the nights is much weaker, and in San Diego it is negative. The product inherits the nights error. San Diego's revenue R² of -0.034 means the product is worse than predicting the city's average estimated revenue.
+
+### The grade
+
+The grade is a rule, not a model. Inside each city, predicted annual revenue is compared with the training listings' estimated revenue (advertised rate times review-based nights). The cuts were fixed from those training rows. A value on a boundary takes the higher grade.
+
+| Grade | Words | Rule |
+| --- | --- | --- |
+| A | Strong | at or above the 80th percentile |
+| B | Above average | at or above the 60th, below the 80th |
+| C | Typical | at or above the 40th, below the 60th |
+| D | Below average | at or above the 20th, below the 40th |
+| F | Weak | below the 20th percentile |
+
+| City | 20th | 40th | 60th | 80th |
+| --- | ---: | ---: | ---: | ---: |
+| Austin | $3,240 | $7,560 | $14,400 | $25,182 |
+| San Diego | $7,252.80 | $15,590.60 | $26,346 | $43,024.80 |
+| Seattle | $6,402 | $13,020 | $19,929 | $29,104.20 |
+
+On the holdout, the letter matched the grade of the review-based revenue 30.6% of the time in Austin, 30.5% in San Diego, and 25.0% in Seattle. Five letters, so a random letter is right about a fifth of the time. Thirty percent is not a rating. The app still shows the letter, next to the error, because a rank is readable. It is a rank of a noisy gross. It does not know the purchase price, the mortgage, taxes, insurance, cleaning, platform fees, or whether a short-term rental is legal at the address. If a purchase price is typed in, the app divides predicted revenue by that price and calls the result a rough gross yield. That is the division and nothing else.
+
+### What this does not support
+
+No resume line that says the model predicts how many nights a home will book is justified. The held-out R² is 0.073, 0.098, and 0.078, and the pre-set bar was missed in every city. No line that says the grade measures how good a rental the home would be is justified either. The letter is a within-city rank of a gross that, in San Diego, does not track the target.
+
+The price result is a separate study and is not re-opened here.
+
 ## How to reproduce
 
 From the repository root, with the pinned `requirements.txt`:
@@ -256,10 +367,11 @@ From the repository root, with the pinned `requirements.txt`:
 ```bash
 pip install -r requirements.txt
 python -m evaluation.run_eval
+python -m evaluation.run_occupancy
 pytest
 ```
 
-The evaluation refits the development splits, writes the report, and scores seed 23 once. It then scores seed 7 and seed 11 once, as secondary comparisons. It does not reopen v3's feature search. v3's published metrics stay in `reports/v3_metrics.json`.
+The price evaluation refits the development splits, writes the report, and scores seed 23 once. It then scores seed 7 and seed 11 once, as secondary comparisons. It does not reopen v3's feature search. v3's published metrics stay in `reports/v3_metrics.json`. The nights command writes `reports/occupancy_metrics.json` and scores seed 31 once. It does not replace the price artifacts.
 
 The local app, after that:
 
