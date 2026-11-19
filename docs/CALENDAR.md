@@ -27,7 +27,21 @@ The client requests the public availability calendar for one listing, waits 2 se
 
 A 401, a 403, an HTML page, or a challenge marker stops the live run. The client logs the status and the reason. It does not change identity and try again. Listings that return 404 are recorded as missing and the run continues. If the live endpoint produces no rows, the job falls back to Inside Airbnb's published calendar file for the same ids. Inside Airbnb's public index, checked while this was written, listed one calendar date per city. One file cannot show a night change from available to unavailable. The fallback stores that file so a later published date can be diffed. It does not invent bookings from it.
 
+A city that already has a complete full-panel file for that UTC date is left as it is. A later manual run with a listing cap does not replace that file. The scheduled job copies the `calendar-data` files into its work directory first, so the second run of a day does not ask again.
+
 The public calendar often returns a null price on both open and closed nights. The column is still stored. The rules below do not read it.
+
+## First collection
+
+On 2026-11-19 the collector asked all 300 ids in each city from the machine that prepared this change. GitHub Actions has not run the workflow. The schedule starts from the default branch after the workflow file is merged, so a hosted-runner result is still open. The public endpoint answered on that machine and the run was not challenged.
+
+| City | Returned a calendar | Empty calendar | Failed |
+| --- | --- | --- | --- |
+| Austin | 80 | 220 | 0 |
+| San Diego | 93 | 207 | 0 |
+| Seattle | 92 | 208 | 0 |
+
+Each returned calendar had 365 nights, from 2026-11-01 through 2027-10-31, and a blank price on every night. The run started at 16:00 UTC and finished at 16:40 UTC. Those files are the first commit on `calendar-data`. The empty calendars are expected from listing files dated March and June 2025. The sample was not redrawn to raise the hit rate.
 
 ## Where the rules come from
 

@@ -270,6 +270,10 @@ def _pause(delay: float, jitter: float, rng: random.Random, sleep: Sleep) -> Non
         sleep(wait)
 
 
+def _log(message: str) -> None:
+    print(message, flush=True)
+
+
 def snapshot_rows(listing_id: str, days: list[dict], fetched_at: str) -> list[dict]:
     rows = []
     for day in days:
@@ -332,6 +336,7 @@ def collect_public_city(
     fetch: Fetch,
     sleep: Sleep,
     max_retries: int = MAX_RETRIES,
+    max_listings: int | None = None,
 ) -> tuple[CityResult, list[dict], Decision | None]:
     """Fetch one city. A challenge or a dead endpoint stops the city immediately."""
     day = now.astimezone(UTC).date().isoformat()
@@ -342,7 +347,13 @@ def collect_public_city(
 
     if meta_path.exists():
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        if meta.get("complete") and final_path.exists():
+        stored_cap = meta.get("max_listings")
+        # A missing cap is the full panel. A smaller manual cap must not replace it.
+        full_on_disk = stored_cap is None
+        capped_covers_request = (
+            stored_cap is not None and max_listings is not None and int(stored_cap) >= max_listings
+        )
+        if meta.get("complete") and final_path.exists() and (full_on_disk or capped_covers_request):
             result.complete = True
             result.succeeded = int(meta.get("succeeded", 0))
             result.missing = int(meta.get("missing", 0))
@@ -379,31 +390,31 @@ def collect_public_city(
             _append_partial(partial_path, new_rows)
             rows.extend(new_rows)
             done.add(listing_id)
-            print(
+            _log(
                 f"{city} {len(done)}/{len(listing_ids)} ok {listing_id} {len(decision.days)} nights"
             )
             continue
         if decision.kind == "missing":
             transport_failures = 0
             missing.append(listing_id)
-            print(f"{city} missing {listing_id}: {decision.reason}")
+            _log(f"{city} missing {listing_id}: {decision.reason}")
             continue
         if decision.kind in {"challenge", "unusable"}:
             stop = decision
-            print(f"{city} stopped on {decision.kind}: {decision.reason}")
+            _log(f"{city} stopped on {decision.kind}: {decision.reason}")
             break
         if decision.kind == "retry":
             transport_failures += 1
             failed.append(listing_id)
-            print(f"{city} transport failure {listing_id}: {decision.reason}")
+            _log(f"{city} transport failure {listing_id}: {decision.reason}")
             # Three listings in a row never answered. Stop rather than hammer a dead route.
             if transport_failures >= 3:
                 stop = decision
-                print(f"{city} stopped after {transport_failures} unanswered listings")
+                _log(f"{city} stopped after {transport_failures} unanswered listings")
                 break
             continue
         failed.append(listing_id)
-        print(f"{city} failed {listing_id}: {decision.reason}")
+        _log(f"{city} failed {listing_id}: {decision.reason}")
 
     result.succeeded = len(done)
     result.missing = len(missing)
@@ -419,6 +430,7 @@ def collect_public_city(
         result.path = str(final_path)
     meta = result.as_dict()
     meta["date"] = day
+    meta["max_listings"] = max_listings
     meta_path.parent.mkdir(parents=True, exist_ok=True)
     meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     if result.complete and partial_path.exists():
@@ -593,7 +605,7 @@ def collect_inside_airbnb(
             result.rows += len(rows)
             result.path = str(dest)
             written += 1
-            print(f"{city} inside airbnb {snap_date}: {len(present)} listings, {len(rows)} rows")
+            _log(f"{city} inside airbnb {snap_date}: {len(present)} listings, {len(rows)} rows")
         result.complete = written > 0
         results.append(result)
     return results
@@ -640,7 +652,7 @@ def _fallback(
             rng=rng,
         )
     except (requests.RequestException, OSError) as exc:
-        print(f"Inside Airbnb fallback failed: {type(exc).__name__}: {exc}")
+        _log(f"Inside Airbnb fallback failed: {type(exc).__name__}: {exc}")
         return [
             CityResult(
                 city=city,
@@ -669,6 +681,7 @@ def collect(
     download: Callable[[str, Path], None] | None = None,
     live: bool = True,
     max_retries: int = MAX_RETRIES,
+    max_listings: int | None = None,
 ) -> dict:
     """Collect the panel. Fall back only when the live endpoint produced nothing."""
     now = now or datetime.now(UTC)
@@ -719,6 +732,7 @@ def collect(
                     fetch=fetch,
                     sleep=sleep,
                     max_retries=max_retries,
+                    max_listings=max_listings,
                 )
                 city_results.append(result)
                 live_rows += result.rows
@@ -731,11 +745,9 @@ def collect(
     if not live or (live_rows == 0 and blocked):
         mode = "inside_airbnb"
         if live:
-            print(
-                "Public calendar endpoint unusable. Falling back to Inside Airbnb calendar files."
-            )
+            _log("Public calendar endpoint unusable. Falling back to Inside Airbnb calendar files.")
         else:
-            print("Fallback only. Not calling the public calendar endpoint.")
+            _log("Fallback only. Not calling the public calendar endpoint.")
         city_results = _fallback(
             listing_ids_by_city,
             out_dir,
@@ -766,7 +778,7 @@ def collect(
     report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     report["report_path"] = str(report_path)
     for city, body in report["cities"].items():
-        print(
+        _log(
             f"{city}: mode={body['mode']} succeeded={body['succeeded']}/{body['attempted']} "
             f"missing={body['missing']} failed={body['failed']} blocked={body['blocked']}"
         )
@@ -823,7 +835,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         document = write_sample(args.sample)
         for city, body in document["cities"].items():
-            print(
+            _log(
                 f"{city}: sampled {body['sampled']} of {body['source_rows']} across {body['strata']} strata"
             )
         return 0
@@ -840,8 +852,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         delay=args.delay,
         jitter=args.jitter,
         live=not args.fallback_only,
+        max_listings=args.max_listings,
     )
 
     wrote = any(body.get("rows", 0) or body.get("complete") for body in report["cities"].values())
-    print(f"REPORT {report['report_path']}")
+    _log(f"REPORT {report['report_path']}")
     return 0 if wrote else 2

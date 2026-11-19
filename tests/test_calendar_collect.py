@@ -138,6 +138,75 @@ def test_cities_are_separated_by_the_same_pause(tmp_path: Path):
     assert sleeps == [2.0, 2.0]
 
 
+def test_a_finished_full_panel_is_not_refetched_or_shrunk(tmp_path: Path):
+    calls: list[str] = []
+
+    def fetch(listing_id: str, _when: datetime) -> Decision:
+        calls.append(listing_id)
+        return Decision(
+            "ok", "ok", [{"date": "2026-11-20", "available": 1, "min_nights": 1, "price": ""}]
+        )
+
+    collect(
+        {"austin": ["1", "2"]},
+        tmp_path,
+        now=NOW,
+        delay=0,
+        jitter=0,
+        fetch=fetch,
+        sleep=lambda _seconds: None,
+    )
+    saved = list(tmp_path.rglob("*.csv.gz"))
+    assert len(saved) == 1
+    first_bytes = saved[0].read_bytes()
+    again = collect(
+        {"austin": ["1"]},
+        tmp_path,
+        now=NOW,
+        delay=0,
+        jitter=0,
+        fetch=fetch,
+        sleep=lambda _seconds: None,
+        max_listings=1,
+    )
+    assert calls == ["1", "2"]
+    assert again["cities"]["austin"]["notes"] == ["already collected today"]
+    assert saved[0].read_bytes() == first_bytes
+
+
+def test_a_capped_day_does_not_block_the_full_panel(tmp_path: Path):
+    calls: list[str] = []
+
+    def fetch(listing_id: str, _when: datetime) -> Decision:
+        calls.append(listing_id)
+        return Decision(
+            "ok", "ok", [{"date": "2026-11-20", "available": 0, "min_nights": 1, "price": ""}]
+        )
+
+    collect(
+        {"austin": ["1"]},
+        tmp_path,
+        now=NOW,
+        delay=0,
+        jitter=0,
+        fetch=fetch,
+        sleep=lambda _seconds: None,
+        max_listings=1,
+    )
+    collect(
+        {"austin": ["1", "2"]},
+        tmp_path,
+        now=NOW,
+        delay=0,
+        jitter=0,
+        fetch=fetch,
+        sleep=lambda _seconds: None,
+    )
+    assert calls == ["1", "1", "2"]
+    saved = load_snapshot_files(tmp_path.rglob("*.csv.gz"))
+    assert set(saved["listing_id"]) == {"1", "2"}
+
+
 def test_retries_back_off_and_a_dead_endpoint_falls_back(tmp_path: Path):
     sleeps: list[float] = []
 

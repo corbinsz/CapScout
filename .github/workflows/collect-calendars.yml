@@ -4,6 +4,9 @@ name: Collect calendars
 # panel. The schedule runs from the default branch after this file is merged.
 # workflow_dispatch runs it by hand. Snapshots are committed to calendar-data
 # so main stays free of the daily files.
+#
+# A pull request runs a one-listing smoke and does not commit. That is the
+# check that a GitHub-hosted runner can read the public calendar.
 on:
   schedule:
     - cron: "17 13 * * *"
@@ -13,18 +16,21 @@ on:
         description: "Cap listings per city. Leave empty for the full fixed panel."
         required: false
         default: ""
+  pull_request:
+    paths:
+      - ".github/workflows/collect-calendars.yml"
+      - "scripts/collect_calendars.py"
+      - "data/calendar_collect.py"
+      - "data/calendar_sample.json"
 
 permissions:
   contents: write
 
-concurrency:
-  group: calendar-data
-  cancel-in-progress: false
-
 jobs:
-  collect:
+  smoke:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 20
     steps:
       - name: Checkout collector
         uses: actions/checkout@v4
@@ -35,6 +41,42 @@ jobs:
 
       - name: Install
         run: pip install pandas==3.1.1 numpy==2.5.5 requests==2.34.2
+
+      - name: Fetch one listing per city
+        run: |
+          set -euo pipefail
+          PYTHONPATH=. python scripts/collect_calendars.py \
+            --out-dir "${RUNNER_TEMP}/calendars" \
+            --max-listings 1 \
+            --delay 2 \
+            --jitter 0
+
+  collect:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    concurrency:
+      group: calendar-data
+      cancel-in-progress: false
+    steps:
+      - name: Checkout collector
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install pandas==3.1.1 numpy==2.5.5 requests==2.34.2
+
+      - name: Seed snapshots already on calendar-data
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/calendars"
+          if git ls-remote --exit-code --heads origin calendar-data >/dev/null 2>&1; then
+            git fetch --depth=1 origin calendar-data
+            git archive FETCH_HEAD calendars | tar -x -C "${RUNNER_TEMP}"
+          fi
 
       - name: Collect
         id: collect
@@ -47,7 +89,9 @@ jobs:
           if [ -n "${MAX_LISTINGS}" ]; then
             args+=(--max-listings "${MAX_LISTINGS}")
           fi
-          PYTHONPATH=. python scripts/collect_calendars.py --out-dir "${RUNNER_TEMP}/calendars" "${args[@]}"
+          PYTHONPATH=. python scripts/collect_calendars.py \
+            --out-dir "${RUNNER_TEMP}/calendars" \
+            "${args[@]}"
 
       - name: Upload the run
         if: always()
