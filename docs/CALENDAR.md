@@ -106,7 +106,7 @@ A night that is already unavailable on day one is censored. A night that is firs
 
 After that, offered nights show up about one per day. For a rate near 30%, the listing's own standard error is near 5 points once there are about 80 offered nights: 0.3 × 0.7 / 0.05² = 84. Twelve weeks supplies that many, if the calendar was mostly open when we first saw it. 13 + 12 = 25. The extra week makes 26, a half year, so the window is not only one holiday peak.
 
-At 26 weeks, fit a model of this observed booked-night rate. Do not multiply it by 52/26 and call it a year. Score it once, on a fresh spatial holdout: a new seed, not seed 31 and not the price-study seeds, with the held-out cells written down before the fit. The comparison is this label against a neighbourhood median on that holdout. The old R² near 0.08 is about the review proxy and is not the bar for the new label. An annual night count, comparable to the review proxy's "nights per year," waits until 52 weeks of the panel exist.
+At 26 weeks, fit a model of this observed booked-night rate. Do not multiply it by 52/26 and call it a year. Score it once, on a fresh spatial holdout: a new seed, not seed 17 and not seed 31, with the held-out cells written down before the fit. Seed 17 is the rate study's primary holdout, and it is also the number used to draw this panel. The panel draw is not that holdout. The comparison is this label against a neighbourhood median on that holdout. The old R² near 0.08 is about the review proxy and is not the bar for the new label. An annual night count, comparable to the review proxy's "nights per year," waits until 52 weeks of the panel exist.
 
 ```bash
 python scripts/collect_calendars.py --out-dir calendars

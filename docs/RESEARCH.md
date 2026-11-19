@@ -1,3 +1,5 @@
+> Background from an earlier round. The current measurement is in [reports/FINDINGS.md](../reports/FINDINGS.md).
+
 # What this round read, and what it did with it
 
 CapScout predicts an Airbnb listing's advertised nightly rate in Austin, San Diego, and Seattle. This note is the reading behind the round that froze a third holdout and tested more data, the high-price tail, text embeddings, and a price-band interval. It is a personal project. The citations are the public papers and data notes I actually used. The measurement is in [reports/FINDINGS.md](../reports/FINDINGS.md).

@@ -1,13 +1,19 @@
 """Download Inside Airbnb listing snapshots.
 
-Inside Airbnb publishes these files under CC BY 4.0. Refreshing a city
+Inside Airbnb publishes these files under CC BY 4.0. The gzip files are
+gitignored. A fresh checkout does not contain them. Refreshing a city
 rewrites data/raw/cities/<city>/listings.csv.gz. Calendar and review dumps
 are intentionally not downloaded: the calendar does not separate a booked
 night from a host-blocked night, and listing-level review totals are already
 on the listings file.
 
+The scored study uses Austin 2025-09-16, San Diego 2025-03-16, and Seattle
+2025-03-16. Those dates live in data/cities.py. The Austin file dated
+2025-06-13 on Inside Airbnb is a different scrape and will not match the
+frozen ids.
+
 Usage (from the repo root):
-    python -m data.download austin
+    python -m data.download austin san-diego seattle
     python -m data.download
 """
 

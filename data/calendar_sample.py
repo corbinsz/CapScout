@@ -20,8 +20,8 @@ import pandas as pd
 
 from data.cities import STUDY_CITIES
 
-# Not a modeling seed. The price study used 0–4, 7, 11, 23, and 42.
-# The nights study used 31. This draw is only a panel, not a holdout.
+# The rate study's primary holdout is also seed 17. This draw is a panel of
+# listings, not that holdout. A later occupancy retest needs a new seed.
 SAMPLE_SEED = 17
 TARGET_CALENDARS = 300
 # A larger ask than this does not fit a two-hour city job at the 2 second delay.

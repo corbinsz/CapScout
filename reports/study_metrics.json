@@ -1,0 +1,2732 @@
+{
+  "study": "simple-spatial",
+  "primary_seed": 17,
+  "confirm_seeds": [
+    19,
+    29,
+    37
+  ],
+  "cell_km": 3.0,
+  "holdout_fraction": 0.2,
+  "buffer_km": 1.0,
+  "max_km_from_center": 60.0,
+  "bootstrap_draws": 1000,
+  "bootstrap_seed": 17,
+  "price_features": [
+    "bedrooms",
+    "bathrooms",
+    "accommodates",
+    "beds",
+    "bath_is_shared",
+    "is_private_room",
+    "is_shared_room",
+    "is_hotel_room",
+    "is_house",
+    "is_condo",
+    "latitude",
+    "longitude",
+    "distance_to_center_km",
+    "distance_to_airport_km",
+    "amenity_count",
+    "has_ac",
+    "has_parking",
+    "has_washer",
+    "has_kitchen",
+    "has_pool",
+    "has_hottub",
+    "has_waterfront",
+    "review_score",
+    "log_reviews",
+    "is_superhost"
+  ],
+  "price_feature_name": "home_amenities_reviews",
+  "price_feature_cv": {
+    "mean": {
+      "home": 60.03395475092854,
+      "home_and_amenities": 58.24208826966537,
+      "home_amenities_reviews": 55.4259722152952,
+      "home_amenities_reviews_census": 54.887883801360864
+    },
+    "by_city": {
+      "austin": {
+        "home": 58.48221101464261,
+        "home_and_amenities": 56.65641617670669,
+        "home_amenities_reviews": 53.332070534030755,
+        "home_amenities_reviews_census": 52.57564636188865
+      },
+      "san-diego": {
+        "home": 78.00516896359782,
+        "home_and_amenities": 75.45386794216648,
+        "home_amenities_reviews": 72.49678676022657,
+        "home_amenities_reviews_census": 71.89824726316976
+      },
+      "seattle": {
+        "home": 43.614484274545205,
+        "home_and_amenities": 42.61598069012295,
+        "home_amenities_reviews": 40.44905935162827,
+        "home_amenities_reviews_census": 40.18975777902419
+      }
+    }
+  },
+  "price_dropped_sparse": [],
+  "nights_features": [
+    "bedrooms",
+    "bathrooms",
+    "accommodates",
+    "beds",
+    "bath_is_shared",
+    "is_private_room",
+    "is_shared_room",
+    "is_hotel_room",
+    "is_house",
+    "is_condo",
+    "latitude",
+    "longitude",
+    "distance_to_center_km",
+    "distance_to_airport_km",
+    "amenity_count",
+    "has_ac",
+    "has_parking",
+    "has_washer",
+    "has_kitchen",
+    "has_pool",
+    "has_hottub",
+    "has_waterfront"
+  ],
+  "nights_feature_name": "home_and_amenities",
+  "nights_feature_cv": {
+    "mean": {
+      "home": 74.56719809940275,
+      "home_and_amenities": 71.83689135089902,
+      "home_amenities_census": 71.57469883569699
+    },
+    "by_city": {
+      "austin": {
+        "home": 71.19190259996643,
+        "home_and_amenities": 68.62076200845557,
+        "home_amenities_census": 68.22484732802096
+      },
+      "san-diego": {
+        "home": 73.20660850181602,
+        "home_and_amenities": 70.77404435529459,
+        "home_amenities_census": 71.08085656241352
+      },
+      "seattle": {
+        "home": 79.3030831964258,
+        "home_and_amenities": 76.11586768894695,
+        "home_amenities_census": 75.41839261665649
+      }
+    }
+  },
+  "nights_dropped_sparse": [],
+  "nights_target": "raw",
+  "nights_target_cv": {
+    "raw": 71.83689135089902,
+    "log": 73.75996751415357,
+    "by_city_raw": {
+      "austin": 68.62076200845557,
+      "san-diego": 70.77404435529459,
+      "seattle": 76.11586768894695
+    },
+    "by_city_log": {
+      "austin": 67.83978739615443,
+      "san-diego": 72.06977610067818,
+      "seattle": 81.37033904562811
+    }
+  },
+  "nights_target_sentence": "The nights models predict nights directly. On the training folds a log target averaged 73.76 nights of error against 71.84 for the direct target, which is not a 2% improvement, so the log target was not used.",
+  "price_mean_mae": {
+    "area_median": 84.58940326897446,
+    "linear": 55.47058825668663,
+    "ridge": 55.17669862345034,
+    "random_forest": 54.66755641573596,
+    "xgboost": 54.194133341441464,
+    "neural_net": 63.26400017724703,
+    "catboost": 54.807718964257965,
+    "blend": 53.69243915829187
+  },
+  "nights_mean_mae": {
+    "area_median": 73.77625866133833,
+    "linear": 69.26680926193046,
+    "ridge": 69.21271333079146,
+    "random_forest": 69.03540421451716,
+    "xgboost": 69.16630154790566,
+    "neural_net": 69.04009233411453
+  },
+  "simple_model": "ridge",
+  "shipped_model": "ridge",
+  "selection_reason": "The lowest average error was $54.19 a night, from XGBoost. Ridge regression was $55.18, inside the 2% band (up to $55.28), and it is the simplest model in that band.",
+  "challenger_reason": "CatBoost averaged $54.81 and the equal blend averaged $53.69. Neither beat Ridge regression's $55.18 by the pre-set 5% margin, which would have required $52.42 or less. CatBoost was fit once, at the depth and learning rate already chosen for XGBoost, not on its own search. Neither CatBoost nor the blend is in the app.",
+  "catboost_shipped": false,
+  "blend_shipped": false,
+  "nights_shipped_model": "linear",
+  "nights_selection_reason": "The lowest average error was 69.0 nights, from Random forest. Linear regression was 69.3 nights, inside the 2% band (up to 70.4 nights), and it is the simplest model in that band.",
+  "nights_cleared_bar": false,
+  "nights_rough_estimate": true,
+  "nights_reason": "The nights model did not clear the pre-set bar in every city. The bar was an average miss at least 10% lower than the area-typical nights, and an R\u00b2 of at least 0.10. The app labels nights as a rough estimate.",
+  "audit_passed": true,
+  "cities": {
+    "austin": {
+      "display": "Austin, TX",
+      "n_raw": 10533,
+      "n_clean": 7720,
+      "n_train": 3281,
+      "n_test": 2101,
+      "removed_host": 1118,
+      "removed_buffer": 1220,
+      "audit": {
+        "shared_cells": 0,
+        "shared_hosts": 0,
+        "training_rows_inside_buffer": 0,
+        "min_train_test_km": 1.0000137579654547,
+        "passed": true
+      },
+      "n_folds": 5,
+      "price": {
+        "n_test_cells": 31,
+        "n_train_cells": 116,
+        "holdout": {
+          "area_median": {
+            "r2": -0.11243736662504467,
+            "mae": 112.75178486435031,
+            "rmse": 212.03753523694206,
+            "mape": 48.22429837097123,
+            "median_ape": 40.090090090090094,
+            "n": 2101
+          },
+          "linear": {
+            "r2": 0.4570695945186728,
+            "mae": 73.25874664268154,
+            "rmse": 148.13137191583814,
+            "mape": 32.65701113181434,
+            "median_ape": 26.27921764852142,
+            "n": 2101
+          },
+          "ridge": {
+            "r2": 0.5113074583401069,
+            "mae": 72.13143803069575,
+            "rmse": 140.53769251064188,
+            "mape": 32.30564698914859,
+            "median_ape": 25.91220897183546,
+            "n": 2101
+          },
+          "random_forest": {
+            "r2": 0.5911393851243021,
+            "mae": 72.09449062954239,
+            "rmse": 128.54719422289307,
+            "mape": 35.72487315575757,
+            "median_ape": 27.706695557993605,
+            "n": 2101
+          },
+          "xgboost": {
+            "r2": 0.6240845837534148,
+            "mae": 71.81043198938434,
+            "rmse": 123.25939488365388,
+            "mape": 35.647611475954086,
+            "median_ape": 26.643814240253068,
+            "n": 2101
+          },
+          "neural_net": {
+            "r2": 0.04357680190875379,
+            "mae": 84.84765507148681,
+            "rmse": 196.60746963618945,
+            "mape": 38.7564368421558,
+            "median_ape": 27.924599291181806,
+            "n": 2101
+          },
+          "catboost": {
+            "r2": 0.5904061691971767,
+            "mae": 74.63587455217558,
+            "rmse": 128.66240540776292,
+            "mape": 39.113640809667054,
+            "median_ape": 27.103233120315156,
+            "n": 2101
+          },
+          "blend": {
+            "r2": 0.631446657690071,
+            "mae": 71.34774553926316,
+            "rmse": 122.04644680656128,
+            "mape": 36.64998939413706,
+            "median_ape": 26.635865417184807,
+            "n": 2101
+          }
+        },
+        "cv_mae": {
+          "area_median": 81.24494839811413,
+          "linear": 54.84059831650925,
+          "ridge": 55.13594387531575,
+          "random_forest": 55.13666740415478,
+          "xgboost": 53.20701770327171
+        },
+        "params": {
+          "ridge": {
+            "alpha": 100.0
+          },
+          "random_forest": {
+            "max_depth": 8,
+            "min_samples_leaf": 5
+          },
+          "xgboost": {
+            "max_depth": 4,
+            "min_child_weight": 20.0
+          }
+        },
+        "trials": {
+          "ridge": [
+            {
+              "mae": 55.13594387531575,
+              "simplicity": [
+                -100.0
+              ],
+              "params": {
+                "alpha": 100.0
+              }
+            },
+            {
+              "mae": 54.8745938582368,
+              "simplicity": [
+                -10.0
+              ],
+              "params": {
+                "alpha": 10.0
+              }
+            },
+            {
+              "mae": 54.843831906487104,
+              "simplicity": [
+                -1.0
+              ],
+              "params": {
+                "alpha": 1.0
+              }
+            },
+            {
+              "mae": 54.84092566698555,
+              "simplicity": [
+                -0.1
+              ],
+              "params": {
+                "alpha": 0.1
+              }
+            }
+          ],
+          "random_forest": [
+            {
+              "mae": 57.06411771297517,
+              "simplicity": [
+                8,
+                -20
+              ],
+              "params": {
+                "max_depth": 8,
+                "min_samples_leaf": 20
+              }
+            },
+            {
+              "mae": 55.13666740415478,
+              "simplicity": [
+                8,
+                -5
+              ],
+              "params": {
+                "max_depth": 8,
+                "min_samples_leaf": 5
+              }
+            },
+            {
+              "mae": 56.943253567281445,
+              "simplicity": [
+                16,
+                -20
+              ],
+              "params": {
+                "max_depth": 16,
+                "min_samples_leaf": 20
+              }
+            },
+            {
+              "mae": 54.76639381505432,
+              "simplicity": [
+                16,
+                -5
+              ],
+              "params": {
+                "max_depth": 16,
+                "min_samples_leaf": 5
+              }
+            }
+          ],
+          "xgboost": [
+            {
+              "mae": 53.20701770327171,
+              "simplicity": [
+                4,
+                -20.0
+              ],
+              "params": {
+                "max_depth": 4,
+                "min_child_weight": 20.0
+              }
+            },
+            {
+              "mae": 53.064485111409525,
+              "simplicity": [
+                4,
+                -5.0
+              ],
+              "params": {
+                "max_depth": 4,
+                "min_child_weight": 5.0
+              }
+            },
+            {
+              "mae": 53.36115859619298,
+              "simplicity": [
+                6,
+                -20.0
+              ],
+              "params": {
+                "max_depth": 6,
+                "min_child_weight": 20.0
+              }
+            },
+            {
+              "mae": 54.09872281582286,
+              "simplicity": [
+                6,
+                -5.0
+              ],
+              "params": {
+                "max_depth": 6,
+                "min_child_weight": 5.0
+              }
+            }
+          ]
+        },
+        "bootstrap": {
+          "r2": {
+            "point": 0.5113074583401069,
+            "low": 0.4492459677191323,
+            "high": 0.664690908515312
+          },
+          "mae": {
+            "point": 72.13143803069575,
+            "low": 56.378856863443616,
+            "high": 85.13150942152033
+          },
+          "median_ape": {
+            "point": 25.91220897183546,
+            "low": 22.72217859438197,
+            "high": 28.071838777705487
+          },
+          "baseline_mae": {
+            "point": 112.75178486435031,
+            "low": 92.963315776839,
+            "high": 147.40621253625523
+          },
+          "error_removed": {
+            "point": 0.36026344844584224,
+            "low": 0.3169389676402859,
+            "high": 0.4618185935589156
+          }
+        },
+        "interval": {
+          "coverage": 0.7900999524036173,
+          "median_width": 155.34936054558776,
+          "mean_width": 214.52972951893562,
+          "n": 2101
+        },
+        "importance": [
+          {
+            "feature": "bathrooms",
+            "mean_abs_dollars": 51.51998595549947,
+            "mean_dollars": 51.4638151994068
+          },
+          {
+            "feature": "distance_to_center_km",
+            "mean_abs_dollars": 51.19727762181863,
+            "mean_dollars": -9.378849045405296
+          },
+          {
+            "feature": "bedrooms",
+            "mean_abs_dollars": 46.056971063441395,
+            "mean_dollars": 34.518181346353174
+          },
+          {
+            "feature": "accommodates",
+            "mean_abs_dollars": 38.915585030823706,
+            "mean_dollars": 34.970363114660266
+          },
+          {
+            "feature": "distance_to_airport_km",
+            "mean_abs_dollars": 22.06469064767777,
+            "mean_dollars": 2.216984223248312
+          },
+          {
+            "feature": "has_pool",
+            "mean_abs_dollars": 13.061423410587645,
+            "mean_dollars": 13.061423410587645
+          },
+          {
+            "feature": "longitude",
+            "mean_abs_dollars": 11.818645304230136,
+            "mean_dollars": 5.8092155680498685
+          },
+          {
+            "feature": "is_condo",
+            "mean_abs_dollars": 10.559722384678794,
+            "mean_dollars": -10.559722384678794
+          },
+          {
+            "feature": "log_reviews",
+            "mean_abs_dollars": 9.188425600765859,
+            "mean_dollars": -1.5398960934021297
+          },
+          {
+            "feature": "has_hottub",
+            "mean_abs_dollars": 8.855807850093134,
+            "mean_dollars": 8.855807850093134
+          },
+          {
+            "feature": "has_waterfront",
+            "mean_abs_dollars": 6.483403174343855,
+            "mean_dollars": 6.483403174343855
+          },
+          {
+            "feature": "review_score",
+            "mean_abs_dollars": 4.860835618835551,
+            "mean_dollars": -2.0405580674133206
+          },
+          {
+            "feature": "is_house",
+            "mean_abs_dollars": 2.5049695298022825,
+            "mean_dollars": 2.5049695298022825
+          },
+          {
+            "feature": "latitude",
+            "mean_abs_dollars": 2.3851517155294744,
+            "mean_dollars": -0.14563072247433886
+          },
+          {
+            "feature": "is_private_room",
+            "mean_abs_dollars": 1.9233510851834559,
+            "mean_dollars": -1.9233510851834559
+          },
+          {
+            "feature": "beds",
+            "mean_abs_dollars": 1.8563945741797523,
+            "mean_dollars": -1.7214871370491351
+          },
+          {
+            "feature": "is_superhost",
+            "mean_abs_dollars": 1.0437955007946744,
+            "mean_dollars": 1.0437955007946744
+          },
+          {
+            "feature": "amenity_count",
+            "mean_abs_dollars": 0.978585527918826,
+            "mean_dollars": 0.5296988679165693
+          },
+          {
+            "feature": "bath_is_shared",
+            "mean_abs_dollars": 0.5267763767556156,
+            "mean_dollars": -0.5267763767556156
+          },
+          {
+            "feature": "has_washer",
+            "mean_abs_dollars": 0.42125525609605896,
+            "mean_dollars": 0.42125525609605896
+          },
+          {
+            "feature": "has_parking",
+            "mean_abs_dollars": 0.25560044936670023,
+            "mean_dollars": 0.25560044936670023
+          },
+          {
+            "feature": "has_ac",
+            "mean_abs_dollars": 0.18402894104684847,
+            "mean_dollars": -0.18402894104684847
+          },
+          {
+            "feature": "has_kitchen",
+            "mean_abs_dollars": 0.12447569113998803,
+            "mean_dollars": 0.12447569113998803
+          },
+          {
+            "feature": "is_shared_room",
+            "mean_abs_dollars": 0.0,
+            "mean_dollars": 0.0
+          },
+          {
+            "feature": "is_hotel_room",
+            "mean_abs_dollars": 0.0,
+            "mean_dollars": 0.0
+          }
+        ],
+        "directions": [
+          {
+            "feature": "bedrooms",
+            "low": 1.0,
+            "high": 3.0,
+            "delta": 28.470812376094628
+          },
+          {
+            "feature": "bathrooms",
+            "low": 1.0,
+            "high": 2.0,
+            "delta": 21.639501038984136
+          },
+          {
+            "feature": "accommodates",
+            "low": 2.0,
+            "high": 6.0,
+            "delta": 18.076984570458578
+          },
+          {
+            "feature": "beds",
+            "low": 1.0,
+            "high": 3.0,
+            "delta": -0.6211014077874637
+          },
+          {
+            "feature": "bath_is_shared",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -27.190862784035744
+          },
+          {
+            "feature": "is_private_room",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -41.30328117521488
+          },
+          {
+            "feature": "is_shared_room",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -56.42862374390199
+          },
+          {
+            "feature": "is_hotel_room",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 17.16260804667128
+          },
+          {
+            "feature": "is_house",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -10.105814678113816
+          },
+          {
+            "feature": "is_condo",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -31.836742524477145
+          },
+          {
+            "feature": "latitude",
+            "low": 30.232677570733657,
+            "high": 30.33559839883013,
+            "delta": -3.1976699539908253
+          },
+          {
+            "feature": "longitude",
+            "low": -97.77428,
+            "high": -97.71125,
+            "delta": -8.457651930072402
+          },
+          {
+            "feature": "distance_to_center_km",
+            "low": 4.566971436044478,
+            "high": 12.927296096214096,
+            "delta": -31.266238185962976
+          },
+          {
+            "feature": "distance_to_airport_km",
+            "low": 11.338167113916722,
+            "high": 18.28479001015167,
+            "delta": 14.069397455961152
+          },
+          {
+            "feature": "amenity_count",
+            "low": 36.0,
+            "high": 56.0,
+            "delta": 0.7928831807957266
+          },
+          {
+            "feature": "has_ac",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 0.9457861471058777
+          },
+          {
+            "feature": "has_parking",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -9.303380220208211
+          },
+          {
+            "feature": "has_washer",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -4.92029571756197
+          },
+          {
+            "feature": "has_kitchen",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -3.3889256404821566
+          },
+          {
+            "feature": "has_pool",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 18.84412133985937
+          },
+          {
+            "feature": "has_hottub",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 25.982687230808395
+          },
+          {
+            "feature": "has_waterfront",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 36.006958026492484
+          },
+          {
+            "feature": "review_score",
+            "low": 4.83,
+            "high": 5.0,
+            "delta": 5.372293700965528
+          },
+          {
+            "feature": "log_reviews",
+            "low": 2.1972245773362196,
+            "high": 4.31748811353631,
+            "delta": -9.93652152068556
+          },
+          {
+            "feature": "is_superhost",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -2.312701572141094
+          }
+        ],
+        "confirmation": {
+          "seeds": [
+            19,
+            29,
+            37
+          ],
+          "r2": [
+            0.45495166207966253,
+            0.3958025115774423,
+            0.5736610531802484
+          ],
+          "mae": [
+            54.40943942434859,
+            64.00718678786731,
+            49.59947384014997
+          ],
+          "median_ape": [
+            23.72013223402223,
+            25.174832091149863,
+            23.71332839143249
+          ],
+          "primary_r2": 0.5113074583401069,
+          "primary_mae": 72.13143803069575,
+          "r2_min": 0.3958025115774423,
+          "r2_max": 0.5736610531802484,
+          "r2_spread": 0.17785854160280612,
+          "mae_min": 49.59947384014997,
+          "mae_max": 64.00718678786731,
+          "mae_spread": 14.407712947717343
+        }
+      },
+      "nights": {
+        "holdout": {
+          "area_median": {
+            "r2": -0.19132862839002418,
+            "mae": 72.04640647310805,
+            "rmse": 90.17808020496246,
+            "mape": 159.22517459351624,
+            "median_ape": 60.078277886497055,
+            "n": 2101
+          },
+          "linear": {
+            "r2": 0.013957651261522597,
+            "mae": 68.89277135710206,
+            "rmse": 82.04138436083497,
+            "mape": 185.64568959333727,
+            "median_ape": 54.248481111559286,
+            "n": 2101
+          },
+          "ridge": {
+            "r2": 0.024444023479179622,
+            "mae": 68.57604504263007,
+            "rmse": 81.60397106703384,
+            "mape": 185.5607696532841,
+            "median_ape": 53.919715783788725,
+            "n": 2101
+          },
+          "random_forest": {
+            "r2": 0.05130535597057628,
+            "mae": 67.91433275035628,
+            "rmse": 80.47267178183546,
+            "mape": 188.50930725882282,
+            "median_ape": 52.564859390736885,
+            "n": 2101
+          },
+          "xgboost": {
+            "r2": 0.015444351259626177,
+            "mae": 68.96994780813269,
+            "rmse": 81.97951230428876,
+            "mape": 190.6487035961939,
+            "median_ape": 53.08200412326389,
+            "n": 2101
+          },
+          "neural_net": {
+            "r2": 0.0004436542858318182,
+            "mae": 68.69468979770825,
+            "rmse": 82.60167167731865,
+            "mape": 182.61915488917236,
+            "median_ape": 54.080397483197004,
+            "n": 2101
+          }
+        },
+        "cv_mae": {
+          "area_median": 71.21892169692244,
+          "linear": 67.99783087059363,
+          "ridge": 68.01388314970643,
+          "random_forest": 68.10458606011552,
+          "xgboost": 68.486988121562
+        },
+        "params": {
+          "ridge": {
+            "alpha": 100.0
+          },
+          "random_forest": {
+            "max_depth": 8,
+            "min_samples_leaf": 20
+          },
+          "xgboost": {
+            "max_depth": 4,
+            "min_child_weight": 20.0
+          }
+        },
+        "trials": {
+          "ridge": [
+            {
+              "mae": 68.01388314970643,
+              "simplicity": [
+                -100.0
+              ],
+              "params": {
+                "alpha": 100.0
+              }
+            },
+            {
+              "mae": 67.97569509516258,
+              "simplicity": [
+                -10.0
+              ],
+              "params": {
+                "alpha": 10.0
+              }
+            },
+            {
+              "mae": 67.99452975074776,
+              "simplicity": [
+                -1.0
+              ],
+              "params": {
+                "alpha": 1.0
+              }
+            },
+            {
+              "mae": 67.99748715220332,
+              "simplicity": [
+                -0.1
+              ],
+              "params": {
+                "alpha": 0.1
+              }
+            }
+          ],
+          "random_forest": [
+            {
+              "mae": 68.10458606011552,
+              "simplicity": [
+                8,
+                -20
+              ],
+              "params": {
+                "max_depth": 8,
+                "min_samples_leaf": 20
+              }
+            },
+            {
+              "mae": 68.25242014622211,
+              "simplicity": [
+                8,
+                -5
+              ],
+              "params": {
+                "max_depth": 8,
+                "min_samples_leaf": 5
+              }
+            },
+            {
+              "mae": 68.14301006548787,
+              "simplicity": [
+                16,
+                -20
+              ],
+              "params": {
+                "max_depth": 16,
+                "min_samples_leaf": 20
+              }
+            },
+            {
+              "mae": 68.49215068734554,
+              "simplicity": [
+                16,
+                -5
+              ],
+              "params": {
+                "max_depth": 16,
+                "min_samples_leaf": 5
+              }
+            }
+          ],
+          "xgboost": [
+            {
+              "mae": 68.486988121562,
+              "simplicity": [
+                4,
+                -20.0
+              ],
+              "params": {
+                "max_depth": 4,
+                "min_child_weight": 20.0
+              }
+            },
+            {
+              "mae": 68.26449343921186,
+              "simplicity": [
+                4,
+                -5.0
+              ],
+              "params": {
+                "max_depth": 4,
+                "min_child_weight": 5.0
+              }
+            },
+            {
+              "mae": 69.74210032174786,
+              "simplicity": [
+                6,
+                -20.0
+              ],
+              "params": {
+                "max_depth": 6,
+                "min_child_weight": 20.0
+              }
+            },
+            {
+              "mae": 70.07058291985607,
+              "simplicity": [
+                6,
+                -5.0
+              ],
+              "params": {
+                "max_depth": 6,
+                "min_child_weight": 5.0
+              }
+            }
+          ]
+        },
+        "bootstrap": {
+          "r2": {
+            "point": 0.013957651261522597,
+            "low": -0.01265023357061683,
+            "high": 0.05535212387886309
+          },
+          "mae": {
+            "point": 68.89277135710206,
+            "low": 64.8434517783363,
+            "high": 70.75608058610901
+          },
+          "median_ape": {
+            "point": 54.248481111559286,
+            "low": 52.320578876670766,
+            "high": 61.460700970158264
+          },
+          "baseline_mae": {
+            "point": 72.04640647310805,
+            "low": 67.64306207945134,
+            "high": 73.86602958593602
+          },
+          "error_removed": {
+            "point": 0.04377227498755414,
+            "low": 0.013132296705506186,
+            "high": 0.07719290157216613
+          }
+        },
+        "cleared_bar": false,
+        "confirmation": {
+          "seeds": [
+            19,
+            29,
+            37
+          ],
+          "r2": [
+            0.03224925499529496,
+            0.03345811985139813,
+            0.05685185531111403
+          ],
+          "mae": [
+            68.50991145986835,
+            65.75740743896151,
+            66.57103959405184
+          ],
+          "median_ape": [
+            56.724100407485686,
+            59.18079097213278,
+            57.551472518361436
+          ],
+          "primary_r2": 0.013957651261522597,
+          "primary_mae": 68.89277135710206,
+          "r2_min": 0.03224925499529496,
+          "r2_max": 0.05685185531111403,
+          "r2_spread": 0.024602600315819068,
+          "mae_min": 65.75740743896151,
+          "mae_max": 68.50991145986835,
+          "mae_spread": 2.7525040209068408
+        },
+        "revenue": {
+          "r2": 0.2663157781875798,
+          "mae": 13388.02684331978
+        },
+        "grade_cuts": {
+          "p20": 3000.0,
+          "p40": 6960.0,
+          "p60": 12960.0,
+          "p80": 23250.499999999996
+        },
+        "grade_match": 0.3184198000951928
+      }
+    },
+    "san-diego": {
+      "display": "San Diego, CA",
+      "n_raw": 12991,
+      "n_clean": 8387,
+      "n_train": 5571,
+      "n_test": 817,
+      "removed_host": 1051,
+      "removed_buffer": 948,
+      "audit": {
+        "shared_cells": 0,
+        "shared_hosts": 0,
+        "training_rows_inside_buffer": 0,
+        "min_train_test_km": 1.0060631225031624,
+        "passed": true
+      },
+      "n_folds": 5,
+      "price": {
+        "n_test_cells": 23,
+        "n_train_cells": 87,
+        "holdout": {
+          "area_median": {
+            "r2": 0.06426847070984476,
+            "mae": 91.61505507955937,
+            "rmse": 158.14769196058543,
+            "mape": 44.97129217357489,
+            "median_ape": 34.75409836065574,
+            "n": 817
+          },
+          "linear": {
+            "r2": 0.6075136066128984,
+            "mae": 56.89397350423873,
+            "rmse": 102.42348037684314,
+            "mape": 27.237693154920983,
+            "median_ape": 20.735715173152297,
+            "n": 817
+          },
+          "ridge": {
+            "r2": 0.6013819164686585,
+            "mae": 57.26503586549339,
+            "rmse": 103.22044449630872,
+            "mape": 27.443077734649307,
+            "median_ape": 21.51898714038859,
+            "n": 817
+          },
+          "random_forest": {
+            "r2": 0.6296632408825922,
+            "mae": 55.98484503442827,
+            "rmse": 99.49142181810272,
+            "mape": 26.319615151718427,
+            "median_ape": 21.39264713674439,
+            "n": 817
+          },
+          "xgboost": {
+            "r2": 0.6611257117042627,
+            "mae": 53.884792980587065,
+            "rmse": 95.17141704947723,
+            "mape": 24.979083694877115,
+            "median_ape": 20.163741903648738,
+            "n": 817
+          },
+          "neural_net": {
+            "r2": 0.5432065208390011,
+            "mae": 63.41420776803833,
+            "rmse": 110.49615714982059,
+            "mape": 30.59096867052748,
+            "median_ape": 22.053110987283713,
+            "n": 817
+          },
+          "catboost": {
+            "r2": 0.6622117349642322,
+            "mae": 53.4129978955968,
+            "rmse": 95.01879213843777,
+            "mape": 25.165798558724088,
+            "median_ape": 19.733885746232378,
+            "n": 817
+          },
+          "blend": {
+            "r2": 0.6641115585036086,
+            "mae": 53.418017763750235,
+            "rmse": 94.7512081275241,
+            "mape": 24.99063540027613,
+            "median_ape": 19.86252798008753,
+            "n": 817
+          }
+        },
+        "cv_mae": {
+          "area_median": 125.90444380932445,
+          "linear": 76.16250666481525,
+          "ridge": 76.33288826354342,
+          "random_forest": 76.18133282543263,
+          "xgboost": 71.60968177610867
+        },
+        "params": {
+          "ridge": {
+            "alpha": 100.0
+          },
+          "random_forest": {
+            "max_depth": 8,
+            "min_samples_leaf": 5
+          },
+          "xgboost": {
+            "max_depth": 4,
+            "min_child_weight": 20.0
+          }
+        },
+        "trials": {
+          "ridge": [
+            {
+              "mae": 76.33288826354342,
+              "simplicity": [
+                -100.0
+              ],
+              "params": {
+                "alpha": 100.0
+              }
+            },
+            {
+              "mae": 76.15162042655547,
+              "simplicity": [
+                -10.0
+              ],
+              "params": {
+                "alpha": 10.0
+              }
+            },
+            {
+              "mae": 76.15965835665084,
+              "simplicity": [
+                -1.0
+              ],
+              "params": {
+                "alpha": 1.0
+              }
+            },
+            {
+              "mae": 76.16218826471555,
+              "simplicity": [
+                -0.1
+              ],
+              "params": {
+                "alpha": 0.1
+              }
+            }
+          ],
+          "random_forest": [
+            {
+              "mae": 76.83855079162359,
+              "simplicity": [
+                8,
+                -20
+              ],
+              "params": {
+                "max_depth": 8,
+                "min_samples_leaf": 20
+              }
+            },
+            {
+              "mae": 76.18133282543263,
+              "simplicity": [
+                8,
+                -5
+              ],
+              "params": {
+                "max_depth": 8,
+                "min_samples_leaf": 5
+              }
+            },
+            {
+              "mae": 76.74100967631907,
+              "simplicity": [
+                16,
+                -20
+              ],
+              "params": {
+                "max_depth": 16,
+                "min_samples_leaf": 20
+              }
+            },
+            {
+              "mae": 75.93606550317097,
+              "simplicity": [
+                16,
+                -5
+              ],
+              "params": {
+                "max_depth": 16,
+                "min_samples_leaf": 5
+              }
+            }
+          ],
+          "xgboost": [
+            {
+              "mae": 71.60968177610867,
+              "simplicity": [
+                4,
+                -20.0
+              ],
+              "params": {
+                "max_depth": 4,
+                "min_child_weight": 20.0
+              }
+            },
+            {
+              "mae": 73.71517798062976,
+              "simplicity": [
+                4,
+                -5.0
+              ],
+              "params": {
+                "max_depth": 4,
+                "min_child_weight": 5.0
+              }
+            },
+            {
+              "mae": 73.61794601151487,
+              "simplicity": [
+                6,
+                -20.0
+              ],
+              "params": {
+                "max_depth": 6,
+                "min_child_weight": 20.0
+              }
+            },
+            {
+              "mae": 75.00777388357537,
+              "simplicity": [
+                6,
+                -5.0
+              ],
+              "params": {
+                "max_depth": 6,
+                "min_child_weight": 5.0
+              }
+            }
+          ]
+        },
+        "bootstrap": {
+          "r2": {
+            "point": 0.6013819164686585,
+            "low": 0.5165332541075444,
+            "high": 0.6730863933972857
+          },
+          "mae": {
+            "point": 57.26503586549339,
+            "low": 45.398153066216004,
+            "high": 75.87752969425449
+          },
+          "median_ape": {
+            "point": 21.51898714038859,
+            "low": 19.21640076994316,
+            "high": 24.47968068893001
+          },
+          "baseline_mae": {
+            "point": 91.61505507955937,
+            "low": 74.81135865394978,
+            "high": 115.30929912958482
+          },
+          "error_removed": {
+            "point": 0.37493858606793506,
+            "low": 0.31876233056612047,
+            "high": 0.4215374861341376
+          }
+        },
+        "interval": {
+          "coverage": 0.8200734394124847,
+          "median_width": 114.58183587875925,
+          "mean_width": 200.70656053216388,
+          "n": 817
+        },
+        "importance": [
+          {
+            "feature": "longitude",
+            "mean_abs_dollars": 47.449001762817986,
+            "mean_dollars": -42.35985370861922
+          },
+          {
+            "feature": "bedrooms",
+            "mean_abs_dollars": 28.437043686565268,
+            "mean_dollars": 9.719612183812306
+          },
+          {
+            "feature": "accommodates",
+            "mean_abs_dollars": 25.789718851506585,
+            "mean_dollars": 17.75766992103541
+          },
+          {
+            "feature": "bathrooms",
+            "mean_abs_dollars": 19.68536338842996,
+            "mean_dollars": 19.68536338842996
+          },
+          {
+            "feature": "distance_to_airport_km",
+            "mean_abs_dollars": 13.860469101322051,
+            "mean_dollars": 8.737166161246202
+          },
+          {
+            "feature": "is_condo",
+            "mean_abs_dollars": 13.187068153853227,
+            "mean_dollars": -13.187068153853227
+          },
+          {
+            "feature": "distance_to_center_km",
+            "mean_abs_dollars": 12.93762219060296,
+            "mean_dollars": -3.6288023517427863
+          },
+          {
+            "feature": "is_house",
+            "mean_abs_dollars": 7.996965601202775,
+            "mean_dollars": 7.996965601202775
+          },
+          {
+            "feature": "has_hottub",
+            "mean_abs_dollars": 6.232830627615532,
+            "mean_dollars": 6.232830627615532
+          },
+          {
+            "feature": "beds",
+            "mean_abs_dollars": 5.216852444337681,
+            "mean_dollars": 4.13776602413133
+          },
+          {
+            "feature": "is_private_room",
+            "mean_abs_dollars": 5.213529770395374,
+            "mean_dollars": -5.213529770395374
+          },
+          {
+            "feature": "log_reviews",
+            "mean_abs_dollars": 5.048932461107375,
+            "mean_dollars": 1.2868027270431242
+          },
+          {
+            "feature": "latitude",
+            "mean_abs_dollars": 4.616420536029412,
+            "mean_dollars": -1.9690422874738664
+          },
+          {
+            "feature": "amenity_count",
+            "mean_abs_dollars": 3.4633609047282423,
+            "mean_dollars": 0.9387275774714456
+          },
+          {
+            "feature": "has_ac",
+            "mean_abs_dollars": 3.4207329871650383,
+            "mean_dollars": -3.4207329871650383
+          },
+          {
+            "feature": "has_waterfront",
+            "mean_abs_dollars": 3.2536333693137682,
+            "mean_dollars": 3.2536333693137682
+          },
+          {
+            "feature": "review_score",
+            "mean_abs_dollars": 2.23049604639308,
+            "mean_dollars": 0.07775744036773795
+          },
+          {
+            "feature": "has_washer",
+            "mean_abs_dollars": 1.9582551764242533,
+            "mean_dollars": -1.9582551764242533
+          },
+          {
+            "feature": "bath_is_shared",
+            "mean_abs_dollars": 1.6532234842980722,
+            "mean_dollars": -1.6532234842980722
+          },
+          {
+            "feature": "has_pool",
+            "mean_abs_dollars": 1.5619407387577968,
+            "mean_dollars": 1.5619407387577968
+          },
+          {
+            "feature": "is_superhost",
+            "mean_abs_dollars": 0.7390943252446323,
+            "mean_dollars": -0.7390943252446323
+          },
+          {
+            "feature": "has_parking",
+            "mean_abs_dollars": 0.4738193444626912,
+            "mean_dollars": 0.4738193444626912
+          },
+          {
+            "feature": "has_kitchen",
+            "mean_abs_dollars": 0.4182709065298607,
+            "mean_dollars": 0.4182709065298607
+          },
+          {
+            "feature": "is_hotel_room",
+            "mean_abs_dollars": 0.29265247000952643,
+            "mean_dollars": 0.29265247000952643
+          },
+          {
+            "feature": "is_shared_room",
+            "mean_abs_dollars": 0.0,
+            "mean_dollars": 0.0
+          }
+        ],
+        "directions": [
+          {
+            "feature": "bedrooms",
+            "low": 1.0,
+            "high": 3.0,
+            "delta": 53.048268384806676
+          },
+          {
+            "feature": "bathrooms",
+            "low": 1.0,
+            "high": 2.0,
+            "delta": 26.087894601900075
+          },
+          {
+            "feature": "accommodates",
+            "low": 2.0,
+            "high": 6.0,
+            "delta": 34.7090597915946
+          },
+          {
+            "feature": "beds",
+            "low": 1.0,
+            "high": 4.0,
+            "delta": 7.683656255269881
+          },
+          {
+            "feature": "bath_is_shared",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -59.959903534868516
+          },
+          {
+            "feature": "is_private_room",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -54.063890319292796
+          },
+          {
+            "feature": "is_shared_room",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -137.69731599780434
+          },
+          {
+            "feature": "is_hotel_room",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 74.3381990916809
+          },
+          {
+            "feature": "is_house",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -66.34751600775485
+          },
+          {
+            "feature": "is_condo",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -60.599145141295025
+          },
+          {
+            "feature": "latitude",
+            "low": 32.73447,
+            "high": 32.8004772,
+            "delta": -4.4431524170401815
+          },
+          {
+            "feature": "longitude",
+            "low": -117.2517921,
+            "high": -117.15455,
+            "delta": -57.978791856147296
+          },
+          {
+            "feature": "distance_to_center_km",
+            "low": 4.482963726421556,
+            "high": 12.946471293477728,
+            "delta": -18.014061725762417
+          },
+          {
+            "feature": "distance_to_airport_km",
+            "low": 4.271924977053869,
+            "high": 11.151569495119805,
+            "delta": 19.978129618219526
+          },
+          {
+            "feature": "amenity_count",
+            "low": 35.0,
+            "high": 58.0,
+            "delta": 6.020623695506771
+          },
+          {
+            "feature": "has_ac",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 12.316583251158619
+          },
+          {
+            "feature": "has_parking",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -15.395209993959526
+          },
+          {
+            "feature": "has_washer",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 16.39168662791687
+          },
+          {
+            "feature": "has_kitchen",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -8.560083458192366
+          },
+          {
+            "feature": "has_pool",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 6.275173788913634
+          },
+          {
+            "feature": "has_hottub",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 24.631949319708042
+          },
+          {
+            "feature": "has_waterfront",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 24.727822909164644
+          },
+          {
+            "feature": "review_score",
+            "low": 4.77,
+            "high": 4.98,
+            "delta": 4.704940967091886
+          },
+          {
+            "feature": "log_reviews",
+            "low": 2.4849066497880004,
+            "high": 4.8283137373023015,
+            "delta": -9.816312218292211
+          },
+          {
+            "feature": "is_superhost",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 2.505363762229166
+          }
+        ],
+        "confirmation": {
+          "seeds": [
+            19,
+            29,
+            37
+          ],
+          "r2": [
+            0.6498043507676633,
+            0.6500739654101793,
+            0.1823800881595875
+          ],
+          "mae": [
+            69.373935762556,
+            74.25376788656052,
+            62.31142198805215
+          ],
+          "median_ape": [
+            21.319450689552692,
+            22.675781744047626,
+            20.80500615802104
+          ],
+          "primary_r2": 0.6013819164686585,
+          "primary_mae": 57.26503586549339,
+          "r2_min": 0.1823800881595875,
+          "r2_max": 0.6500739654101793,
+          "r2_spread": 0.46769387725059175,
+          "mae_min": 62.31142198805215,
+          "mae_max": 74.25376788656052,
+          "mae_spread": 11.942345898508371
+        }
+      },
+      "nights": {
+        "holdout": {
+          "area_median": {
+            "r2": -0.08125135345144896,
+            "mae": 76.47552019583843,
+            "rmse": 89.22282250805311,
+            "mape": 155.54598633649422,
+            "median_ape": 50.0,
+            "n": 817
+          },
+          "linear": {
+            "r2": 0.11808030450606188,
+            "mae": 70.24627832467864,
+            "rmse": 80.579978376249,
+            "mape": 161.11634580611135,
+            "median_ape": 39.94924337644745,
+            "n": 817
+          },
+          "ridge": {
+            "r2": 0.11814163230790853,
+            "mae": 70.30355091379907,
+            "rmse": 80.57717660252362,
+            "mape": 161.04169674007258,
+            "median_ape": 40.14274987273808,
+            "n": 817
+          },
+          "random_forest": {
+            "r2": 0.10987907320140256,
+            "mae": 70.4787933811789,
+            "rmse": 80.95377985467017,
+            "mape": 160.47106108672136,
+            "median_ape": 40.547829632283886,
+            "n": 817
+          },
+          "xgboost": {
+            "r2": 0.11597722813899691,
+            "mae": 69.85616934693428,
+            "rmse": 80.67599898891311,
+            "mape": 162.130024305568,
+            "median_ape": 39.93004935128348,
+            "n": 817
+          },
+          "neural_net": {
+            "r2": 0.1166727510021458,
+            "mae": 70.45690221304822,
+            "rmse": 80.64425600403274,
+            "mape": 163.3726264620888,
+            "median_ape": 39.809796855940135,
+            "n": 817
+          }
+        },
+        "cv_mae": {
+          "area_median": 76.09404058416726,
+          "linear": 70.22446278280329,
+          "ridge": 70.30941167620865,
+          "random_forest": 70.81333173878683,
+          "xgboost": 70.72800313241271
+        },
+        "params": {
+          "ridge": {
+            "alpha": 100.0
+          },
+          "random_forest": {
+            "max_depth": 8,
+            "min_samples_leaf": 20
+          },
+          "xgboost": {
+            "max_depth": 4,
+            "min_child_weight": 20.0
+          }
+        },
+        "trials": {
+          "ridge": [
+            {
+              "mae": 70.30941167620865,
+              "simplicity": [
+                -100.0
+              ],
+              "params": {
+                "alpha": 100.0
+              }
+            },
+            {
+              "mae": 70.23311045615068,
+              "simplicity": [
+                -10.0
+              ],
+              "params": {
+                "alpha": 10.0
+              }
+            },
+            {
+              "mae": 70.22535207638836,
+              "simplicity": [
+                -1.0
+              ],
+              "params": {
+                "alpha": 1.0
+              }
+            },
+            {
+              "mae": 70.22455202205978,
+              "simplicity": [
+                -0.1
+              ],
+              "params": {
+                "alpha": 0.1
+              }
+            }
+          ],
+          "random_forest": [
+            {
+              "mae": 70.81333173878683,
+              "simplicity": [
+                8,
+                -20
+              ],
+              "params": {
+                "max_depth": 8,
+                "min_samples_leaf": 20
+              }
+            },
+            {
+              "mae": 70.58986567973554,
+              "simplicity": [
+                8,
+                -5
+              ],
+              "params": {
+                "max_depth": 8,
+                "min_samples_leaf": 5
+              }
+            },
+            {
+              "mae": 70.85946660819971,
+              "simplicity": [
+                16,
+                -20
+              ],
+              "params": {
+                "max_depth": 16,
+                "min_samples_leaf": 20
+              }
+            },
+            {
+              "mae": 70.91427201894365,
+              "simplicity": [
+                16,
+                -5
+              ],
+              "params": {
+                "max_depth": 16,
+                "min_samples_leaf": 5
+              }
+            }
+          ],
+          "xgboost": [
+            {
+              "mae": 70.72800313241271,
+              "simplicity": [
+                4,
+                -20.0
+              ],
+              "params": {
+                "max_depth": 4,
+                "min_child_weight": 20.0
+              }
+            },
+            {
+              "mae": 70.51542894361074,
+              "simplicity": [
+                4,
+                -5.0
+              ],
+              "params": {
+                "max_depth": 4,
+                "min_child_weight": 5.0
+              }
+            },
+            {
+              "mae": 71.58222868824313,
+              "simplicity": [
+                6,
+                -20.0
+              ],
+              "params": {
+                "max_depth": 6,
+                "min_child_weight": 20.0
+              }
+            },
+            {
+              "mae": 72.07102671325893,
+              "simplicity": [
+                6,
+                -5.0
+              ],
+              "params": {
+                "max_depth": 6,
+                "min_child_weight": 5.0
+              }
+            }
+          ]
+        },
+        "bootstrap": {
+          "r2": {
+            "point": 0.11808030450606188,
+            "low": 0.04151019525860117,
+            "high": 0.14448533891801532
+          },
+          "mae": {
+            "point": 70.24627832467864,
+            "low": 66.63723550653619,
+            "high": 71.35591391381735
+          },
+          "median_ape": {
+            "point": 39.94924337644745,
+            "low": 36.0849784554655,
+            "high": 48.60243529954589
+          },
+          "baseline_mae": {
+            "point": 76.47552019583843,
+            "low": 72.43862279620225,
+            "high": 78.55411395486558
+          },
+          "error_removed": {
+            "point": 0.08145406340758389,
+            "low": 0.04465358808327752,
+            "high": 0.11247861109536712
+          }
+        },
+        "cleared_bar": false,
+        "confirmation": {
+          "seeds": [
+            19,
+            29,
+            37
+          ],
+          "r2": [
+            0.09956379274771021,
+            0.09529039685712104,
+            0.06016532911963868
+          ],
+          "mae": [
+            71.23208081189115,
+            70.8471765785275,
+            73.1080154297797
+          ],
+          "median_ape": [
+            42.90123062797589,
+            44.62712353171363,
+            45.03508907342504
+          ],
+          "primary_r2": 0.11808030450606188,
+          "primary_mae": 70.24627832467864,
+          "r2_min": 0.06016532911963868,
+          "r2_max": 0.09956379274771021,
+          "r2_spread": 0.039398463628071534,
+          "mae_min": 70.8471765785275,
+          "mae_max": 73.1080154297797,
+          "mae_spread": 2.2608388512522026
+        },
+        "revenue": {
+          "r2": 0.27622306933244034,
+          "mae": 14092.904764256515
+        },
+        "grade_cuts": {
+          "p20": 7296.0,
+          "p40": 15585.499999999998,
+          "p60": 25916.0,
+          "p80": 42668.49999999999
+        },
+        "grade_match": 0.30966952264381886
+      }
+    },
+    "seattle": {
+      "display": "Seattle, WA",
+      "n_raw": 6772,
+      "n_clean": 4610,
+      "n_train": 2585,
+      "n_test": 730,
+      "removed_host": 723,
+      "removed_buffer": 572,
+      "audit": {
+        "shared_cells": 0,
+        "shared_hosts": 0,
+        "training_rows_inside_buffer": 0,
+        "min_train_test_km": 1.0052887878063488,
+        "passed": true
+      },
+      "n_folds": 5,
+      "price": {
+        "n_test_cells": 8,
+        "n_train_cells": 29,
+        "holdout": {
+          "area_median": {
+            "r2": 0.04475775948197669,
+            "mae": 49.4013698630137,
+            "rmse": 105.80916525544843,
+            "mape": 33.80865622191339,
+            "median_ape": 28.40909090909091,
+            "n": 730
+          },
+          "linear": {
+            "r2": 0.5378030888873482,
+            "mae": 36.25904462313964,
+            "rmse": 73.60037858541325,
+            "mape": 26.28878135404273,
+            "median_ape": 20.157603782679665,
+            "n": 730
+          },
+          "ridge": {
+            "r2": 0.5220748414353975,
+            "mae": 36.1336219741619,
+            "rmse": 74.84218796677328,
+            "mape": 25.997509868057822,
+            "median_ape": 19.92192796001653,
+            "n": 730
+          },
+          "random_forest": {
+            "r2": 0.4428766278970696,
+            "mae": 35.92333358323723,
+            "rmse": 80.80574114619932,
+            "mape": 25.009446763015923,
+            "median_ape": 20.595097665667524,
+            "n": 730
+          },
+          "xgboost": {
+            "r2": 0.5101411947543338,
+            "mae": 36.88717505435299,
+            "rmse": 75.77082019260006,
+            "mape": 26.434717911408928,
+            "median_ape": 20.46843658289995,
+            "n": 730
+          },
+          "neural_net": {
+            "r2": 0.5359663559077721,
+            "mae": 41.53013769221593,
+            "rmse": 73.74647454884743,
+            "mape": 29.796123356121807,
+            "median_ape": 23.034586919029458,
+            "n": 730
+          },
+          "catboost": {
+            "r2": 0.5295588335677812,
+            "mae": 36.374284445001514,
+            "rmse": 74.25388617392571,
+            "mape": 25.919571052416924,
+            "median_ape": 20.691270804777336,
+            "n": 730
+          },
+          "blend": {
+            "r2": 0.5239937758205628,
+            "mae": 36.311554171862205,
+            "rmse": 74.69178607204024,
+            "mape": 25.927343824969242,
+            "median_ape": 20.784641647570577,
+            "n": 730
+          }
+        },
+        "cv_mae": {
+          "area_median": 59.03974509552323,
+          "linear": 40.25185653852334,
+          "ridge": 40.34240659724429,
+          "random_forest": 41.01681381157969,
+          "xgboost": 40.09490505137074
+        },
+        "params": {
+          "ridge": {
+            "alpha": 10.0
+          },
+          "random_forest": {
+            "max_depth": 8,
+            "min_samples_leaf": 5
+          },
+          "xgboost": {
+            "max_depth": 4,
+            "min_child_weight": 20.0
+          }
+        },
+        "trials": {
+          "ridge": [
+            {
+              "mae": 40.81256472104805,
+              "simplicity": [
+                -100.0
+              ],
+              "params": {
+                "alpha": 100.0
+              }
+            },
+            {
+              "mae": 40.34240659724429,
+              "simplicity": [
+                -10.0
+              ],
+              "params": {
+                "alpha": 10.0
+              }
+            },
+            {
+              "mae": 40.22988487830705,
+              "simplicity": [
+                -1.0
+              ],
+              "params": {
+                "alpha": 1.0
+              }
+            },
+            {
+              "mae": 40.24415583340813,
+              "simplicity": [
+                -0.1
+              ],
+              "params": {
+                "alpha": 0.1
+              }
+            }
+          ],
+          "random_forest": [
+            {
+              "mae": 41.633300045519704,
+              "simplicity": [
+                8,
+                -20
+              ],
+              "params": {
+                "max_depth": 8,
+                "min_samples_leaf": 20
+              }
+            },
+            {
+              "mae": 41.01681381157969,
+              "simplicity": [
+                8,
+                -5
+              ],
+              "params": {
+                "max_depth": 8,
+                "min_samples_leaf": 5
+              }
+            },
+            {
+              "mae": 41.61582534873243,
+              "simplicity": [
+                16,
+                -20
+              ],
+              "params": {
+                "max_depth": 16,
+                "min_samples_leaf": 20
+              }
+            },
+            {
+              "mae": 41.0721970293082,
+              "simplicity": [
+                16,
+                -5
+              ],
+              "params": {
+                "max_depth": 16,
+                "min_samples_leaf": 5
+              }
+            }
+          ],
+          "xgboost": [
+            {
+              "mae": 40.09490505137074,
+              "simplicity": [
+                4,
+                -20.0
+              ],
+              "params": {
+                "max_depth": 4,
+                "min_child_weight": 20.0
+              }
+            },
+            {
+              "mae": 40.603640446815014,
+              "simplicity": [
+                4,
+                -5.0
+              ],
+              "params": {
+                "max_depth": 4,
+                "min_child_weight": 5.0
+              }
+            },
+            {
+              "mae": 40.78129617346423,
+              "simplicity": [
+                6,
+                -20.0
+              ],
+              "params": {
+                "max_depth": 6,
+                "min_child_weight": 20.0
+              }
+            },
+            {
+              "mae": 41.85009696475447,
+              "simplicity": [
+                6,
+                -5.0
+              ],
+              "params": {
+                "max_depth": 6,
+                "min_child_weight": 5.0
+              }
+            }
+          ]
+        },
+        "bootstrap": {
+          "r2": {
+            "point": 0.5220748414353975,
+            "low": 0.48880283590499063,
+            "high": 0.5920562675329719
+          },
+          "mae": {
+            "point": 36.1336219741619,
+            "low": 31.42641247162995,
+            "high": 40.23602019237569
+          },
+          "median_ape": {
+            "point": 19.92192796001653,
+            "low": 17.328627651601106,
+            "high": 22.402233159324755
+          },
+          "baseline_mae": {
+            "point": 49.4013698630137,
+            "low": 44.251701466844345,
+            "high": 56.05113500857981
+          },
+          "error_removed": {
+            "point": 0.26857044502292693,
+            "low": 0.2234938994227228,
+            "high": 0.3500905734676681
+          }
+        },
+        "interval": {
+          "coverage": 0.8178082191780822,
+          "median_width": 83.24838826893568,
+          "mean_width": 116.72521431159932,
+          "n": 730
+        },
+        "importance": [
+          {
+            "feature": "bedrooms",
+            "mean_abs_dollars": 17.32794202869275,
+            "mean_dollars": 15.372263548706101
+          },
+          {
+            "feature": "distance_to_center_km",
+            "mean_abs_dollars": 15.181091010205984,
+            "mean_dollars": -13.976024354853573
+          },
+          {
+            "feature": "distance_to_airport_km",
+            "mean_abs_dollars": 15.067533889430688,
+            "mean_dollars": 4.819090460853512
+          },
+          {
+            "feature": "is_condo",
+            "mean_abs_dollars": 12.777842807850462,
+            "mean_dollars": -12.777842807850462
+          },
+          {
+            "feature": "accommodates",
+            "mean_abs_dollars": 11.722687141521428,
+            "mean_dollars": 3.21520239106434
+          },
+          {
+            "feature": "latitude",
+            "mean_abs_dollars": 11.31033181188855,
+            "mean_dollars": -3.80313053582492
+          },
+          {
+            "feature": "bathrooms",
+            "mean_abs_dollars": 11.302479973027339,
+            "mean_dollars": 11.302479973027339
+          },
+          {
+            "feature": "is_house",
+            "mean_abs_dollars": 7.0530091591449855,
+            "mean_dollars": 7.0530091591449855
+          },
+          {
+            "feature": "log_reviews",
+            "mean_abs_dollars": 4.895702820035915,
+            "mean_dollars": 1.7727445348014639
+          },
+          {
+            "feature": "longitude",
+            "mean_abs_dollars": 4.875892880030618,
+            "mean_dollars": 1.3868321263333048
+          },
+          {
+            "feature": "amenity_count",
+            "mean_abs_dollars": 4.391633114031323,
+            "mean_dollars": 0.5429444670240486
+          },
+          {
+            "feature": "is_private_room",
+            "mean_abs_dollars": 3.9413575047221605,
+            "mean_dollars": -3.9413575047221605
+          },
+          {
+            "feature": "bath_is_shared",
+            "mean_abs_dollars": 2.7629418088056297,
+            "mean_dollars": -2.7629418088056297
+          },
+          {
+            "feature": "has_hottub",
+            "mean_abs_dollars": 2.728983325509904,
+            "mean_dollars": 2.728983325509904
+          },
+          {
+            "feature": "has_waterfront",
+            "mean_abs_dollars": 2.1621747757999263,
+            "mean_dollars": 2.1621747757999263
+          },
+          {
+            "feature": "review_score",
+            "mean_abs_dollars": 1.8250997543509504,
+            "mean_dollars": -0.5510203875587598
+          },
+          {
+            "feature": "beds",
+            "mean_abs_dollars": 1.7126128370133225,
+            "mean_dollars": -0.7839577218375001
+          },
+          {
+            "feature": "is_superhost",
+            "mean_abs_dollars": 0.6430139265645081,
+            "mean_dollars": 0.6430139265645081
+          },
+          {
+            "feature": "has_parking",
+            "mean_abs_dollars": 0.18202640077468515,
+            "mean_dollars": -0.18202640077468515
+          },
+          {
+            "feature": "has_kitchen",
+            "mean_abs_dollars": 0.16099800450521362,
+            "mean_dollars": 0.16099800450521362
+          },
+          {
+            "feature": "has_washer",
+            "mean_abs_dollars": 0.12966604431731152,
+            "mean_dollars": -0.12966604431731152
+          },
+          {
+            "feature": "has_ac",
+            "mean_abs_dollars": 0.1252132540318194,
+            "mean_dollars": 0.1252132540318194
+          },
+          {
+            "feature": "has_pool",
+            "mean_abs_dollars": 0.09207663377795498,
+            "mean_dollars": -0.09207663377795498
+          },
+          {
+            "feature": "is_shared_room",
+            "mean_abs_dollars": 0.0,
+            "mean_dollars": 0.0
+          },
+          {
+            "feature": "is_hotel_room",
+            "mean_abs_dollars": 0.0,
+            "mean_dollars": 0.0
+          }
+        ],
+        "directions": [
+          {
+            "feature": "bedrooms",
+            "low": 1.0,
+            "high": 2.0,
+            "delta": 17.153064413816935
+          },
+          {
+            "feature": "bathrooms",
+            "low": 1.0,
+            "high": 2.0,
+            "delta": 16.75512449027414
+          },
+          {
+            "feature": "accommodates",
+            "low": 2.0,
+            "high": 5.0,
+            "delta": 16.312026763074456
+          },
+          {
+            "feature": "beds",
+            "low": 1.0,
+            "high": 3.0,
+            "delta": -2.5209053555910543
+          },
+          {
+            "feature": "bath_is_shared",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -36.04935423980757
+          },
+          {
+            "feature": "is_private_room",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -31.613620287643386
+          },
+          {
+            "feature": "is_shared_room",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -60.43551419384755
+          },
+          {
+            "feature": "is_hotel_room",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 32.09723605584776
+          },
+          {
+            "feature": "is_house",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -71.10840106337514
+          },
+          {
+            "feature": "is_condo",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -48.84887429335373
+          },
+          {
+            "feature": "latitude",
+            "low": 47.6066307905596,
+            "high": 47.64982,
+            "delta": -8.139853832667185
+          },
+          {
+            "feature": "longitude",
+            "low": -122.35128801316023,
+            "high": -122.31377,
+            "delta": -3.9705678587630757
+          },
+          {
+            "feature": "distance_to_center_km",
+            "low": 1.7237788844199726,
+            "high": 6.780119812954196,
+            "delta": -18.869157268274733
+          },
+          {
+            "feature": "distance_to_airport_km",
+            "low": 17.491790947440673,
+            "high": 22.61973523621957,
+            "delta": 13.221346745751006
+          },
+          {
+            "feature": "amenity_count",
+            "low": 37.0,
+            "high": 56.0,
+            "delta": 7.2828696999916644
+          },
+          {
+            "feature": "has_ac",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 0.28193976183817426
+          },
+          {
+            "feature": "has_parking",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 5.565186524429379
+          },
+          {
+            "feature": "has_washer",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 1.0906747048797314
+          },
+          {
+            "feature": "has_kitchen",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -4.969512393616185
+          },
+          {
+            "feature": "has_pool",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -10.717228955471668
+          },
+          {
+            "feature": "has_hottub",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 27.0822047160396
+          },
+          {
+            "feature": "has_waterfront",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": 11.886014139691241
+          },
+          {
+            "feature": "review_score",
+            "low": 4.81,
+            "high": 4.98,
+            "delta": 2.5341265660887586
+          },
+          {
+            "feature": "log_reviews",
+            "low": 2.833213344056216,
+            "high": 5.075173815233827,
+            "delta": -9.043677549484102
+          },
+          {
+            "feature": "is_superhost",
+            "low": 0.0,
+            "high": 1.0,
+            "delta": -2.607433046231307
+          }
+        ],
+        "confirmation": {
+          "seeds": [
+            19,
+            29,
+            37
+          ],
+          "r2": [
+            0.4646337142686232,
+            0.5440063430527236,
+            0.49244154127310924
+          ],
+          "mae": [
+            39.791190558836206,
+            36.181549887320756,
+            32.45863356022416
+          ],
+          "median_ape": [
+            20.792769106523362,
+            20.453542774164983,
+            19.52634433376757
+          ],
+          "primary_r2": 0.5220748414353975,
+          "primary_mae": 36.1336219741619,
+          "r2_min": 0.4646337142686232,
+          "r2_max": 0.5440063430527236,
+          "r2_spread": 0.07937262878410034,
+          "mae_min": 32.45863356022416,
+          "mae_max": 39.791190558836206,
+          "mae_spread": 7.3325569986120485
+        }
+      },
+      "nights": {
+        "holdout": {
+          "area_median": {
+            "r2": -0.0691033137084085,
+            "mae": 72.80684931506849,
+            "rmse": 84.3511049370996,
+            "mape": 160.62581895724367,
+            "median_ape": 34.246575342465746,
+            "n": 730
+          },
+          "linear": {
+            "r2": 0.06245295012579599,
+            "mae": 68.66137810401067,
+            "rmse": 78.99097489649732,
+            "mape": 134.423166191468,
+            "median_ape": 39.994708516974505,
+            "n": 730
+          },
+          "ridge": {
+            "r2": 0.06329009086206094,
+            "mae": 68.75854403594525,
+            "rmse": 78.9557012904017,
+            "mape": 136.04379445636897,
+            "median_ape": 40.119359342131254,
+            "n": 730
+          },
+          "random_forest": {
+            "r2": 0.06278940959613644,
+            "mae": 68.71308651201632,
+            "rmse": 78.97679979644968,
+            "mape": 134.56355277237358,
+            "median_ape": 40.28183259520123,
+            "n": 730
+          },
+          "xgboost": {
+            "r2": 0.026900272460608,
+            "mae": 68.67278748864997,
+            "rmse": 80.47474580389364,
+            "mape": 132.79900962471368,
+            "median_ape": 39.81516141947468,
+            "n": 730
+          },
+          "neural_net": {
+            "r2": 0.05369176383330887,
+            "mae": 67.96868499158714,
+            "rmse": 79.35919395256423,
+            "mape": 126.73473877947809,
+            "median_ape": 40.19314283776808,
+            "n": 730
+          }
+        },
+        "cv_mae": {
+          "area_median": 80.14427607573649,
+          "linear": 72.33516212383248,
+          "ridge": 72.80617901418123,
+          "random_forest": 74.14583395682095,
+          "xgboost": 75.26330558313525
+        },
+        "params": {
+          "ridge": {
+            "alpha": 100.0
+          },
+          "random_forest": {
+            "max_depth": 8,
+            "min_samples_leaf": 20
+          },
+          "xgboost": {
+            "max_depth": 4,
+            "min_child_weight": 20.0
+          }
+        },
+        "trials": {
+          "ridge": [
+            {
+              "mae": 72.80617901418123,
+              "simplicity": [
+                -100.0
+              ],
+              "params": {
+                "alpha": 100.0
+              }
+            },
+            {
+              "mae": 72.43405071149786,
+              "simplicity": [
+                -10.0
+              ],
+              "params": {
+                "alpha": 10.0
+              }
+            },
+            {
+              "mae": 72.35792231152777,
+              "simplicity": [
+                -1.0
+              ],
+              "params": {
+                "alpha": 1.0
+              }
+            },
+            {
+              "mae": 72.33706865941416,
+              "simplicity": [
+                -0.1
+              ],
+              "params": {
+                "alpha": 0.1
+              }
+            }
+          ],
+          "random_forest": [
+            {
+              "mae": 74.14583395682095,
+              "simplicity": [
+                8,
+                -20
+              ],
+              "params": {
+                "max_depth": 8,
+                "min_samples_leaf": 20
+              }
+            },
+            {
+              "mae": 75.20189245568152,
+              "simplicity": [
+                8,
+                -5
+              ],
+              "params": {
+                "max_depth": 8,
+                "min_samples_leaf": 5
+              }
+            },
+            {
+              "mae": 74.19488539530153,
+              "simplicity": [
+                16,
+                -20
+              ],
+              "params": {
+                "max_depth": 16,
+                "min_samples_leaf": 20
+              }
+            },
+            {
+              "mae": 75.606483793298,
+              "simplicity": [
+                16,
+                -5
+              ],
+              "params": {
+                "max_depth": 16,
+                "min_samples_leaf": 5
+              }
+            }
+          ],
+          "xgboost": [
+            {
+              "mae": 75.26330558313525,
+              "simplicity": [
+                4,
+                -20.0
+              ],
+              "params": {
+                "max_depth": 4,
+                "min_child_weight": 20.0
+              }
+            },
+            {
+              "mae": 76.47645992048835,
+              "simplicity": [
+                4,
+                -5.0
+              ],
+              "params": {
+                "max_depth": 4,
+                "min_child_weight": 5.0
+              }
+            },
+            {
+              "mae": 75.33685590476166,
+              "simplicity": [
+                6,
+                -20.0
+              ],
+              "params": {
+                "max_depth": 6,
+                "min_child_weight": 20.0
+              }
+            },
+            {
+              "mae": 77.24093430369133,
+              "simplicity": [
+                6,
+                -5.0
+              ],
+              "params": {
+                "max_depth": 6,
+                "min_child_weight": 5.0
+              }
+            }
+          ]
+        },
+        "bootstrap": {
+          "r2": {
+            "point": 0.06245295012579599,
+            "low": -0.005668409072942082,
+            "high": 0.12016328372513099
+          },
+          "mae": {
+            "point": 68.66137810401067,
+            "low": 64.7754045299958,
+            "high": 70.75984670078145
+          },
+          "median_ape": {
+            "point": 39.994708516974505,
+            "low": 38.508462607609125,
+            "high": 43.02578281166607
+          },
+          "baseline_mae": {
+            "point": 72.80684931506849,
+            "low": 69.83502939985057,
+            "high": 75.6298744917073
+          },
+          "error_removed": {
+            "point": 0.05693792891817742,
+            "low": 0.026427668081188606,
+            "high": 0.1091849603218636
+          }
+        },
+        "cleared_bar": false,
+        "confirmation": {
+          "seeds": [
+            19,
+            29,
+            37
+          ],
+          "r2": [
+            0.07275490018504216,
+            0.06319998066608157,
+            0.05629666535411548
+          ],
+          "mae": [
+            70.48259733051577,
+            71.72616336538906,
+            71.85345281534028
+          ],
+          "median_ape": [
+            42.8659694451613,
+            40.43662611789699,
+            40.83805242351596
+          ],
+          "primary_r2": 0.06245295012579599,
+          "primary_mae": 68.66137810401067,
+          "r2_min": 0.05629666535411548,
+          "r2_max": 0.07275490018504216,
+          "r2_spread": 0.016458234830926677,
+          "mae_min": 70.48259733051577,
+          "mae_max": 71.85345281534028,
+          "mae_spread": 1.370855484824503
+        },
+        "revenue": {
+          "r2": 0.16069569533096573,
+          "mae": 9106.60905499676
+        },
+        "grade_cuts": {
+          "p20": 7080.0,
+          "p40": 14256.0,
+          "p60": 21718.499999999996,
+          "p80": 31080.0
+        },
+        "grade_match": 0.3041095890410959
+      }
+    }
+  }
+}

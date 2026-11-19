@@ -25,7 +25,7 @@ CITIES = {
         "base_utilities_monthly": 275,  # hot summers, AC heavy
         "ia_state": "tx",
         "ia_city": "austin",
-        "ia_date": "2025-06-13",
+        "ia_date": "2025-09-16",
         "redfin_region_id": 30818,
         "assessor": {
             "source": "travis_cad",

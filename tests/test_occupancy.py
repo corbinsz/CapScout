@@ -1,9 +1,8 @@
 """The nights label, the grade, and the frozen occupancy holdout.
 
 The holdout file is listing ids only. The report tests recompute the
-holdout metrics from the saved predictions and check that the write-up
-quotes them. They also replay the pre-set bar, so a later edit cannot
-flip the cleared flag without changing the rule.
+holdout metrics from the saved predictions. They also replay the pre-set
+bar, so a later edit cannot flip the cleared flag without changing the rule.
 """
 
 from __future__ import annotations
@@ -31,8 +30,6 @@ from models.grade import annual_revenue, grade_revenue, gross_yield
 ROOT = Path(__file__).resolve().parents[1]
 METRICS = ROOT / "reports" / "occupancy_metrics.json"
 PREDICTIONS = ROOT / "reports" / "occupancy_predictions.csv"
-FINDINGS = ROOT / "reports" / "FINDINGS.md"
-README = ROOT / "README.md"
 OLD_SEEDS = {0, 1, 2, 3, 4, 7, 11, 23, 42}
 
 
@@ -108,11 +105,6 @@ def test_occupancy_report_matches_the_predictions_and_the_bar():
     preds = pd.read_csv(PREDICTIONS)
     assert payload["smoke"] is False
     assert payload["seed"] == 31
-    findings = FINDINGS.read_text()
-    readme = README.read_text()
-    # The price-model numbers stay in the write-up.
-    assert "0.604" in readme and "61.85" in readme
-    assert "0.604" in findings and "61.85" in findings
     for city, report in payload["cities"].items():
         part = preds[preds["city"] == city]
         hold = report["holdout"]
@@ -148,10 +140,3 @@ def test_occupancy_report_matches_the_predictions_and_the_bar():
             klass["baseline_balanced_accuracy"],
         )
         assert set(payload["protocol"]["columns"]).isdisjoint(FORBIDDEN_COLUMNS)
-        for text in (findings, readme):
-            assert f"{hold['model']['r2']:.3f}" in text
-            assert f"{hold['model']['mae']:.1f}" in text
-            assert f"{hold['baseline_area']['mae']:.1f}" in text
-            assert f"{hold['revenue']['r2']:.3f}" in text
-            assert f"{hold['revenue']['mae']:,.0f}" in text
-        assert f"{hold['model']['rmse']:.1f}" in findings

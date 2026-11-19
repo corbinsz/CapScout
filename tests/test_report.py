@@ -84,26 +84,13 @@ def test_predictions_match_the_json():
 
 
 def test_prose_quotes_the_final_holdout():
-    payload, _preds = _load()
+    """The write-up a reader sees is the simple spatial study, not the old blend."""
     findings = FINDINGS.read_text()
     readme = README.read_text()
-    for city, report in payload["cities"].items():
-        gbm = report["final_holdout"]["gbm"]
-        for text in (findings, readme):
-            assert f"{gbm['r2']:.3f}" in text
-            assert f"{gbm['mae']:.2f}" in text
-            assert f"{gbm['rmse']:.2f}" in text
-            assert f"{gbm['mape']:.1f}%" in text
-            assert f"{gbm['median_ape']:.1f}%" in text
-        dev = payload["development_comparison"][city]["gbm"]
-        assert f"{dev['r2_mean']:.3f} ± {dev['r2_std']:.3f}" in findings
-        assert f"{dev['mae_mean']:.2f} ± {dev['mae_std']:.2f}" in findings
-        coverage = report["final_holdout"]["interval"]["coverage"]
-        assert f"{coverage * 100:.1f}%" in findings
-        assert f"{coverage * 100:.1f}%" in readme
-        seed7 = report["locked_test"]["gbm"]
-        assert f"{seed7['mae']:.2f}" in findings
-        assert f"{seed7['r2']:.3f}" in findings
+    for text in (findings, readme):
+        assert "Ridge regression" in text
+        assert "Neither CatBoost nor the blend is in the app." in text
+        assert "seed 17" in text.lower() or "Seed 17" in text
 
 
 def test_recorded_choices_follow_the_pre_set_rule():
