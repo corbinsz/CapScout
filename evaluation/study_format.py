@@ -105,7 +105,10 @@ def nights_comparison_table(metrics: dict) -> str:
     rule = "| --- | " + " | ".join("---:" for _ in STUDY_CITIES) + " | ---: |"
     lines = [header, rule]
     for name in ELIGIBLE_MODELS:
-        cells = [MODEL_NAMES[name]]
+        # "Area-typical rate" is the price-table name. Here the same baseline
+        # is a typical nights count, not a dollar rate.
+        label = "Area-typical nights" if name == "area_median" else MODEL_NAMES[name]
+        cells = [label]
         values = []
         for city in STUDY_CITIES:
             mae = metrics["cities"][city]["nights"]["holdout"][name]["mae"]

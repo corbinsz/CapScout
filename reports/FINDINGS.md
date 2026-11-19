@@ -6,7 +6,7 @@ This is a personal project. The rate is the advertised rate, not the price a gue
 
 ## The data
 
-The rows are Inside Airbnb listing snapshots, CC BY 4.0. Austin is 2025-09-16. San Diego and Seattle are 2025-03-16. The files are downloaded with `python -m data.download austin san-diego seattle` and are not committed. Prices that look like `$1,234.00` are parsed by removing the dollar sign and the comma. A bathroom written as "Half-bath" with no digit is 0.5. On these three files, after the price filters, the numeric bathroom column was already filled, so that rule changed zero kept rows. It is still the parser.
+The rows are Inside Airbnb listing snapshots, CC BY 4.0, credit Inside Airbnb. Austin is the 2025-09-16 snapshot. San Diego and Seattle are the 2025-03-16 snapshots. The files are downloaded with `python -m data.download austin san-diego seattle` and are not committed. Prices that look like `$1,234.00` are parsed by removing the dollar sign and the comma. A bathroom written as "Half-bath" with no digit is 0.5. On these three files, after the price filters, the numeric bathroom column was already filled, so that rule changed zero kept rows. It is still the parser.
 
 Every cut below is a fixed rule, not a percentile of the file. Counts are sequential.
 
@@ -91,6 +91,19 @@ Primary holdout, with a 95% interval from resampling the held-out cells 1,000 ti
 | San Diego, CA | 817 | 23 | 0.601 | 0.517 to 0.673 | $57.27 | $45.40 to $75.88 | 21.5% | 19.2% to 24.5% | $91.62 | 37.5% |
 | Seattle, WA | 730 | 8 | 0.522 | 0.489 to 0.592 | $36.13 | $31.43 to $40.24 | 19.9% | 17.3% to 22.4% | $49.40 | 26.9% |
 
+## All three cities together
+
+The city rows are the numbers to quote. Austin, San Diego, and Seattle are different markets: the usual nightly rate on this holdout is about $113, $92, and $49, and the holdouts are 2,101, 817, and 730 homes. One blended score would let Austin's prices, and its larger sample, speak for the other two cities.
+
+Counting each city once is the overall the model was chosen on. Ridge's average miss is $55.18 a night, against $84.59 for the usual local rate, which is 34.8% less error. The average of the three R² values is 0.545, and the average of the three median percent errors is 22.5%. Resampling each city's holdout cells 1,000 times, then averaging the three cities, gives a 95% interval of R² 0.506 to 0.611, a miss of $48.86 to $63.45, a usual-rate miss of $77.07 to $100.80, a median percent error of 21.0% to 24.1%, and 31.6% to 40.4% less error.
+
+Counting every holdout home once, instead of each city once, the miss is $61.60 against a usual rate of $95.34. That pool has R² 0.542, a median error of 23.6%, and 35.4% less error than the usual local rate. The same cell resampling, keeping each city's share of the homes, puts the R² between 0.480 and 0.659 and the miss between $50.26 and $71.34. The dollar error is higher than $55.18 because Austin has more of the holdout and more expensive misses.
+
+| Summary | R² | Model miss | Usual local rate | Median % error | Less error |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Each city once | 0.545 (0.506 to 0.611) | $55.18 ($48.86 to $63.45) | $84.59 ($77.07 to $100.80) | 22.5% (21.0% to 24.1%) | 34.8% (31.6% to 40.4%) |
+| Every home once | 0.542 (0.480 to 0.659) | $61.60 ($50.26 to $71.34) | $95.34 ($79.54 to $109.27) | 23.6% (21.2% to 25.6%) | 35.4% (32.1% to 41.0%) |
+
 The same specification on seeds 19, 29, and 37:
 
 | City | Primary R² | Other seeds R² | Primary MAE | Other seeds MAE |
@@ -111,7 +124,7 @@ Same holdout, same 2% rule, simpler models only. The comparison is the average m
 
 | Model | Austin, TX | San Diego, CA | Seattle, WA | Average |
 | --- | ---: | ---: | ---: | ---: |
-| Area-typical rate | 72.0 | 76.5 | 72.8 | 73.8 |
+| Area-typical nights | 72.0 | 76.5 | 72.8 | 73.8 |
 | Linear regression | 68.9 | 70.2 | 68.7 | 69.3 |
 | Ridge regression | 68.6 | 70.3 | 68.8 | 69.2 |
 | Random forest | 67.9 | 70.5 | 68.7 | 69.0 |

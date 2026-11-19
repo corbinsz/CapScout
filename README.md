@@ -1,10 +1,36 @@
-CapScout is a personal project built in Corbin's spare time, for learning and as a portfolio piece. It is not a commercial product. It runs on your computer. It is not a hosted site.
-
 # CapScout
 
-What nightly rate could a home in Austin, San Diego, or Seattle charge on Airbnb, and about how many nights a year would it book?
+CapScout grades a home in Austin, San Diego, or Seattle as a short-term rental. It predicts the nightly rate the home could advertise. Nights booked and yearly revenue are shown as rough estimates: the nights figure is built from reviews, not from a count of bookings, and it missed a bar that was set before the test. The letter grade ranks that predicted revenue inside the city. It is not a profit grade.
 
-The long version is [reports/FINDINGS.md](reports/FINDINGS.md). A one-page way to explain the work out loud is [docs/EXPLAIN_IT_YOURSELF.md](docs/EXPLAIN_IT_YOURSELF.md). Sources and licenses are in [DATA.md](DATA.md).
+This is a personal project, built in spare time. It runs on your computer.
+
+## Run it locally
+
+From the repository root:
+
+```bash
+pip install -r requirements.txt && python -m app.launch
+```
+
+That installs the libraries, downloads the three Inside Airbnb snapshots the first time, and opens the app on this machine at port 8501.
+
+The listings are Inside Airbnb snapshots, CC BY 4.0, credit Inside Airbnb. Austin is the 2025-09-16 snapshot. San Diego and Seattle are the 2025-03-16 snapshots. The longer source notes are in [DATA.md](DATA.md).
+
+## The holdout, in one table
+
+Ridge regression is the nightly-rate model. Quote the city rows. The last two rows are summaries, not a fourth market. Intervals, the model comparison, and why the summaries differ are in [reports/FINDINGS.md](reports/FINDINGS.md). A one-page way to explain the work out loud is [docs/EXPLAIN_IT_YOURSELF.md](docs/EXPLAIN_IT_YOURSELF.md).
+
+| City | R² | Average miss | Median error | Less error than the usual local rate |
+| --- | ---: | ---: | ---: | ---: |
+| Austin, TX | 0.511 | $72.13 | 25.9% | 36.0% |
+| San Diego, CA | 0.601 | $57.27 | 21.5% | 37.5% |
+| Seattle, WA | 0.522 | $36.13 | 19.9% | 26.9% |
+| Each city once | 0.545 | $55.18 | 22.5% | 34.8% |
+| Every home once | 0.542 | $61.60 | 23.6% | 35.4% |
+
+Counting each city once, the average miss is $55.18 against $84.59 for the usual local rate, which is 34.8% less error. Counting every holdout home once, the miss is $61.60 against $95.34, because Austin is a larger share of the homes.
+
+![A downtown Austin estimate, with the nightly rate, a rough nights figure, and a grade](docs/app-austin.png)
 
 ## The result
 
@@ -59,7 +85,7 @@ The nights model did not clear the pre-set bar in every city. The bar was an ave
 
 | Model | Austin, TX | San Diego, CA | Seattle, WA | Average |
 | --- | ---: | ---: | ---: | ---: |
-| Area-typical rate | 72.0 | 76.5 | 72.8 | 73.8 |
+| Area-typical nights | 72.0 | 76.5 | 72.8 | 73.8 |
 | Linear regression | 68.9 | 70.2 | 68.7 | 69.3 |
 | Ridge regression | 68.6 | 70.3 | 68.8 | 69.2 |
 | Random forest | 67.9 | 70.5 | 68.7 | 69.0 |
@@ -135,12 +161,10 @@ An older pipeline trained on area-median prices. As a demonstration, that fit sc
 From the repository root:
 
 ```bash
-pip install -r requirements.txt
-python -m data.download austin san-diego seattle
-streamlit run app/streamlit_app.py
+pip install -r requirements.txt && python -m app.launch
 ```
 
-The download pulls the three Inside Airbnb snapshots. They are not stored in git. The app listens on `127.0.0.1` port 8501. Pick a city, search an address or type a latitude and longitude, and enter bedrooms, bathrooms, guests, and room type. You get a nightly rate with a range, nights per year, yearly revenue, a letter grade, the top reasons, and nearby ads. A bad address, a lookup that does not answer, or a pin more than 60 km from downtown is a message, not a score. A purchase price is optional and only produces a rough gross yield.
+The same command is at the top of this file. The download pulls the three Inside Airbnb snapshots. They are not stored in git. The app listens on `127.0.0.1` port 8501. Pick a city, search an address or type a latitude and longitude, and enter bedrooms, bathrooms, guests, and room type. You get a nightly rate with a range, nights per year, yearly revenue, a letter grade, the top reasons, and nearby ads. A bad address, a lookup that does not answer, or a pin more than 60 km from downtown is a message, not a score. A purchase price is optional and only produces a rough gross yield.
 
 The saved models are already in `models/artifacts/`. `python -m evaluation.run_study` refits them. It will refuse to run if the frozen holdout ids in `evaluation/study_ids.json` no longer match the cleaned rows.
 

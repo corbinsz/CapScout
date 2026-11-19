@@ -16,6 +16,7 @@ from evaluation.study_format import (
     price_result_table,
 )
 from evaluation.study_models import bootstrap_metrics
+from evaluation.study_overall import findings_overall, readme_overall_table
 from evaluation.study_protocol import (
     CONFIRM_SEEDS,
     ELIGIBLE_MODELS,
@@ -34,6 +35,21 @@ README = (ROOT / "README.md").read_text()
 FINDINGS = (ROOT / "reports" / "FINDINGS.md").read_text()
 PREDICTIONS = pd.read_csv(ROOT / "reports" / "study_predictions.csv")
 CONFIRMATION = pd.read_csv(ROOT / "reports" / "study_confirmation.csv")
+
+
+def test_overall_figures_match_the_holdout_and_the_docs():
+    section = findings_overall(PREDICTIONS)
+    table = readme_overall_table(PREDICTIONS)
+    assert section in FINDINGS
+    assert table in README
+    assert "CC BY 4.0" in README
+    assert "2025-09-16" in README
+    assert "2025-03-16" in README
+    assert "CC BY 4.0" in FINDINGS
+    assert "2025-09-16" in FINDINGS
+    assert "2025-03-16" in FINDINGS
+    assert "$55.18" in section and "$84.59" in section
+    assert "$61.60" in section and "$95.34" in section
 
 
 def test_docs_quote_the_rendered_tables_and_the_reasons():

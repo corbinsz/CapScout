@@ -89,6 +89,14 @@ def _money(value: float) -> str:
     return f"${value:,.0f}"
 
 
+def _place_name(name: str) -> str:
+    """A neighbourhood label. Austin stores ZIP codes in this field."""
+    text = str(name).strip()
+    if text.isdigit():
+        return f"ZIP {text}"
+    return text
+
+
 def _predict_page() -> None:
     st.markdown(
         '<p class="eyebrow">Personal study · this computer only</p>', unsafe_allow_html=True
@@ -280,7 +288,10 @@ def _stay(scored: dict) -> None:
     area = scored.get("area_median_nights")
     area_bit = ""
     if area is not None and scored.get("area_name"):
-        area_bit = f" The usual nights figure near {scored['area_name']} is about {area:.0f}."
+        # Austin's cleaned neighbourhood field is a ZIP code. Naming it
+        # keeps "78701" from reading like a stray number.
+        place = _place_name(scored["area_name"])
+        area_bit = f" The usual nights figure for {place} is about {area:.0f}."
     elif area is not None:
         area_bit = f" The citywide usual nights figure is about {area:.0f}."
     yield_bit = ""
@@ -298,6 +309,13 @@ def _stay(scored: dict) -> None:
         note += (
             "That missed a bar set before the test, so this number stays a rough estimate. "
             "The label itself comes from review counts, not from a calendar of bookings."
+        )
+    if nights < 0.5:
+        # A linear nights model can hit the floor on an unusual home, such as
+        # a 10-bedroom shared room. Zero would read as a forecast. It is the floor.
+        note += (
+            " This guess landed at the bottom of the scale. Do not read zero nights "
+            "as a forecast that the home would never book."
         )
     st.markdown(
         '<div class="stay-grid">'
@@ -358,7 +376,7 @@ def _result(scored: dict, comps: pd.DataFrame) -> None:
             median = float(pd.Series(prices).median())
             rows = []
             for row in comps.itertuples(index=False):
-                neighbourhood = str(row.neighbourhood_cleansed).replace("<", "")
+                neighbourhood = _place_name(str(row.neighbourhood_cleansed).replace("<", ""))
                 rows.append(
                     f'<div class="comp"><div><strong>{_money(row.price_clean)}</strong>'
                     f'<div class="muted">{neighbourhood}</div></div>'
