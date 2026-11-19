@@ -18,5 +18,7 @@ jobs:
         run: |
           ruff check data features models evaluation tests backend app
           black --check data features models evaluation tests backend app
+      - name: Download the three study snapshots
+        run: python -m data.download austin san-diego seattle
       - name: Tests
         run: pytest

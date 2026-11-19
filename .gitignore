@@ -33,10 +33,12 @@ venv/
 # Census and OSM downloads before they are cut down to a city extract.
 data/external/_cache/
 
-# Local caches and optional uploads. Inside Airbnb snapshots under
-# data/raw/cities/*/listings.csv.gz are part of the study and stay tracked.
+# Local caches and optional uploads. Inside Airbnb snapshots are downloaded
+# with `python -m data.download` and are not committed.
 backend/data/*
 backend/.env
+data/raw/cities/**/*.csv
+data/raw/cities/**/*.csv.gz
 data/raw/cities/*/redfin_listings.csv
 reports/smoke_metrics.json
 

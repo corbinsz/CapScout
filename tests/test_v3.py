@@ -107,7 +107,7 @@ def test_shared_bath_and_host_tenure_from_the_listing_fields():
     assert out.loc[0, "host_response_rate"] == 0.8
     assert np.isnan(out.loc[0, "host_acceptance_rate"])
     assert out.loc[0, "host_response_time_ord"] == 1.0
-    # Austin's snapshot is 2025-06-13, so this host has about five years.
+    # Host since 2020-06-13 is about five years before the Austin snapshot.
     assert 1.7 < out.loc[0, "log_host_tenure"] < 1.9
     assert out.loc[0, "text_mentions_quiet"] == 1.0
 

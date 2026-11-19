@@ -34,3 +34,8 @@ def distance_to_airport_km(lat: np.ndarray, lon: np.ndarray, city_key: str) -> n
     points = airport_points(city_key)
     stacked = [haversine_km(lat, lon, plat, plon) for plat, plon in points]
     return np.min(np.vstack(stacked), axis=0)
+
+
+def distance_to_city_center_km(lat: np.ndarray, lon: np.ndarray, city_key: str) -> np.ndarray:
+    """Kilometers from the city's reference point. Same inputs as the downtown feature."""
+    return distance_to_center_km(lat, lon, city_key)
