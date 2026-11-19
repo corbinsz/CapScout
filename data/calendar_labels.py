@@ -21,6 +21,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from data.calendar_sample import listing_id as _listing_id
+
 # Seen still open inside this many days, then closed: close to the date.
 # A short urban trip usually books inside about a month. Forty-five days
 # leaves room for a missed scrape without calling a six-month closure "close".
@@ -423,21 +425,7 @@ def label_frame(
 
 
 def _normalize_listing_id(value: object) -> str:
-    try:
-        if pd.isna(value):
-            return ""
-    except TypeError:
-        pass
-    text = str(value).strip()
-    if text == "" or text.lower() in {"nan", "none", "null"}:
-        return ""
-    try:
-        number = float(text)
-    except ValueError:
-        return text
-    if number.is_integer():
-        return str(int(number))
-    return text
+    return _listing_id(value) or ""
 
 
 def load_snapshot_files(paths: Iterable[Path | str]) -> pd.DataFrame:

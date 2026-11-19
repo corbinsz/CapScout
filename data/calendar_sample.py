@@ -2,14 +2,16 @@
 
 The occupancy model is weak because its label is a review-count proxy.
 Replacing that label needs the same homes watched every day. This module
-draws that panel once, from the Inside Airbnb listings already in the repo,
-stratified by neighbourhood and room type. The daily job reads the committed
-ids. It does not redraw them.
+draws that panel once, from the newest Inside Airbnb listings, keeping homes
+with a review in the twelve months before that file and at least one open
+night. The draw is large enough that about 300 of those calendars come back.
+The daily job reads the committed ids. It does not redraw them.
 """
 
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -17,20 +19,37 @@ import numpy as np
 import pandas as pd
 
 from data.cities import STUDY_CITIES
-from data.ingest import listings_path
 
 # Not a modeling seed. The price study used 0–4, 7, 11, 23, and 42.
 # The nights study used 31. This draw is only a panel, not a holdout.
 SAMPLE_SEED = 17
-SAMPLE_SIZE = 300
+TARGET_CALENDARS = 300
+# A larger ask than this does not fit a two-hour city job at the 2 second delay.
+MAX_PANEL = 1200
 SAMPLE_CITIES: tuple[str, ...] = STUDY_CITIES
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_PATH = REPO_ROOT / "data" / "calendar_sample.json"
+POOL_DIR = REPO_ROOT / "data" / "calendar_pool"
+ACTIVE_RULE = "number_of_reviews_ltm >= 1 and availability_365 >= 1"
 
 
 def listing_id(value: object) -> str | None:
-    """Inside Airbnb ids arrive as ints, floats, or strings. Keep one form."""
-    if value is None or (isinstance(value, float) and np.isnan(value)):
+    """One decimal form of a listing id, without rounding through float.
+
+    Newer Airbnb ids are longer than the 53-bit float mantissa. Reading one
+    as a float and converting back changes the id, and the public calendar
+    then comes back empty. Integers and digit strings stay exact. A float
+    that large has already lost digits, so it is rejected.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, np.integer)):
+        return str(int(value))
+    if isinstance(value, float):
+        if np.isnan(value) or abs(value) >= 2**53:
+            return None
+        if value.is_integer():
+            return str(int(value))
         return None
     try:
         if pd.isna(value):
@@ -38,12 +57,13 @@ def listing_id(value: object) -> str | None:
     except TypeError:
         pass
     text = str(value).strip()
-    if text == "" or text.lower() in {"nan", "none"}:
+    if text.endswith(".0") and text[:-2].lstrip("-").isdigit():
+        text = text[:-2]
+    if text.lstrip("-").isdigit():
+        return str(int(text))
+    if text == "" or text.lower() in {"nan", "none", "null"}:
         return None
-    try:
-        return str(int(float(text)))
-    except ValueError:
-        return text
+    return text
 
 
 def _stratum_label(neighbourhood: object, room_type: object) -> str:
@@ -52,14 +72,58 @@ def _stratum_label(neighbourhood: object, room_type: object) -> str:
     return f"{hood or 'unknown'}|{room or 'unknown'}"
 
 
+def active_mask(frame: pd.DataFrame) -> pd.Series:
+    """Homes with a review in the file's last twelve months and an open night.
+
+    ``number_of_reviews_ltm`` is Inside Airbnb's count of reviews in the twelve
+    months before the scrape. ``availability_365`` is open nights in the next
+    year on that same scrape. Both have to be at least 1.
+    """
+    reviews = pd.to_numeric(frame["number_of_reviews_ltm"], errors="coerce").fillna(0)
+    available = pd.to_numeric(frame["availability_365"], errors="coerce").fillna(0)
+    return (reviews >= 1) & (available >= 1)
+
+
+def panel_size(
+    returned: int,
+    probed: int,
+    target: int = TARGET_CALENDARS,
+    cap: int = MAX_PANEL,
+) -> int:
+    """How many ids to ask so about ``target`` calendars come back.
+
+    ``returned / probed`` is the share of a probe that published a calendar.
+    The result is rounded up. It stops at ``cap`` when the probe return rate
+    is too low for one city job. A probe that returned nothing asks ``cap``.
+    """
+    if probed <= 0:
+        raise ValueError("probe asked nothing")
+    if returned < 0 or returned > probed:
+        raise ValueError("returned count is outside the probe")
+    if returned == 0:
+        return cap
+    asked = math.ceil(target * probed / returned)
+    return min(cap, asked)
+
+
 def load_strata(city_key: str, path: Path | None = None) -> pd.DataFrame:
-    """One row per listing id, with the stratum used for the draw."""
-    frame = pd.read_csv(
-        path or listings_path(city_key),
-        usecols=["id", "neighbourhood_cleansed", "room_type"],
-    )
-    frame["listing_id"] = frame["id"].map(listing_id)
+    """One row per eligible listing id, with the stratum used for the draw.
+
+    The default file is the committed eligible pool, already filtered.
+    A raw listings file can be passed instead; rows that fail ``active_mask``
+    are dropped when that file still has the review and availability columns.
+    """
+    source = path or (POOL_DIR / f"{city_key}.csv.gz")
+    header = pd.read_csv(source, nrows=0).columns
+    id_dtype = {column: "string" for column in ("id", "listing_id") if column in header}
+    frame = pd.read_csv(source, dtype=id_dtype)
+    if "listing_id" not in frame.columns:
+        frame["listing_id"] = frame["id"].map(listing_id)
+    else:
+        frame["listing_id"] = frame["listing_id"].map(listing_id)
     frame = frame[frame["listing_id"].notna()].drop_duplicates("listing_id")
+    if {"number_of_reviews_ltm", "availability_365"}.issubset(frame.columns):
+        frame = frame[active_mask(frame)]
     frame["stratum"] = [
         _stratum_label(hood, room)
         for hood, room in zip(frame["neighbourhood_cleansed"], frame["room_type"], strict=True)
@@ -134,26 +198,45 @@ def draw_ids(
     return sorted(chosen, key=_id_sort_key)
 
 
+def _sizes(per_city: int | Mapping[str, int], cities: Sequence[str]) -> dict[str, int]:
+    if isinstance(per_city, int):
+        return {city: per_city for city in cities}
+    missing = [city for city in cities if city not in per_city]
+    if missing:
+        raise ValueError(f"No panel size for: {', '.join(missing)}")
+    return {city: int(per_city[city]) for city in cities}
+
+
 def build_sample_document(
     cities: Sequence[str] = SAMPLE_CITIES,
-    per_city: int = SAMPLE_SIZE,
+    per_city: int | Mapping[str, int] = TARGET_CALENDARS,
     seed: int = SAMPLE_SEED,
+    extra: Mapping[str, object] | None = None,
 ) -> dict:
-    """The document committed at ``data/calendar_sample.json``."""
+    """The document committed at ``data/calendar_sample.json``.
+
+    ``per_city`` is how many ids to ask, not how many calendars come back.
+    The probe that chose those counts belongs in ``extra``.
+    """
+    sizes = _sizes(per_city, cities)
     payload: dict = {
         "seed": seed,
-        "per_city": per_city,
+        "target_calendars": TARGET_CALENDARS,
+        "active": ACTIVE_RULE,
         "strata": ["neighbourhood_cleansed", "room_type"],
         "allocation": "largest remainder, capped at the stratum size",
         "draw": "SeedSequence([seed, city_index]); pools sorted; ids sorted",
         "cities": {},
     }
+    if extra:
+        payload.update(dict(extra))
     for index, city in enumerate(cities):
         frame = load_strata(city)
-        ids = draw_ids(frame, per_city, seed, index)
+        ids = draw_ids(frame, sizes[city], seed, index)
         payload["cities"][city] = {
-            "source_rows": int(len(frame)),
+            "eligible": int(len(frame)),
             "strata": int(frame["stratum"].nunique()),
+            "asked": sizes[city],
             "sampled": len(ids),
             "listing_ids": ids,
         }
@@ -161,8 +244,19 @@ def build_sample_document(
 
 
 def write_sample(path: Path | None = None) -> dict:
-    document = build_sample_document()
+    """Rewrite the panel from the pools, keeping the committed ask sizes."""
     dest = path or SAMPLE_PATH
+    current = json.loads(dest.read_text(encoding="utf-8"))
+    sizes = {
+        city: int(body.get("asked", body["sampled"])) for city, body in current["cities"].items()
+    }
+    extra = {key: current[key] for key in ("sources", "probe", "note") if key in current}
+    document = build_sample_document(per_city=sizes, seed=int(current["seed"]), extra=extra)
+    for city, body in document["cities"].items():
+        previous = current["cities"].get(city, {})
+        for key, value in previous.items():
+            if key not in body:
+                body[key] = value
     dest.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
     return document
 

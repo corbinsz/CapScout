@@ -23,7 +23,15 @@ from data.calendar_labels import (
     Rules,
     label_frame,
 )
-from data.calendar_sample import SAMPLE_PATH, allocate_strata, build_sample_document, draw_ids
+from data.calendar_sample import (
+    SAMPLE_PATH,
+    active_mask,
+    allocate_strata,
+    build_sample_document,
+    draw_ids,
+    listing_id,
+    panel_size,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -294,15 +302,56 @@ def test_draw_is_stable_and_the_committed_panel_matches_it():
     assert sum(alloc.values()) == 8
     assert all(alloc[key] <= {"a|entire": 10, "b|private": 6, "c|shared": 4}[key] for key in alloc)
 
+    active = pd.DataFrame(
+        {
+            "number_of_reviews_ltm": [0, 2, 4, None],
+            "availability_365": [10, 0, 3, 5],
+        }
+    )
+    assert list(active_mask(active)) == [False, False, True, False]
+    assert panel_size(36, 36) == 300
+    assert panel_size(35, 36) == 309
+    assert panel_size(33, 36) == 328
+    assert panel_size(0, 36) == 1200
+    long_id = "1775522910816348491"
+    assert listing_id(long_id) == long_id
+    assert listing_id(int(long_id)) == long_id
+    assert listing_id(float(long_id)) is None
+
+
+def test_a_long_listing_id_survives_the_snapshot(tmp_path: Path):
+    from data.calendar_labels import load_snapshot_files
+
+    raw = "1775522910816348491"
+    path = tmp_path / "daily" / "austin" / "2026-11-19.csv.gz"
+    path.parent.mkdir(parents=True)
+    pd.DataFrame(
+        [
+            {
+                "listing_id": raw,
+                "date": "2026-11-19",
+                "available": 1,
+                "min_nights": 2,
+                "price": "",
+                "fetched_at": "2026-11-19T12:00:00Z",
+            }
+        ]
+    ).to_csv(path, index=False, compression="gzip")
+    loaded = load_snapshot_files([path])
+    assert list(loaded["listing_id"]) == [raw]
+
     document = json.loads(SAMPLE_PATH.read_text(encoding="utf-8"))
-    fresh = build_sample_document()
-    assert document["seed"] == fresh["seed"] == 17
-    assert document["per_city"] == 300
+    assert document["seed"] == 17
+    assert document["target_calendars"] == 300
+    assert "number_of_reviews_ltm >= 1" in document["active"]
+    assert "availability_365 >= 1" in document["active"]
+    fresh = build_sample_document(
+        per_city={city: body["asked"] for city, body in document["cities"].items()},
+        seed=document["seed"],
+    )
     for city in ("austin", "san-diego", "seattle"):
         assert document["cities"][city]["listing_ids"] == fresh["cities"][city]["listing_ids"]
-        assert len(document["cities"][city]["listing_ids"]) == min(
-            300, fresh["cities"][city]["source_rows"]
-        )
+        assert document["cities"][city]["sampled"] == len(document["cities"][city]["listing_ids"])
 
 
 def test_docs_state_the_wait_and_the_branch():

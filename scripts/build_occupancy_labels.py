@@ -18,6 +18,7 @@ if str(_ROOT) not in sys.path:
 
 import pandas as pd
 from data.calendar_labels import label_frame, load_snapshot_files
+from data.calendar_sample import load_sample
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -31,6 +32,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--night-detail", type=Path, default=None, help="Optional per-night label CSV."
     )
+    parser.add_argument(
+        "--sample",
+        type=Path,
+        default=None,
+        help="Panel JSON. Default: the committed sample. Listings outside it are dropped.",
+    )
+    parser.add_argument(
+        "--all-listings",
+        action="store_true",
+        help="Keep every listing in the snapshots, including ids that are not in the panel.",
+    )
     args = parser.parse_args(argv)
 
     paths = sorted(
@@ -39,6 +51,10 @@ def main(argv: list[str] | None = None) -> int:
         if not path.name.endswith(".partial.csv.gz")
     )
     frame = load_snapshot_files(paths)
+    if not args.all_listings and not frame.empty:
+        panel = load_sample(args.sample)
+        wanted = {str(listing_id) for ids in panel.values() for listing_id in ids}
+        frame = frame[frame["listing_id"].astype(str).isin(wanted)].copy()
     nights, summary = label_frame(frame)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     written = summary.copy()

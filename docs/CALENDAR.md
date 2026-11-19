@@ -4,7 +4,9 @@ The nights model in this repo predicts a review-count proxy. Held-out R² on tha
 
 ## What is collected
 
-Three cities: Austin, San Diego, Seattle. Three hundred listings in each, drawn once from the Inside Airbnb listing files already in the repo. The draw is seed 17. It is stratified by `neighbourhood_cleansed` and `room_type`, with largest-remainder allocation capped at the size of each stratum, then a seeded draw inside the stratum. The ids are committed in `data/calendar_sample.json`. The daily job reads that file. It does not redraw. The listing files are the study snapshots, Austin dated 2025-06-13 and San Diego and Seattle dated 2025-03-16. A listing that has since left the platform comes back with an empty calendar and is counted missing. It is still asked, because a missing id can return.
+Three cities: Austin, San Diego, Seattle. The ids are drawn once from the newest Inside Airbnb listings file for each city: Austin 2026-09-17, San Diego 2026-09-20, Seattle 2026-09-20. A row is eligible when `number_of_reviews_ltm` is at least 1 and `availability_365` is at least 1. That is a review in the twelve months before the file, and at least one open night on that scrape. The draw is seed 17. It is stratified by `neighbourhood_cleansed` and `room_type`, with largest-remainder allocation capped at the size of each stratum, then a seeded draw inside the stratum. The ids are committed in `data/calendar_sample.json`. The eligible rows are `data/calendar_pool/`. The daily job reads the sample. It does not redraw.
+
+The ask is larger than 300 where the probe said a few calendars would come back empty, so the expected number of calendars is about 300. Austin and San Diego ask 309. Seattle asks 300. Listing ids are kept as text. The newer ids are longer than the 53 bits of a floating-point number, and rounding one changes the id. The public calendar for a rounded id comes back empty.
 
 Each run appends one compact snapshot per city:
 
@@ -31,17 +33,19 @@ A city that already has a complete full-panel file for that UTC date is left as 
 
 The public calendar often returns a null price on both open and closed nights. The column is still stored. The rules below do not read it.
 
-## First collection
+## Probe and the first collection
 
-On 2026-11-19 the collector asked all 300 ids in each city from the machine that prepared this change. GitHub Actions has not run the workflow. The schedule starts from the default branch after the workflow file is merged, so a hosted-runner result is still open. The public endpoint answered on that machine and the run was not challenged.
+On 2026-11-19 the active pool was probed with 36 ids per city, drawn the same way as the panel, from the machine that prepared this change. GitHub Actions has not run the workflow. The schedule starts from the default branch after the workflow file is merged, so a hosted-runner result is still open. The public endpoint answered and the probe was not challenged.
 
-| City | Returned a calendar | Empty calendar | Failed |
-| --- | --- | --- | --- |
-| Austin | 80 | 220 | 0 |
-| San Diego | 93 | 207 | 0 |
-| Seattle | 92 | 208 | 0 |
+| City | Returned a calendar | Empty calendar | Failed | Ids the daily job asks |
+| --- | --- | --- | --- | --- |
+| Austin | 35 of 36 | 1 | 0 | 309 |
+| San Diego | 35 of 36 | 1 | 0 | 309 |
+| Seattle | 36 of 36 | 0 | 0 | 300 |
 
-Each returned calendar had 365 nights, from 2026-11-01 through 2027-10-31, and a blank price on every night. The run started at 16:00 UTC and finished at 16:40 UTC. Those files are the first commit on `calendar-data`. The empty calendars are expected from listing files dated March and June 2025. The sample was not redrawn to raise the hit rate.
+309 times 35/36 is 300.4, and 300 times 36/36 is 300, which is the sizing rule: round the ask up so the probe rate yields about 300 calendars. At roughly 3 seconds a listing, the full pass is under an hour. That fits the 180-minute job, so the workflow does not split by city.
+
+The same day, before this redraw, a panel of 300 ids from the 2025 study files was collected in full. Austin returned 80 calendars, San Diego 93, and Seattle 92, with no failures, from 16:00 to 16:40 UTC. Those files are the 2026-11-19 commit on `calendar-data`. They are the retired panel. The label command keeps ids in the current sample and leaves that day out of the rates.
 
 ## Where the rules come from
 
@@ -90,7 +94,7 @@ over nights whose date is on or before the last snapshot. Owner blocks, the clos
 - Preparation time of a night or two that flips in the same snapshot as the stay becomes part of that stay's length. We do not have the host's preparation setting, so we do not peel those nights off.
 - Two back-to-back stays that close on the same day become one run. Visit counts would be low. Night counts are the target, so the merge is the smaller error.
 - A snapshot gap longer than 2 days leaves those nights unresolved. GitHub's scheduler can skip a day. One missed day still resolves, because the slack is 2. A week-long outage does not.
-- The panel is 300 listings per city, not every listing. A rate on this panel is not a city occupancy rate.
+- The panel is about 300 calendars per city, not every listing. A rate on this panel is not a city occupancy rate. The eligible pool is a few thousand homes per city, and the draw is stratified, so small neighbourhoods can be missing.
 - Listings disappear, change id, or get blocked from the public calendar. The run report's missing count is that attrition.
 - Inside Airbnb's monthly file, used only when the live endpoint is unusable, cannot support rule 1 for more than the nights within 2 days of the scrape. It is kept so the next file has something to diff against.
 

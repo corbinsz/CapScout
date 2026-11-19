@@ -7,6 +7,11 @@ name: Collect calendars
 #
 # A pull request runs a one-listing smoke and does not commit. That is the
 # check that a GitHub-hosted runner can read the public calendar.
+#
+# The panel asks 309 Austin ids, 309 San Diego ids, and 300 Seattle ids.
+# A 36-id probe on 2026-11-19 returned calendars for 35, 35, and 36 of those.
+# At about 3 seconds a listing the full pass is under an hour, inside the
+# 180-minute job, so the cities stay in one run.
 on:
   schedule:
     - cron: "17 13 * * *"

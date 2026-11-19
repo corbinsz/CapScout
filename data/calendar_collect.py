@@ -31,6 +31,7 @@ import pandas as pd
 import requests
 
 from data.calendar_sample import SAMPLE_CITIES, load_sample
+from data.calendar_sample import listing_id as normalize_listing_id
 from data.cities import CITIES
 
 USER_AGENT = (
@@ -484,7 +485,7 @@ def inside_rows_for_sample(
         missing = ", ".join(sorted(required - set(working.columns)))
         raise ValueError(f"Inside Airbnb calendar is missing {missing}")
     working["listing_id"] = working["listing_id"].map(
-        lambda value: str(int(float(value))) if _float_id(value) else ""
+        lambda value: normalize_listing_id(value) or ""
     )
     working = working[working["listing_id"].isin(listing_ids)]
     min_column = "minimum_nights" if "minimum_nights" in working.columns else "min_nights"
@@ -507,28 +508,21 @@ def inside_rows_for_sample(
     return rows
 
 
-def _float_id(value: object) -> bool:
-    try:
-        if pd.isna(value):
-            return False
-    except TypeError:
-        return False
-    try:
-        float(value)
-    except (TypeError, ValueError):
-        return False
-    return True
-
-
 def read_inside_airbnb_calendar(path: Path, listing_ids: set[str], fetched_at: str) -> list[dict]:
     kept: list[pd.DataFrame] = []
     usecols = ["listing_id", "date", "available", "price", "minimum_nights"]
-    for chunk in pd.read_csv(path, usecols=lambda name: name in usecols, chunksize=200_000):
+    for chunk in pd.read_csv(
+        path,
+        usecols=lambda name: name in usecols,
+        dtype={"listing_id": "string"},
+        chunksize=200_000,
+    ):
         if chunk.empty or "listing_id" not in chunk.columns:
             continue
-        ids = pd.to_numeric(chunk["listing_id"], errors="coerce")
-        chunk = chunk.loc[ids.notna()].copy()
-        chunk["listing_id"] = ids.loc[ids.notna()].astype("int64").astype(str).to_numpy()
+        chunk = chunk.copy()
+        chunk["listing_id"] = chunk["listing_id"].map(
+            lambda value: normalize_listing_id(value) or ""
+        )
         chunk = chunk[chunk["listing_id"].isin(listing_ids)]
         if not chunk.empty:
             kept.append(chunk)

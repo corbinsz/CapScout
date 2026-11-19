@@ -292,12 +292,26 @@ def test_build_script_reads_a_snapshot(tmp_path: Path):
                 "min_nights": 1,
                 "price": "",
                 "fetched_at": "2026-04-12T12:00:00Z",
-            }
+            },
+            {
+                "listing_id": "9",
+                "date": "2026-04-12",
+                "available": 0,
+                "min_nights": 1,
+                "price": "",
+                "fetched_at": "2026-04-12T12:00:00Z",
+            },
         ],
     )
+    sample = tmp_path / "sample.json"
+    sample.write_text(
+        json.dumps({"cities": {"austin": {"listing_ids": ["5"]}}}),
+        encoding="utf-8",
+    )
     out = tmp_path / "labels.csv"
-    assert main(["--snapshots", str(tmp_path), "--out", str(out)]) == 0
+    assert main(["--snapshots", str(tmp_path), "--out", str(out), "--sample", str(sample)]) == 0
     saved = pd.read_csv(out)
+    assert len(saved) == 1
     assert saved.iloc[0]["listing_id"] == 5 or str(saved.iloc[0]["listing_id"]) == "5"
     assert saved.iloc[0]["city"] == "austin"
     assert int(saved.iloc[0]["unbooked_nights"]) == 1
