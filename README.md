@@ -91,7 +91,7 @@ It does not know what a guest paid. The intervals are wide: about $155 in Austin
 
 | City | Rows in the file | Rows kept |
 | --- | ---: | ---: |
-| Austin, snapshot 2025-06-13 | 10,533 | 7,720 |
+| Austin, snapshot 2025-09-16 | 10,533 | 7,720 |
 | San Diego, snapshot 2025-03-16 | 12,991 | 8,387 |
 | Seattle, snapshot 2025-03-16 | 6,772 | 4,610 |
 

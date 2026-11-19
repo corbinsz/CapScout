@@ -6,7 +6,7 @@ This is a personal project. The rate is the advertised rate, not the price a gue
 
 ## The data
 
-The rows are Inside Airbnb listing snapshots, CC BY 4.0. Austin is 2025-06-13. San Diego and Seattle are 2025-03-16. The files are downloaded with `python -m data.download austin san-diego seattle` and are not committed. Prices that look like `$1,234.00` are parsed by removing the dollar sign and the comma. A bathroom written as "Half-bath" with no digit is 0.5. On these three files, after the price filters, the numeric bathroom column was already filled, so that rule changed zero kept rows. It is still the parser.
+The rows are Inside Airbnb listing snapshots, CC BY 4.0. Austin is 2025-09-16. San Diego and Seattle are 2025-03-16. The files are downloaded with `python -m data.download austin san-diego seattle` and are not committed. Prices that look like `$1,234.00` are parsed by removing the dollar sign and the comma. A bathroom written as "Half-bath" with no digit is 0.5. On these three files, after the price filters, the numeric bathroom column was already filled, so that rule changed zero kept rows. It is still the parser.
 
 Every cut below is a fixed rule, not a percentile of the file. Counts are sequential.
 

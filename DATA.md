@@ -9,7 +9,7 @@ No Redfin, Zillow, AirDNA, or other source whose terms forbid automated collecti
 ## Inside Airbnb listings
 
 - **What:** one snapshot per city, `data/raw/cities/<city>/listings.csv.gz`.
-- **Markets in the model:** Austin (2025-06-13), San Diego (2025-03-16), Seattle (2025-03-16).
+- **Markets in the model:** Austin (2025-09-16), San Diego (2025-03-16), Seattle (2025-03-16). The Austin file is the Inside Airbnb snapshot dated 2025-09-16. Most rows were last scraped on 2025-09-16, and the rest on 2025-09-17. The file Inside Airbnb now serves at the 2025-06-13 path is a different scrape (15,187 rows) and is not the one this study scored.
 - **License:** Creative Commons Attribution 4.0 (CC BY 4.0). Credit Inside Airbnb. These files are filtered (price window, required bedrooms and coordinates) and are not a verbatim republication of the full dump.
 - **Source:** [insideairbnb.com/get-the-data](https://insideairbnb.com/get-the-data/) and [insideairbnb.com/data-policies](https://insideairbnb.com/data-policies/). Inside Airbnb is not Airbnb and is not affiliated with this project.
 - **Join:** there is no join. The row is the listing. `python -m data.download austin san-diego seattle` fetches the three snapshots the metrics were computed on. Those dates are pinned in `data/cities.py`. The files are gitignored, so they are not in a fresh clone until that command runs.
@@ -18,7 +18,7 @@ Other snapshots are on disk and were screened. They are not in the model. Hawaii
 
 ### Earlier snapshots of the same three cities
 
-Inside Airbnb's public page keeps about the last 12 months. On the day this round was frozen, every file still hosted for San Diego and Seattle before their study dates was one snapshot, 2025-02-18. Austin still had a monthly file from 2024-04-21 through 2025-05-11. Files dated after the study snapshot (Austin 2025-06-13, San Diego and Seattle 2025-03-16) were left alone: a later scrape is a price from after the label. The files belong under `data/raw/cities/<city>/history/<date>.csv.gz`, CC BY 4.0, credit Inside Airbnb. `python -m data.history` downloads any that are missing. They are gitignored, same as the current snapshots, and the current model does not use them.
+Inside Airbnb's public page keeps about the last 12 months. The previous round's history list, which this model does not use, is San Diego and Seattle 2025-02-18 and Austin monthly files from 2024-04-21 through 2025-05-11. The files belong under `data/raw/cities/<city>/history/<date>.csv.gz`, CC BY 4.0, credit Inside Airbnb. `python -m data.history` downloads any that are missing. They are gitignored, same as the current snapshots.
 
 A listing that is already in the study file is not repeated. The newest earlier snapshot is kept for ids the study file does not have. Those rows can enter training only. They are dropped when they share a host with a held-out listing, sit in a held-out cell, or fall inside the 1 km buffer. Whether they cleared the error bar is in the findings, not here.
 

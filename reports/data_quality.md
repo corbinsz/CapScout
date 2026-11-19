@@ -25,7 +25,7 @@ The dollar cuts and the 60 km cut are fixed. They are not percentiles of the fil
 
 ## Sources
 
-- **Austin, TX** snapshot 2025-06-13, CC BY 4.0, credit Inside Airbnb. `https://data.insideairbnb.com/united-states/tx/austin/2025-06-13/data/listings.csv.gz`
+- **Austin, TX** snapshot 2025-09-16, CC BY 4.0, credit Inside Airbnb. `https://data.insideairbnb.com/united-states/tx/austin/2025-09-16/data/listings.csv.gz`
 - **San Diego, CA** snapshot 2025-03-16, CC BY 4.0, credit Inside Airbnb. `https://data.insideairbnb.com/united-states/ca/san-diego/2025-03-16/data/listings.csv.gz`
 - **Seattle, WA** snapshot 2025-03-16, CC BY 4.0, credit Inside Airbnb. `https://data.insideairbnb.com/united-states/wa/seattle/2025-03-16/data/listings.csv.gz`
 

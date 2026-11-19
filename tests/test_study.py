@@ -259,3 +259,16 @@ def test_nearby_comps_prefer_the_same_room_and_are_not_required_to_score():
     assert scored["reasons"]
     assert scored["nights_rough_estimate"] is True
     assert all("$" in item["sentence"] for item in scored["reasons"])
+
+
+def test_austin_download_date_is_the_snapshot_the_study_scored():
+    import json
+    from pathlib import Path
+
+    from data.cities import CITIES
+
+    assert CITIES["austin"]["ia_date"] == "2025-09-16"
+    quality = json.loads(Path("reports/data_quality.json").read_text())
+    austin = quality["cities"]["austin"]
+    assert austin["snapshot"] == "2025-09-16"
+    assert austin["url"].endswith("/tx/austin/2025-09-16/data/listings.csv.gz")
