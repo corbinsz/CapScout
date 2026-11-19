@@ -42,6 +42,9 @@ data/raw/cities/**/*.csv.gz
 data/raw/cities/*/redfin_listings.csv
 reports/smoke_metrics.json
 
+# Daily calendar snapshots belong on the calendar-data branch, not on main.
+/calendars/
+
 # Temp/debug files
 tmp_*
 nul

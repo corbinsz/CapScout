@@ -1,0 +1,147 @@
+name: Collect calendars
+
+# Daily public calendar snapshots for the fixed Austin, San Diego, and Seattle
+# panel. The schedule runs from the default branch after this file is merged.
+# workflow_dispatch runs it by hand. Snapshots are committed to calendar-data
+# so main stays free of the daily files.
+#
+# A pull request runs a one-listing smoke and does not commit. That is the
+# check that a GitHub-hosted runner can read the public calendar.
+#
+# The panel asks 309 Austin ids, 309 San Diego ids, and 300 Seattle ids.
+# A 36-id probe on 2026-11-19 returned calendars for 35, 35, and 36 of those.
+# At about 3 seconds a listing the full pass is under an hour, inside the
+# 180-minute job, so the cities stay in one run.
+on:
+  schedule:
+    - cron: "17 13 * * *"
+  workflow_dispatch:
+    inputs:
+      max_listings:
+        description: "Cap listings per city. Leave empty for the full fixed panel."
+        required: false
+        default: ""
+  pull_request:
+    paths:
+      - ".github/workflows/collect-calendars.yml"
+      - "scripts/collect_calendars.py"
+      - "data/calendar_collect.py"
+      - "data/calendar_sample.json"
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout collector
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install pandas==3.1.1 numpy==2.5.5 requests==2.34.2
+
+      - name: Fetch one listing per city
+        run: |
+          set -euo pipefail
+          PYTHONPATH=. python scripts/collect_calendars.py \
+            --out-dir "${RUNNER_TEMP}/calendars" \
+            --max-listings 1 \
+            --delay 2 \
+            --jitter 0
+
+  collect:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    concurrency:
+      group: calendar-data
+      cancel-in-progress: false
+    steps:
+      - name: Checkout collector
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install pandas==3.1.1 numpy==2.5.5 requests==2.34.2
+
+      - name: Seed snapshots already on calendar-data
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/calendars"
+          if git ls-remote --exit-code --heads origin calendar-data >/dev/null 2>&1; then
+            git fetch --depth=1 origin calendar-data
+            git archive FETCH_HEAD calendars | tar -x -C "${RUNNER_TEMP}"
+          fi
+
+      - name: Collect
+        id: collect
+        continue-on-error: true
+        env:
+          MAX_LISTINGS: ${{ github.event.inputs.max_listings }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ -n "${MAX_LISTINGS}" ]; then
+            args+=(--max-listings "${MAX_LISTINGS}")
+          fi
+          PYTHONPATH=. python scripts/collect_calendars.py \
+            --out-dir "${RUNNER_TEMP}/calendars" \
+            "${args[@]}"
+
+      - name: Upload the run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-snapshots
+          path: ${{ runner.temp }}/calendars
+          if-no-files-found: ignore
+
+      - name: Commit snapshots to calendar-data
+        if: always()
+        run: |
+          set -euo pipefail
+          src="${RUNNER_TEMP}/calendars"
+          if [ ! -d "${src}" ] || [ -z "$(ls -A "${src}")" ]; then
+            echo "No snapshot files to publish."
+            exit 0
+          fi
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          if git ls-remote --exit-code --heads origin calendar-data >/dev/null 2>&1; then
+            git fetch origin calendar-data
+            git switch --detach origin/calendar-data
+          else
+            git switch --orphan calendar-data-publish
+            git rm -rf --cached . >/dev/null 2>&1 || true
+            find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+            printf '%s\n' \
+              "# Calendar snapshots" \
+              "" \
+              "Daily availability snapshots for the fixed CapScout panel." \
+              "The collector code lives on main. This branch holds the files." \
+              > README.md
+            git add README.md
+          fi
+          mkdir -p calendars
+          cp -a "${src}/." calendars/
+          git add calendars README.md
+          if git diff --cached --quiet; then
+            echo "Nothing new to commit."
+            exit 0
+          fi
+          git commit -m "Add calendar snapshots for $(date -u +%Y-%m-%d)"
+          git push origin HEAD:calendar-data
+
+      - name: Fail the job when collection failed
+        if: steps.collect.outcome == 'failure'
+        run: exit 1

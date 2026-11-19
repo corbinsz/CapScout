@@ -15,7 +15,9 @@ https://insideairbnb.com/data-assumptions/) estimates bookings from reviews:
 
 The output is a model of review activity, not a count of bookings. Listings
 with no reviews are left missing rather than coded as 0% occupied: a new
-listing has not failed, it has not been observed.
+listing has not failed, it has not been observed. A booked-night rate built
+from repeated calendars lives in data/calendar_labels.py. It is not this proxy,
+and it is not yet the training target.
 """
 
 from __future__ import annotations

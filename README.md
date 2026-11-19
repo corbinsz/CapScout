@@ -81,6 +81,35 @@ The nights models predict nights directly. On the training folds a log target av
 
 Yearly revenue in the app is the predicted rate times the predicted nights. On the primary holdout that product has R² 0.266 in Austin, 0.276 in San Diego, and 0.161 in Seattle. The letter grade matched the grade of the review-based revenue about 32%, 31%, and 30% of the time. The grade is a rank inside the city. It is not a profit.
 
+## Calendar panel
+
+The nights model is weak because the label is a review proxy. A daily job watches a fixed panel of real calendars so a later model can train on nights that actually closed. The rules and the limits are in [docs/CALENDAR.md](docs/CALENDAR.md). The snapshots go to the `calendar-data` branch, compressed, so the study stays as it is.
+
+What is collected: listings that still look active on the newest Inside Airbnb file for each city. Active means a review in the twelve months before that file and at least one open night in the next year. Those files are Austin dated 2026-09-17, and San Diego and Seattle dated 2026-09-20. The panel draw uses seed 17, the same number as this study's primary holdout, and it is a sample of listings, not that holdout. It is stratified by neighbourhood and room type. The ids are `data/calendar_sample.json`. The eligible rows behind the draw are `data/calendar_pool/`. Ids are stored as text, because the newer ones are longer than a floating-point number can hold. Once a day the job reads each listing's public availability calendar and appends `listing_id`, `date`, `available`, `min_nights`, `price` when the calendar includes one, and `fetched_at`. It waits about 2 seconds between listings, retries ordinary server errors with backoff, names itself in the user agent, and stops if the response is a block or a challenge page. There is no login, no captcha handling, and no proxy. If that public calendar cannot be read, the job stores Inside Airbnb's published `calendar.csv` for the same ids instead and says so in the run report. One published file cannot show a night flip, so that fallback is a supply snapshot, not a booked-night rate.
+
+A probe on 2026-11-19 asked 36 of those ids in each city. The public calendar came back for 35 of 36 in Austin, 35 of 36 in San Diego, and 36 of 36 in Seattle. None failed, and the probe was not challenged. The panel is sized from that rate so about 300 calendars come back: 309 ids in Austin, 309 in San Diego, and 300 in Seattle. At the probe's pace a full pass is under an hour, inside the three-hour Actions job, so the daily run stays one job. GitHub Actions has not run it. The schedule starts from the default branch after this workflow is merged.
+
+An earlier panel, 300 ids from the 2025 study files, returned a calendar for 80 Austin listings, 93 San Diego listings, and 92 Seattle listings on the same day. That pass is the 2026-11-19 files on `calendar-data`. It is not the panel being tracked. The label command keeps the current sample.
+
+How a booking is inferred, once two or more snapshots exist:
+
+- A night that was available and then unavailable, in a run of 1 to 13 nights, counts as booked when we still saw it open inside 45 days of the night and the run is at least as long as the minimum stay that was posted.
+- A run of 14 nights or more that was already closed when the first night was still 90 days out counts as an owner block. Ninety days is the shortest availability window a host can set.
+- A stretch of 21 unavailable nights through the last date in the snapshot, never seen open, counts as that availability window, not as demand.
+- Half or more of the open calendar closing between two snapshots at most 3 days apart counts as one owner block.
+- A night that was already unavailable the first time we saw it stays out of the booked count. A night that opens again before the date is not a booking. A night with no snapshot within 2 days of itself stays unresolved.
+
+The booked-night rate is booked nights divided by booked plus nights that were still open at the date. Blocks, the closed window, censored nights, and unresolved nights are reported and left out of the rate. A one-night owner hold can look like a one-night booking when the minimum stay is 1. A real stay of 14 nights or a stay booked more than 45 days ahead is left as uncertain. The price column is kept and is not part of the rule, because the public calendar often omits it.
+
+Retrain after 26 weeks of daily snapshots. Nights already closed on day one are censored, and a night we first see far out does not become a resolved outcome until that date arrives, about 13 weeks later for the far cutoff. A rate near 30% then needs on the order of 80 offered nights for a standard error near 5 points, which is about 12 weeks more. 13 + 12 is 25, and a half year also keeps the window off a single holiday peak, so the wait is 26 weeks. That label is the rate over the tracked window. It is not an annual night count. An annual label waits for 52 weeks. When the 26 weeks exist, occupancy accuracy will be re-tested on a fresh spatial holdout: a new seed, not seed 17 and not seed 31, with the cell ids frozen before the fit, scored once.
+
+```bash
+python scripts/collect_calendars.py --out-dir calendars
+python scripts/build_occupancy_labels.py --snapshots calendars --out reports/calendar_occupancy.csv
+```
+
+The GitHub Actions workflow runs the collector daily at 13:17 UTC and on demand. Local snapshot files are gitignored. The committed panel is the sample json, not the daily files.
+
 ## What it does well, and what it does not
 
 It beats the usual rate for the neighbourhood and room type, by 36.0% of the dollar error in Austin, 37.5% in San Diego, and 26.9% in Seattle. The features are ones a person can name: size, room type, location, a few amenities, and, for the rate only, reviews. Blank fields in the app use a typical training value, not zero.
