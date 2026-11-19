@@ -1,0 +1,53 @@
+{
+  "started_at": "2026-11-19T16:00:50Z",
+  "finished_at": "2026-11-19T16:40:46Z",
+  "mode": "airbnb_public",
+  "blocked": false,
+  "block_reason": "",
+  "delay_seconds": 2.0,
+  "jitter_seconds": 1.0,
+  "cities": {
+    "austin": {
+      "city": "austin",
+      "mode": "airbnb_public",
+      "attempted": 300,
+      "succeeded": 80,
+      "missing": 220,
+      "failed": 0,
+      "blocked": false,
+      "block_reason": "",
+      "complete": true,
+      "rows": 29200,
+      "path": "calendars/daily/austin/2026-11-19.csv.gz",
+      "notes": []
+    },
+    "san-diego": {
+      "city": "san-diego",
+      "mode": "airbnb_public",
+      "attempted": 300,
+      "succeeded": 93,
+      "missing": 207,
+      "failed": 0,
+      "blocked": false,
+      "block_reason": "",
+      "complete": true,
+      "rows": 33945,
+      "path": "calendars/daily/san-diego/2026-11-19.csv.gz",
+      "notes": []
+    },
+    "seattle": {
+      "city": "seattle",
+      "mode": "airbnb_public",
+      "attempted": 300,
+      "succeeded": 92,
+      "missing": 208,
+      "failed": 0,
+      "blocked": false,
+      "block_reason": "",
+      "complete": true,
+      "rows": 33580,
+      "path": "calendars/daily/seattle/2026-11-19.csv.gz",
+      "notes": []
+    }
+  }
+}

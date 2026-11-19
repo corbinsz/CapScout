@@ -1,0 +1,15 @@
+{
+  "city": "san-diego",
+  "mode": "airbnb_public",
+  "attempted": 300,
+  "succeeded": 93,
+  "missing": 207,
+  "failed": 0,
+  "blocked": false,
+  "block_reason": "",
+  "complete": true,
+  "rows": 33945,
+  "path": "calendars/daily/san-diego/2026-11-19.csv.gz",
+  "notes": [],
+  "date": "2026-11-19"
+}
