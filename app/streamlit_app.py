@@ -29,6 +29,7 @@ from data.ingest import load_listings
 from features.columns import pretty
 from features.geo import haversine_km
 from models.artifacts import available, load_artifact
+from models.occupancy import occupancy_available, predict_stay
 from models.score import score_features
 from streamlit_folium import st_folium
 
@@ -103,6 +104,8 @@ st.markdown(
       .wordmark { font-family: Fraunces, Georgia, serif; font-size: 2.15rem; letter-spacing: -0.03em; margin: 0; }
       .eyebrow { letter-spacing: 0.14em; text-transform: uppercase; font-size: 0.72rem; color: #6d6456; margin: 0 0 0.2rem; }
       .card { background: #fffdf8; border: 1px solid #e4d8c4; border-radius: 18px; padding: 1.15rem 1.25rem 1.2rem; }
+      .stay-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.8rem; margin: 0.8rem 0; }
+      @media (max-width: 860px) { .stay-grid { grid-template-columns: 1fr; } }
       .price { font-family: Fraunces, Georgia, serif; font-size: 3.5rem; line-height: 0.95; letter-spacing: -0.04em; margin: 0.1rem 0 0.35rem; }
       .price span { font-family: Outfit, sans-serif; font-size: 1rem; color: #6d6456; margin-left: 0.35rem; letter-spacing: 0; }
       .muted { color: #6d6456; font-size: 0.92rem; line-height: 1.45; }
@@ -144,6 +147,14 @@ def _listings(city: str) -> pd.DataFrame:
 @st.cache_data(show_spinner=False)
 def _metrics() -> dict | None:
     path = REPORTS / "metrics.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text())
+
+
+@st.cache_data(show_spinner=False)
+def _occupancy_metrics() -> dict | None:
+    path = REPORTS / "occupancy_metrics.json"
     if not path.exists():
         return None
     return json.loads(path.read_text())
@@ -192,8 +203,10 @@ def _predict_page() -> None:
     st.markdown('<p class="eyebrow">Personal study · local only</p>', unsafe_allow_html=True)
     st.markdown('<p class="wordmark">CapScout</p>', unsafe_allow_html=True)
     st.markdown(
-        '<p class="muted">An estimate of the advertised nightly rate for a home you describe. '
-        "Not a quote, not a booked price, and not what a host would clear.</p>",
+        '<p class="muted">An estimate of the advertised nightly rate, how many nights a year '
+        "a similar listing was booked on a review-based estimate, the gross those two imply, "
+        "and a grade of that gross inside the city. Not a quote, not a booking count, "
+        "and not a profit.</p>",
         unsafe_allow_html=True,
     )
 
@@ -244,12 +257,22 @@ def _predict_page() -> None:
             "Room type",
             ["Entire home/apt", "Private room", "Shared room", "Hotel room"],
         )
+        property_type = st.selectbox(
+            "Building",
+            ["Not specified", "House", "Condo", "Townhouse", "Guest unit", "Cabin"],
+        )
+        knows_price = st.checkbox("Add a purchase price for a rough gross yield")
+        home_price = None
+        if knows_price:
+            home_price = float(
+                st.number_input("Purchase price ($)", min_value=10000, value=500000, step=5000)
+            )
         lat = st.number_input("Latitude", value=float(st.session_state.lat), format="%.5f")
         lon = st.number_input("Longitude", value=float(st.session_state.lon), format="%.5f")
         st.session_state.lat = float(lat)
         st.session_state.lon = float(lon)
         extras = _optional_inputs(city)
-        go = st.button("Estimate nightly rate", type="primary", use_container_width=True)
+        go = st.button("Estimate this home", type="primary", use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     comps = _comps(
@@ -275,12 +298,25 @@ def _predict_page() -> None:
             "accommodates": int(accommodates),
             "room_type": room,
         }
+        if property_type != "Not specified":
+            payload["property_type"] = property_type
         payload.update(extras["features"])
-        st.session_state.scored = score_features(payload, city)
+        scored = score_features(payload, city)
+        if occupancy_available(city):
+            scored["stay"] = predict_stay(
+                payload,
+                city,
+                nightly_rate=float(scored["nightly_rate"]),
+                purchase_price=home_price,
+            )
+        else:
+            scored["stay"] = None
+        st.session_state.scored = scored
         st.session_state.scored_city = city
         st.session_state.shown_comps = comps
         st.session_state.unknowns = extras["unknowns"]
     if st.session_state.get("scored") and st.session_state.get("scored_city") == city:
+        _stay_block(city, st.session_state.scored.get("stay"))
         _result(
             st.session_state.scored,
             st.session_state.get("shown_comps", comps),
@@ -289,8 +325,8 @@ def _predict_page() -> None:
     else:
         st.markdown(
             '<p class="muted" style="margin-top:0.6rem">Drop a pin or locate an address, '
-            "then estimate a rate. The number is for a home that has not been listed, "
-            "unless you add a description or reviews below.</p>",
+            "then estimate. The rate is for a home that has not been listed, unless you "
+            "add a description or reviews below. The nights estimate does not use reviews.</p>",
             unsafe_allow_html=True,
         )
 
@@ -403,6 +439,100 @@ def _map(city: str, lat: float, lon: float, comps: pd.DataFrame) -> None:
             st.rerun()
     st.caption(
         "Click the map to move the pin. Coral dots are nearby Inside Airbnb ads, not model inputs."
+    )
+
+
+def _nights_note(city: str) -> str:
+    payload = _occupancy_metrics()
+    if not payload or city not in payload.get("cities", {}):
+        return (
+            "This is a model of a review-based estimate, not a count of bookings. "
+            "The holdout report is not loaded, so the error is not shown here."
+        )
+    hold = payload["cities"][city]["holdout"]
+    model = hold["model"]
+    baseline = hold["baseline_area"]["mae"]
+    if hold["cleared_bar"]:
+        verdict = (
+            "That cleared the pre-set bar: the average miss is at least 10% lower "
+            "than the neighbourhood median, and R² is at least 0.10."
+        )
+    else:
+        verdict = (
+            "That did not clear the pre-set bar. The bar was a 10% lower average "
+            "miss than the neighbourhood median, and an R² of at least 0.10. "
+            "Read the number as a rough comparison, not a forecast."
+        )
+    klass = hold.get("classification") or {}
+    class_bit = ""
+    if klass.get("accuracy") is not None:
+        if klass.get("cleared_bar"):
+            class_bit = (
+                " A separate three-way model, not this point estimate, was right "
+                f"{klass['accuracy']:.0%} of the time on those blocks, against "
+                f"{klass['baseline_accuracy']:.0%} for the neighbourhood's usual band, "
+                "and that gap cleared its own bar."
+            )
+        else:
+            class_bit = (
+                " A separate three-way model, not this point estimate, was right "
+                f"{klass['accuracy']:.0%} of the time, against {klass['baseline_accuracy']:.0%} "
+                "for the neighbourhood's usual band. That did not clear its bar either."
+            )
+    return (
+        "This is a model of Inside Airbnb's review-based estimate, not a count of bookings. "
+        f"On held-out blocks of this city the average miss was {model['mae']:.0f} nights "
+        f"(R² {model['r2']:.2f}). The neighbourhood median misses by {baseline:.0f} nights. "
+        f"{verdict}{class_bit}"
+    )
+
+
+def _stay_block(city: str, stay: dict | None) -> None:
+    if not stay:
+        st.markdown(
+            '<p class="muted">No nights model is saved for this city. '
+            "From the repo root: python -m evaluation.run_occupancy</p>",
+            unsafe_allow_html=True,
+        )
+        return
+    nights = float(stay["booked_nights"])
+    revenue = stay.get("annual_revenue")
+    grade = stay.get("grade") or "—"
+    words = stay.get("grade_words") or ""
+    revenue_text = _money(revenue) if revenue is not None else "—"
+    area = stay.get("area_median_nights")
+    area_bit = ""
+    if area is not None and stay.get("area_name"):
+        area_bit = f" The neighbourhood median for {stay['area_name']} is about {area:.0f} nights."
+    elif area is not None:
+        area_bit = f" The citywide median of reviewed listings is about {area:.0f} nights."
+    yield_bit = ""
+    gross = stay.get("gross_yield")
+    if gross is not None:
+        yield_bit = (
+            f" Rough gross yield {gross:.1%} on the purchase price you entered. "
+            "That is predicted revenue divided by that price, before mortgage, taxes, "
+            "fees, repairs, and any rule that limits short-term rentals."
+        )
+    band = stay.get("occupancy_class")
+    band_bit = f" That point estimate is in the {band.lower()} band for this city." if band else ""
+    st.markdown(
+        '<div class="stay-grid">'
+        '<div class="card"><p class="eyebrow">Booked nights</p>'
+        f'<p class="price" style="font-size:2.4rem">{nights:.0f}<span>nights / year</span></p>'
+        f'<p class="muted">Review-based estimate.{band_bit}{area_bit}</p></div>'
+        '<div class="card"><p class="eyebrow">Estimated annual revenue</p>'
+        f'<p class="price" style="font-size:2.4rem">{revenue_text}</p>'
+        '<p class="muted">Predicted rate times predicted nights. Not what a host would clear.</p></div>'
+        '<div class="card"><p class="eyebrow">Grade in this city</p>'
+        f'<p class="price" style="font-size:2.4rem">{grade}<span>{words}</span></p>'
+        '<p class="muted">Where that gross sits among reviewed listings here. '
+        "Not a profit grade.</p></div>"
+        "</div>"
+        f'<p class="muted">{_nights_note(city)}{yield_bit} '
+        "The grade does not know the mortgage, taxes, fees, or whether a short-term "
+        "rental is legal at this address.</p>",
+        unsafe_allow_html=True,
     )
 
 
@@ -640,6 +770,31 @@ def _results_page() -> None:
                 }
             )
         st.table(pd.DataFrame(confirm_rows))
+    occ = _occupancy_metrics()
+    if occ and not occ.get("smoke"):
+        st.markdown("##### Booked nights, seed 31")
+        st.caption(
+            "A separate holdout from the price model. The target is a review-based "
+            "estimate of nights booked in the last year, not a count of bookings. "
+            "The neighbourhood median is the baseline."
+        )
+        occ_rows = []
+        for city in occ["cities"]:
+            hold = occ["cities"][city]["holdout"]
+            occ_rows.append(
+                {
+                    "City": occ["cities"][city]["display"],
+                    "R²": f"{hold['model']['r2']:.3f}",
+                    "MAE nights": f"{hold['model']['mae']:.1f}",
+                    "Area median MAE": f"{hold['baseline_area']['mae']:.1f}",
+                    "Cleared bar": "Yes" if hold["cleared_bar"] else "No",
+                    "Revenue R²": f"{hold['revenue']['r2']:.3f}",
+                    "Revenue MAE": _money(hold["revenue"]["mae"]),
+                    "Class accuracy": f"{hold['classification']['accuracy']:.0%}",
+                }
+            )
+        st.table(pd.DataFrame(occ_rows))
+        st.caption(occ["bar"]["rule"])
     figures = [
         ("pred_vs_actual.png", "Predicted versus actual"),
         ("residuals.png", "Residuals"),
@@ -659,14 +814,15 @@ def _results_page() -> None:
 
 def main() -> None:
     page = st.sidebar.radio(
-        "Study", ["Estimate a rate", "Holdout results"], label_visibility="collapsed"
+        "Study", ["Estimate a home", "Holdout results"], label_visibility="collapsed"
     )
     st.sidebar.markdown("---")
     st.sidebar.markdown(
         "A personal project, built in spare time, on advertised Airbnb rates "
-        "in Austin, San Diego, and Seattle. It runs on this machine only."
+        "and a review-based nights estimate in Austin, San Diego, and Seattle. "
+        "It runs on this machine only."
     )
-    if page == "Estimate a rate":
+    if page == "Estimate a home":
         _predict_page()
     else:
         _results_page()

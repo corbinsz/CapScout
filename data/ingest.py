@@ -21,7 +21,7 @@ import pandas as pd
 from features.frame import attach_base_features
 
 from data.cities import CITIES, get_city_or_default
-from data.occupancy import san_francisco_occupancy
+from data.occupancy import booked_nights_ltm, san_francisco_occupancy
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RAW_ROOT = REPO_ROOT / "data" / "raw" / "cities"
@@ -46,6 +46,7 @@ _WANTED = [
     "price",
     "minimum_nights",
     "number_of_reviews",
+    "number_of_reviews_ltm",
     "reviews_per_month",
     "review_scores_rating",
     "host_is_superhost",
@@ -192,6 +193,7 @@ def load_listings(
 
     df["minimum_nights"] = pd.to_numeric(df.get("minimum_nights"), errors="coerce")
     df["number_of_reviews"] = pd.to_numeric(df.get("number_of_reviews"), errors="coerce").fillna(0)
+    df["number_of_reviews_ltm"] = pd.to_numeric(df.get("number_of_reviews_ltm"), errors="coerce")
     df["reviews_per_month"] = pd.to_numeric(df.get("reviews_per_month"), errors="coerce")
     df["review_scores_rating"] = pd.to_numeric(df.get("review_scores_rating"), errors="coerce")
     if "neighbourhood_cleansed" not in df.columns:
@@ -204,11 +206,19 @@ def load_listings(
         df["minimum_nights"].fillna(city["avg_stay_nights"]).to_numpy(),
         float(city["avg_stay_nights"]),
     )
+    # Annual nights use the last-twelve-months review count and the stated
+    # 3-night stay, not the hand-set city averages above. It is a label for
+    # the occupancy study. The price model does not train on it.
+    df["booked_nights"] = booked_nights_ltm(
+        df["number_of_reviews_ltm"].to_numpy(),
+        df["minimum_nights"].to_numpy(),
+    )
 
     df = attach_base_features(df, city_key)
     df = df.reset_index(drop=True)
     stats["rows_final"] = int(len(df))
     stats["occupancy_observed"] = int(np.isfinite(df["occupancy_rate"]).sum())
+    stats["booked_nights_observed"] = int(np.isfinite(df["booked_nights"]).sum())
     stats["room_type_counts"] = {str(k): int(v) for k, v in df["room_type"].value_counts().items()}
     stats["n_hosts"] = int(df["host_id"].nunique())
     return df, stats
