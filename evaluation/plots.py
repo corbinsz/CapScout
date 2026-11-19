@@ -10,6 +10,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from features.columns import pretty
 
 plt.rcParams.update(
     {
@@ -61,6 +62,7 @@ def plot_model_comparison(comparison: dict, path: Path, models: list[str] | None
         "xgboost": "XGBoost",
         "lightgbm": "LightGBM",
         "catboost": "CatBoost",
+        "v2": "v2 specification",
         "gbm": "Selected",
     }
     x = np.arange(len(models))
@@ -135,7 +137,7 @@ def plot_shap(shap_rows: dict, path: Path) -> None:
         axes = [axes]
     for ax, city in zip(axes, cities, strict=True):
         pairs = shap_rows[city][:12][::-1]
-        ax.barh([p["feature"] for p in pairs], [p["mean_abs_shap"] for p in pairs])
+        ax.barh([pretty(p["feature"]) for p in pairs], [p["mean_abs_shap"] for p in pairs])
         ax.set_xlabel("Mean |SHAP| on log price")
         ax.set_title(city)
     fig.suptitle("What the locked-test model uses", y=1.02)
@@ -177,7 +179,7 @@ def plot_pdp(curves: dict, path: Path) -> None:
             ax.plot(
                 [r["value"] for r in rows], [r["mean_pred"] for r in rows], marker="o", label=city
             )
-        ax.set_title(feature.replace("_", " "))
+        ax.set_title(pretty(feature))
         ax.set_ylabel("Mean predicted nightly rate ($)")
         ax.set_xlabel("Feature value, other columns held")
     axes[0][0].legend(fontsize=8)

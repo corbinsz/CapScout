@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from features.columns import KNN_COLUMNS, SMOOTH_COLUMNS
+from features.columns import KERNEL_COLUMNS, KNN_COLUMNS, SMOOTH_COLUMNS
 
 from evaluation.blocking import buffer_train, purge_hosts
 from evaluation.protocol import BUFFER_KM, SPATIAL_STEP_DEGREES
@@ -64,7 +64,7 @@ def split_audit(
 
 def column_audit(columns: list[str]) -> dict:
     """A price column that is not a declared fold-fit encoding is a leak."""
-    allowed_price = set(SMOOTH_COLUMNS) | set(KNN_COLUMNS)
+    allowed_price = set(SMOOTH_COLUMNS) | set(KNN_COLUMNS) | set(KERNEL_COLUMNS)
     suspicious = [
         column
         for column in columns

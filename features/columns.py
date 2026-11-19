@@ -94,10 +94,69 @@ QUALITY_COLUMNS = [
     "instant_bookable",
 ]
 
+# More of the ad than v2 used: beds, a shared bath, host operations, the
+# separate review scores, and a few amenities. review_scores_value is not
+# here. Guests score "value" by comparing the stay to the price, so that
+# column is a consequence of the thing we are predicting.
+DETAIL_COLUMNS = [
+    "beds",
+    "bath_is_shared",
+    "log_host_tenure",
+    "host_response_rate",
+    "host_acceptance_rate",
+    "host_response_time_ord",
+    "host_identity_verified",
+    "review_cleanliness",
+    "review_location",
+    "review_accuracy",
+    "review_checkin",
+    "review_communication",
+    "has_fireplace",
+    "has_dishwasher",
+    "has_self_checkin",
+    "has_patio",
+    "has_bbq",
+    "has_ev_charger",
+    "allows_pets",
+    "has_elevator",
+]
+
+# Fixed phrases in the listing's own title and description. The patterns
+# live in features/text.py. They were written down before the fit, not
+# mined from a test fold. An empty ad is missing, not a string of zeros.
+LEXICON_COLUMNS = [
+    "log_text_chars",
+    "text_mentions_view",
+    "text_mentions_luxury",
+    "text_mentions_renovated",
+    "text_mentions_new",
+    "text_mentions_quiet",
+    "text_mentions_walk",
+    "text_mentions_downtown",
+    "text_mentions_water",
+]
+
+
+def text_component_names(n_components: int) -> list[str]:
+    """Fold-fit TF-IDF components. The count is fixed in the protocol."""
+    return [f"text_svd_{index:02d}" for index in range(n_components)]
+
+
+# One dummy per study city, used only if a pooled model is selected.
+# Hyphens become underscores so the name is a legal feature name.
+CITY_DUMMY_COLUMNS = ["city_austin", "city_san_diego", "city_seattle"]
+
+
+def city_dummy(city_key: str) -> str:
+    return "city_" + city_key.replace("-", "_")
+
+
 # Fold-fit encodings. These use other listings' prices, so they are attached
 # inside the training fold only. They are not columns on the raw frame.
 SMOOTH_COLUMNS = ["neigh_log_price", "neigh_bed_log_price"]
 KNN_COLUMNS = ["knn_log_price"]
+# Gaussian weights on the nearest training listings. Same leakage rule.
+KERNEL_COLUMNS = ["kernel_log_price"]
 
 # Monotone directions. A constraint is an inductive bias, not a claim that
 # the world is perfectly monotone: more bedrooms should not lower the
@@ -173,8 +232,47 @@ PRETTY = {
     "is_superhost": "Superhost",
     "log_host_listings": "Host's listing count",
     "instant_bookable": "Instant book",
+    "beds": "Beds",
+    "bath_is_shared": "Shared bathroom",
+    "log_host_tenure": "Host tenure",
+    "host_response_rate": "Host response rate",
+    "host_acceptance_rate": "Host acceptance rate",
+    "host_response_time_ord": "Host response time",
+    "host_identity_verified": "Verified host",
+    "review_cleanliness": "Cleanliness score",
+    "review_location": "Location score",
+    "review_accuracy": "Accuracy score",
+    "review_checkin": "Check-in score",
+    "review_communication": "Communication score",
+    "has_fireplace": "Fireplace",
+    "has_dishwasher": "Dishwasher",
+    "has_self_checkin": "Self check-in",
+    "has_patio": "Patio or balcony",
+    "has_bbq": "BBQ",
+    "has_ev_charger": "EV charger",
+    "allows_pets": "Pets allowed",
+    "has_elevator": "Elevator",
+    "log_text_chars": "Length of the listing text",
+    "text_mentions_view": "Text mentions a view",
+    "text_mentions_luxury": "Text mentions luxury",
+    "text_mentions_renovated": "Text mentions a renovation",
+    "text_mentions_new": "Text mentions new construction",
+    "text_mentions_quiet": "Text mentions quiet",
+    "text_mentions_walk": "Text mentions walking",
+    "text_mentions_downtown": "Text mentions downtown",
+    "text_mentions_water": "Text mentions water",
+    "kernel_log_price": "Smoothed nearby prices",
+    "listing_wording": "Wording of the listing",
+    "city_austin": "Austin",
+    "city_san_diego": "San Diego",
+    "city_seattle": "Seattle",
 }
 
 
 def pretty(name: str) -> str:
+    if name.startswith("text_svd_"):
+        # Components are numbered for the chart. The app collapses them
+        # into one "wording" reason because a single component is not a
+        # sentence a person can say.
+        return f"Listing wording {int(name.rsplit('_', 1)[-1]) + 1}"
     return PRETTY.get(name, name.replace("_", " "))

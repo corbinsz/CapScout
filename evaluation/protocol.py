@@ -55,11 +55,14 @@ from __future__ import annotations
 from data.cities import STUDY_CITIES
 from features.columns import (
     CENSUS_COLUMNS,
+    DETAIL_COLUMNS,
+    LEXICON_COLUMNS,
     LOCATION_COLUMNS,
     OSM_COLUMNS,
     QUALITY_COLUMNS,
     SIZE_COLUMNS,
     STRUCTURE_COLUMNS,
+    city_dummy,
 )
 
 TEST_SEED = 7
@@ -73,6 +76,49 @@ KNN_K = 40
 TARGET_PRIOR = 20.0
 MAX_TREES = 400
 EARLY_STOPPING_ROUNDS = 30
+
+# The published v2 specification. It is the starting point of this round.
+# Depth, the blend, and monotone constraints are not re-opened except for
+# one depth check on the feature stack this round actually keeps. Re-running
+# the whole v2 search on the same five seeds would be a second bite at a
+# decision that was already published.
+V2_STAGE1 = "plus_census"
+V2_QUALITY = True
+V2_DEPTH = 4
+V2_BLEND = ("catboost", "xgboost")
+
+# Confirmation holdout. Seed 7 has been published, so it is no longer a
+# blind test. Seed 11 is a spatial holdout of the development cells, drawn
+# before any v3 model was fit. It was not searched. Seeds 0–4 stay the
+# development folds, and they are built on the cells that are in neither
+# holdout. 20% is the same cell fraction as the locked test.
+CONFIRM_SEED = 11
+CONFIRM_GROUP_FRACTION = 0.20
+
+# Text and kernel settings. Fixed here so a later reader can see they were
+# not a grid search. Eight components is small on purpose: Seattle's
+# training set after the buffer is about 1,500 rows.
+N_TEXT_COMPONENTS = 8
+TEXT_MAX_FEATURES = 4000
+TEXT_MIN_DF = 5
+KERNEL_BANDWIDTH_KM = 5.0
+KERNEL_NEIGHBORS = 80
+
+# Floor on the scaled-interval width, in log1p(price). Stops a nearly
+# flat residual fit from dividing by zero. Not tuned.
+SIGMA_FLOOR = 0.05
+
+# How an interval method is allowed to replace the log-residual band.
+# Decided before the locked test was scored again.
+INTERVAL_MEAN_COVERAGE_FLOOR = 0.78
+INTERVAL_WIDTH_CAP = 1.35
+INTERVAL_TAIL_GAIN = 0.02
+INTERVAL_WORST_SLACK = 0.01
+POINT_INSIDE_FLOOR = 0.90
+
+# Add-ons, simplest first. Each is tried on top of whatever has already
+# been kept, and kept only if mean development MAE falls by at least 1%.
+V3_ADDON_ORDER = ("listing_detail", "text_lexicon", "text_svd", "kernel_price")
 # Nominal coverage of the prediction interval. Chosen before looking at
 # calibration. 80% is wide enough to be useful and narrow enough to check.
 INTERVAL_LEVEL = 0.80
@@ -178,6 +224,47 @@ def stage1_spec(name: str) -> tuple[list[str], str]:
         if candidate == name:
             return list(columns), mode
     raise KeyError(name)
+
+
+def v2_features() -> tuple[list[str], str]:
+    """The published specification: census, location, size, and listing quality."""
+    return resolve_features(V2_STAGE1, None, V2_QUALITY)
+
+
+def stack_features(base_columns: list[str], kept: list[str]) -> tuple[list[str], str, str]:
+    """Static columns, spatial mode, and text mode for a v3 stack.
+
+    `kept` is a subset of V3_ADDON_ORDER. Text components and the kernel
+    column are attached inside the training fold, so they are modes rather
+    than names on the raw frame.
+    """
+    columns = list(base_columns)
+    spatial = "none"
+    text = "none"
+    for name in kept:
+        if name == "listing_detail":
+            columns.extend(DETAIL_COLUMNS)
+        elif name == "text_lexicon":
+            columns.extend(LEXICON_COLUMNS)
+        elif name == "text_svd":
+            text = "svd"
+        elif name == "kernel_price":
+            spatial = "kernel"
+        else:
+            raise ValueError(name)
+    return columns, spatial, text
+
+
+def feature_label_v3(kept: list[str], pooled: bool) -> str:
+    parts = ["plus_census", "listing_quality", *kept]
+    if pooled:
+        parts.append("pooled")
+    return "+".join(parts)
+
+
+def city_dummies(city_key: str) -> dict[str, float]:
+    """1 for this city, 0 for the other study cities."""
+    return {city_dummy(key): 1.0 if key == city_key else 0.0 for key in study_cities()}
 
 
 def resolve_features(stage1: str, addon: str | None, quality: bool) -> tuple[list[str], str]:

@@ -45,3 +45,17 @@ def test_frozen_ids_match_the_seed_and_block_hosts_and_neighbours():
 
 def test_freeze_file_lives_with_the_protocol():
     assert Path(PATH).name == "locked_test_ids.json"
+
+
+def test_confirmation_ids_are_disjoint_from_the_locked_test():
+    from evaluation.confirm import PATH as CONFIRM_PATH
+    from evaluation.confirm import computed_ids
+
+    saved = json.loads(CONFIRM_PATH.read_text())
+    assert saved["confirm_seed"] == 11
+    assert "price" not in json.dumps(saved["cities"])
+    recomputed = computed_ids(tuple(saved["cities"]))
+    locked = json.loads(PATH.read_text())
+    for city, ids in saved["cities"].items():
+        assert ids == recomputed[city]
+        assert set(ids).isdisjoint(locked["cities"][city])

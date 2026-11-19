@@ -1,0 +1,2401 @@
+{
+  "study_cities": [
+    "austin",
+    "san-diego",
+    "seattle"
+  ],
+  "rationale": "Austin, San Diego, and Seattle stay the study markets. Each is one metro, the Inside Airbnb snapshot is from 2025, and bedrooms are almost complete. The other snapshots on disk were screened again for this round. Hawaii is several islands in one file. Asheville's bedrooms column is empty. Las Vegas, Fort Lauderdale, Nashville, and Washington have no nightly price on roughly 20\u201330% of rows. Boston, Denver, Dallas, Fort Worth, and New Orleans are missing a price on about 9\u201320% and are smaller. A fourth market with a large unpriced slice would not make the spatial test more honest, so the headline table is still three cities.",
+  "protocol": {
+    "test_seed": 7,
+    "previous_study_seed": 42,
+    "inner_seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "stage1": "plus_census",
+    "addon": null,
+    "listing_quality": true,
+    "chosen_feature_set": "plus_census+listing_quality",
+    "feature_set_why": {
+      "size_and_room": "How big the place is, and whether the guest gets the whole home or a room.",
+      "plus_location": "Where it sits: coordinates, distance to downtown, and distance to the airport.",
+      "plus_census": "The census tract around it: median income, median rent, median home value, and population density. A 2024 ACS 5-year join, not a listing's own price.",
+      "plus_osm": "What is nearby in OpenStreetMap: food, transit, parks, beaches, and attractions. Counts within 1 km and distance to the nearest, capped at 20 km.",
+      "plus_structure": "Building type, and two interactions: capacity priced differently for a room, and downtown distance priced differently for a house than a condo.",
+      "osm_without_census": "OpenStreetMap on top of location, with census left out, as a substitution check.",
+      "target_smooth": "Smoothed mean log price of the neighbourhood, and of neighbourhood by bedroom bin, fit on the training fold only. Unseen neighbourhoods fall back to the training mean.",
+      "target_knn": "Median log price of the 40 nearest other training listings. Under a 1 km buffer those neighbours are not next door.",
+      "listing_quality": "Amenities, reviews, and host fields from the current ad. Available for a listing that exists, not for a house that has never been listed."
+    },
+    "stage1_development_mae": {
+      "size_and_room": 68.93253501160302,
+      "plus_location": 65.26267459529703,
+      "plus_census": 64.2926982540989,
+      "plus_osm": 64.45166474351801,
+      "plus_structure": 63.83842109736312
+    },
+    "feature_set_development_mae": {
+      "size_and_room": 68.93253501160302,
+      "plus_location": 65.26267459529703,
+      "plus_census": 64.2926982540989,
+      "plus_osm": 64.45166474351801,
+      "plus_structure": 63.83842109736312,
+      "osm_without_census": 65.14795688899615,
+      "target_smooth": 70.88005395823488,
+      "target_knn": 64.14844180550648,
+      "listing_quality": 58.7041975966792
+    },
+    "chosen_depth": 4,
+    "depth_development_mae": {
+      "4": 58.372659775888536,
+      "6": 58.7041975966792,
+      "8": 59.21850136479812
+    },
+    "library_development_mae": {
+      "xgboost": 58.372659775888536,
+      "lightgbm": 58.82988791958805,
+      "catboost": 57.700099384057026
+    },
+    "xgboost_development_mae": 58.372659775888536,
+    "lightgbm_development_mae": 58.82988791958805,
+    "catboost_development_mae": 57.700099384057026,
+    "library": "blend",
+    "component_library": "xgboost",
+    "monotonic_within_bar": false,
+    "monotonic": false,
+    "monotonic_development_mae": 58.99951357795875,
+    "blend": true,
+    "blend_libraries": [
+      "catboost",
+      "xgboost"
+    ],
+    "blend_development_mae": 57.622029763532005,
+    "spatial_mode": "none",
+    "columns": [
+      "bedrooms",
+      "bathrooms",
+      "accommodates",
+      "is_private_room",
+      "is_shared_room",
+      "is_hotel_room",
+      "latitude",
+      "longitude",
+      "distance_to_center_km",
+      "distance_to_airport_km",
+      "census_median_income",
+      "census_median_rent",
+      "census_median_home_value",
+      "census_pop_density",
+      "minimum_nights_capped",
+      "amenity_count",
+      "has_ac",
+      "has_parking",
+      "has_washer",
+      "has_dryer",
+      "has_pool",
+      "has_hottub",
+      "has_gym",
+      "has_waterfront",
+      "has_kitchen",
+      "has_workspace",
+      "review_score",
+      "log_reviews",
+      "reviews_per_month",
+      "is_superhost",
+      "log_host_listings",
+      "instant_bookable"
+    ],
+    "ablation_depth": 6,
+    "selection_rule": "Stage 1 keeps the simplest cumulative prefix within 1% of the best. A target encoding or listing-quality block is added only if it improves development MAE by at least 1%. Shallower trees win within 1%. LightGBM or CatBoost replaces XGBoost only if it is at least 2% better. Monotone constraints are kept when they are within 1%. An equal-weight blend of the two best libraries is kept only if it is at least 1% better. osm_without_census is reported and is not eligible."
+  },
+  "cities": {
+    "austin": {
+      "display": "Austin, TX",
+      "snapshot": "2025-06-13",
+      "cleaning": {
+        "city": "austin",
+        "snapshot": "2025-06-13",
+        "rows_raw": 10533,
+        "entire_home_only": false,
+        "min_price": 25.0,
+        "max_price": 2000.0,
+        "dropped_not_entire_home": 0,
+        "dropped_missing_or_nonpositive_price": 16,
+        "dropped_below_min_price": 72,
+        "dropped_above_max_price": 122,
+        "dropped_missing_coordinates": 0,
+        "dropped_missing_bedrooms": 13,
+        "dropped_bedroom_range": 14,
+        "dropped_missing_room_type": 0,
+        "rows_final": 10296,
+        "occupancy_observed": 8757,
+        "room_type_counts": {
+          "Entire home/apt": 8972,
+          "Private room": 1285,
+          "Hotel room": 32,
+          "Shared room": 7
+        },
+        "n_hosts": 5498,
+        "place": {
+          "census_field_filled_rows": 731,
+          "census_field_filled_fraction": 0.070998445998446,
+          "census_polygon_fraction": 0.9984459984459985,
+          "census_centroid_fallback_fraction": 0.001554001554001554,
+          "census_city_median_fraction": 0.0,
+          "outside_poi_bbox": 0
+        }
+      },
+      "split": {
+        "train_before": 7500,
+        "removed_host": 1501,
+        "removed_buffer": 1602,
+        "train_after": 4397,
+        "n_rows": 10296,
+        "n_groups": 152,
+        "n_test": 2796,
+        "test_fraction_of_rows": 0.2715617715617716
+      },
+      "locked_test": {
+        "gbm": {
+          "r2": 0.42160109985617134,
+          "mae": 87.74257202241358,
+          "rmse": 160.4649933812229,
+          "mape": 33.596801732546496,
+          "median_ape": 29.04614022887785,
+          "n": 2796
+        },
+        "previous_spec": {
+          "r2": 0.3440515413148134,
+          "mae": 93.21287907752523,
+          "rmse": 170.88401179306152,
+          "mape": 38.45927786291462,
+          "median_ape": 31.590793626892644,
+          "n": 2796
+        },
+        "ridge": {
+          "r2": 0.2582013531774292,
+          "mae": 99.5950284453751,
+          "rmse": 181.72287190829624,
+          "mape": 37.19829079285656,
+          "median_ape": 34.19043981224091,
+          "n": 2796
+        },
+        "baseline_room": {
+          "r2": -0.17215365025896645,
+          "mae": 127.6818669527897,
+          "rmse": 228.43300111379284,
+          "mape": 53.07476871544014,
+          "median_ape": 42.65402843601896,
+          "n": 2796
+        },
+        "baseline_room_bed": {
+          "r2": 0.09869525443171201,
+          "mae": 113.94098712446352,
+          "rmse": 200.30989448076588,
+          "mape": 48.0080546600853,
+          "median_ape": 37.44451135276823,
+          "n": 2796
+        },
+        "interval": {
+          "method": "log_residual_conformal",
+          "nominal": 0.8,
+          "radius_log": 0.4623450955284367,
+          "development_coverage": 0.7969554762898409,
+          "coverage": 0.6673819742489271,
+          "median_width": 119.48042617706645,
+          "mean_width": 160.5318688492427,
+          "n": 2796
+        },
+        "quantile_interval": {
+          "library": "catboost",
+          "alphas": [
+            0.1,
+            0.9
+          ],
+          "cross_rate": 0.0,
+          "coverage": 0.7024320457796852,
+          "median_width": 131.83350822473435,
+          "mean_width": 192.16877078818783,
+          "n": 2796
+        }
+      },
+      "residuals_by_predicted_quintile": [
+        {
+          "predicted_bin": "(34.13, 89.665]",
+          "n": 560,
+          "mae": 46.443581784238674,
+          "mean_residual": 34.41284554169958
+        },
+        {
+          "predicted_bin": "(89.665, 112.414]",
+          "n": 559,
+          "mae": 53.559293457399846,
+          "mean_residual": 40.38655126255454
+        },
+        {
+          "predicted_bin": "(112.414, 136.58]",
+          "n": 559,
+          "mae": 84.14954083367249,
+          "mean_residual": 71.01098412008236
+        },
+        {
+          "predicted_bin": "(136.58, 203.87]",
+          "n": 559,
+          "mae": 87.27480471979597,
+          "mean_residual": 64.45689716824064
+        },
+        {
+          "predicted_bin": "(203.87, 1078.617]",
+          "n": 559,
+          "mae": 167.35951944261058,
+          "mean_residual": 84.58361427340498
+        }
+      ],
+      "locked_test_by_room_type": [
+        {
+          "room_type": "Entire home/apt",
+          "r2": 0.42502360045320653,
+          "mae": 90.02316381598824,
+          "rmse": 164.0838121448783,
+          "mape": 32.49023374067606,
+          "median_ape": 27.71362178683896,
+          "n": 2417
+        },
+        {
+          "room_type": "Hotel room",
+          "r2": -0.6101441584308085,
+          "mae": 256.7567733188044,
+          "rmse": 267.7805061559465,
+          "mape": 61.67337427495648,
+          "median_ape": 64.05364212825936,
+          "n": 11
+        },
+        {
+          "room_type": "Private room",
+          "r2": 0.10114923397205833,
+          "mae": 68.00344839505082,
+          "rmse": 129.5739731955934,
+          "mape": 39.70102968205435,
+          "median_ape": 34.06008647315748,
+          "n": 365
+        },
+        {
+          "room_type": "Shared room",
+          "r2": -19.18771717058951,
+          "mae": 32.2204202414589,
+          "rmse": 32.88106458844284,
+          "mape": 79.4932473372027,
+          "median_ape": 86.08464291882576,
+          "n": 3
+        }
+      ],
+      "interval_by_predicted_bin": [
+        {
+          "predicted_bin": "(34.13, 80.507]",
+          "n": 350,
+          "coverage": 0.7657142857142857,
+          "median_pred": 68.46596831913133,
+          "median_width": 66.5475772181689
+        },
+        {
+          "predicted_bin": "(80.507, 96.506]",
+          "n": 349,
+          "coverage": 0.5759312320916905,
+          "median_pred": 88.11659263903492,
+          "median_width": 85.37264323188002
+        },
+        {
+          "predicted_bin": "(96.506, 109.585]",
+          "n": 350,
+          "coverage": 0.7257142857142858,
+          "median_pred": 103.22254018545425,
+          "median_width": 99.84396257174294
+        },
+        {
+          "predicted_bin": "(109.585, 123.72]",
+          "n": 349,
+          "coverage": 0.5759312320916905,
+          "median_pred": 116.72476688504707,
+          "median_width": 112.77893628117744
+        },
+        {
+          "predicted_bin": "(123.72, 144.203]",
+          "n": 349,
+          "coverage": 0.6446991404011462,
+          "median_pred": 131.49699787647577,
+          "median_width": 126.93055910273665
+        },
+        {
+          "predicted_bin": "(144.203, 183.678]",
+          "n": 350,
+          "coverage": 0.7342857142857143,
+          "median_pred": 163.81194258390943,
+          "median_width": 157.88789447506375
+        },
+        {
+          "predicted_bin": "(183.678, 273.26]",
+          "n": 349,
+          "coverage": 0.673352435530086,
+          "median_pred": 211.22856579871103,
+          "median_width": 203.31245949826237
+        },
+        {
+          "predicted_bin": "(273.26, 1078.617]",
+          "n": 350,
+          "coverage": 0.6428571428571429,
+          "median_pred": 408.78429479821347,
+          "median_width": 392.5685146372118
+        }
+      ],
+      "shap": [
+        {
+          "feature": "bedrooms",
+          "mean_abs_shap": 0.21035156478322317
+        },
+        {
+          "feature": "reviews_per_month",
+          "mean_abs_shap": 0.1258359165408628
+        },
+        {
+          "feature": "log_host_listings",
+          "mean_abs_shap": 0.10913280037057241
+        },
+        {
+          "feature": "bathrooms",
+          "mean_abs_shap": 0.10737302919338691
+        },
+        {
+          "feature": "accommodates",
+          "mean_abs_shap": 0.09309312161680142
+        },
+        {
+          "feature": "is_private_room",
+          "mean_abs_shap": 0.08096287539100785
+        },
+        {
+          "feature": "census_median_home_value",
+          "mean_abs_shap": 0.07589778885068592
+        },
+        {
+          "feature": "distance_to_center_km",
+          "mean_abs_shap": 0.06858632139022647
+        },
+        {
+          "feature": "minimum_nights_capped",
+          "mean_abs_shap": 0.06673906466542931
+        },
+        {
+          "feature": "review_score",
+          "mean_abs_shap": 0.05392849211172488
+        },
+        {
+          "feature": "census_median_income",
+          "mean_abs_shap": 0.029177519586173244
+        },
+        {
+          "feature": "has_hottub",
+          "mean_abs_shap": 0.026268454010869788
+        },
+        {
+          "feature": "has_pool",
+          "mean_abs_shap": 0.024409026789027864
+        },
+        {
+          "feature": "census_median_rent",
+          "mean_abs_shap": 0.01628850319440477
+        },
+        {
+          "feature": "has_waterfront",
+          "mean_abs_shap": 0.013644868372966034
+        }
+      ],
+      "partial_dependence": {
+        "bedrooms": [
+          {
+            "value": 0.0,
+            "mean_pred": 118.8867752555666
+          },
+          {
+            "value": 1.0,
+            "mean_pred": 119.07366322266495
+          },
+          {
+            "value": 2.0,
+            "mean_pred": 142.8821635521856
+          },
+          {
+            "value": 3.0,
+            "mean_pred": 183.9503469156771
+          },
+          {
+            "value": 4.0,
+            "mean_pred": 215.73759925045985
+          },
+          {
+            "value": 5.0,
+            "mean_pred": 228.84980829840904
+          }
+        ],
+        "bathrooms": [
+          {
+            "value": 1.0,
+            "mean_pred": 136.34657526421847
+          },
+          {
+            "value": 1.5,
+            "mean_pred": 139.27724465696355
+          },
+          {
+            "value": 2.0,
+            "mean_pred": 154.6028369176526
+          },
+          {
+            "value": 2.5,
+            "mean_pred": 173.68169550045462
+          },
+          {
+            "value": 3.0,
+            "mean_pred": 193.22833547181892
+          }
+        ],
+        "distance_to_center_km": [
+          {
+            "value": 1.0,
+            "mean_pred": 188.43077316119513
+          },
+          {
+            "value": 3.0,
+            "mean_pred": 177.4553553383922
+          },
+          {
+            "value": 5.0,
+            "mean_pred": 171.42039207562735
+          },
+          {
+            "value": 10.0,
+            "mean_pred": 167.41760455379202
+          },
+          {
+            "value": 20.0,
+            "mean_pred": 164.95432966533056
+          }
+        ],
+        "census_median_income": [
+          {
+            "value": 68594.0,
+            "mean_pred": 165.66006439757842
+          },
+          {
+            "value": 85199.0,
+            "mean_pred": 166.62435818012543
+          },
+          {
+            "value": 95339.5,
+            "mean_pred": 167.17586654473948
+          },
+          {
+            "value": 107514.09999999998,
+            "mean_pred": 167.78017936386976
+          },
+          {
+            "value": 137106.0,
+            "mean_pred": 178.32455797577867
+          }
+        ]
+      },
+      "audit": {
+        "split": {
+          "shared_cells": 0,
+          "shared_hosts": 0,
+          "hosts_still_to_purge": 0,
+          "training_rows_inside_buffer": 0,
+          "min_train_test_km": 1.0012964507708089,
+          "passed": true
+        },
+        "columns": {
+          "n_columns": 32,
+          "fold_fit_price_columns": [],
+          "unexpected_price_columns": [],
+          "passed": true
+        }
+      }
+    },
+    "san-diego": {
+      "display": "San Diego, CA",
+      "snapshot": "2025-03-16",
+      "cleaning": {
+        "city": "san-diego",
+        "snapshot": "2025-03-16",
+        "rows_raw": 12991,
+        "entire_home_only": false,
+        "min_price": 25.0,
+        "max_price": 2000.0,
+        "dropped_not_entire_home": 0,
+        "dropped_missing_or_nonpositive_price": 1287,
+        "dropped_below_min_price": 3,
+        "dropped_above_max_price": 88,
+        "dropped_missing_coordinates": 0,
+        "dropped_missing_bedrooms": 19,
+        "dropped_bedroom_range": 4,
+        "dropped_missing_room_type": 0,
+        "rows_final": 11590,
+        "occupancy_observed": 9687,
+        "room_type_counts": {
+          "Entire home/apt": 9898,
+          "Private room": 1505,
+          "Hotel room": 147,
+          "Shared room": 40
+        },
+        "n_hosts": 5388,
+        "place": {
+          "census_field_filled_rows": 75,
+          "census_field_filled_fraction": 0.0064710957722174285,
+          "census_polygon_fraction": 0.9993960310612597,
+          "census_centroid_fallback_fraction": 0.0006039689387402934,
+          "census_city_median_fraction": 0.0,
+          "outside_poi_bbox": 0
+        }
+      },
+      "split": {
+        "train_before": 10715,
+        "removed_host": 1610,
+        "removed_buffer": 627,
+        "train_after": 8478,
+        "n_rows": 11590,
+        "n_groups": 112,
+        "n_test": 875,
+        "test_fraction_of_rows": 0.07549611734253667
+      },
+      "locked_test": {
+        "gbm": {
+          "r2": 0.6779454125884009,
+          "mae": 98.9559212621759,
+          "rmse": 178.04279780102138,
+          "mape": 30.37410208912883,
+          "median_ape": 24.005453361371952,
+          "n": 875
+        },
+        "previous_spec": {
+          "r2": 0.5231911291601522,
+          "mae": 117.44806920958092,
+          "rmse": 216.63659885802772,
+          "mape": 33.83735213320171,
+          "median_ape": 27.139765481341964,
+          "n": 875
+        },
+        "ridge": {
+          "r2": 0.5185006047657981,
+          "mae": 113.66563059896171,
+          "rmse": 217.6995535418877,
+          "mape": 31.25673507904957,
+          "median_ape": 26.345191436290722,
+          "n": 875
+        },
+        "baseline_room": {
+          "r2": 0.005780679613882289,
+          "mae": 187.0697142857143,
+          "rmse": 312.82450397261766,
+          "mape": 65.88419311326093,
+          "median_ape": 48.138297872340424,
+          "n": 875
+        },
+        "baseline_room_bed": {
+          "r2": 0.32745205067264005,
+          "mae": 156.68742857142857,
+          "rmse": 257.2890431290958,
+          "mape": 59.57817326116663,
+          "median_ape": 40.201567749160134,
+          "n": 875
+        },
+        "interval": {
+          "method": "log_residual_conformal",
+          "nominal": 0.8,
+          "radius_log": 0.41396869234881173,
+          "development_coverage": 0.8013109680701398,
+          "coverage": 0.752,
+          "median_width": 185.29250043360923,
+          "mean_width": 248.6182568137719,
+          "n": 875
+        },
+        "quantile_interval": {
+          "library": "catboost",
+          "alphas": [
+            0.1,
+            0.9
+          ],
+          "cross_rate": 0.0,
+          "coverage": 0.7085714285714285,
+          "median_width": 163.36777397226854,
+          "mean_width": 267.76836204534436,
+          "n": 875
+        }
+      },
+      "residuals_by_predicted_quintile": [
+        {
+          "predicted_bin": "(41.698, 102.205]",
+          "n": 175,
+          "mae": 18.61333231827492,
+          "mean_residual": 1.3481796921572593
+        },
+        {
+          "predicted_bin": "(102.205, 161.618]",
+          "n": 175,
+          "mae": 61.57611400318382,
+          "mean_residual": 22.727782766020454
+        },
+        {
+          "predicted_bin": "(161.618, 275.225]",
+          "n": 175,
+          "mae": 72.55799597284162,
+          "mean_residual": 30.6913169314109
+        },
+        {
+          "predicted_bin": "(275.225, 439.692]",
+          "n": 175,
+          "mae": 118.73680472886181,
+          "mean_residual": 48.74725177517966
+        },
+        {
+          "predicted_bin": "(439.692, 1652.929]",
+          "n": 175,
+          "mae": 223.29535928771736,
+          "mean_residual": 76.79806410758897
+        }
+      ],
+      "locked_test_by_room_type": [
+        {
+          "room_type": "Entire home/apt",
+          "r2": 0.6689641803313635,
+          "mae": 103.9012485609857,
+          "rmse": 182.9455026983435,
+          "mape": 29.776891724296323,
+          "median_ape": 23.565042394776388,
+          "n": 670
+        },
+        {
+          "room_type": "Hotel room",
+          "r2": -0.9253943388887091,
+          "mae": 255.51199133590862,
+          "rmse": 295.55119334295307,
+          "mape": 31.59779175339707,
+          "median_ape": 29.93310458791735,
+          "n": 25
+        },
+        {
+          "room_type": "Private room",
+          "r2": 0.35814862089579225,
+          "mae": 58.27034603154578,
+          "rmse": 131.70480833274857,
+          "mape": 32.33614277449608,
+          "median_ape": 24.38690792117912,
+          "n": 179
+        },
+        {
+          "room_type": "Shared room",
+          "r2": null,
+          "mae": 154.40284549908992,
+          "rmse": 154.40284549908992,
+          "mape": 48.707522239460545,
+          "median_ape": 48.707522239460545,
+          "n": 1
+        }
+      ],
+      "interval_by_predicted_bin": [
+        {
+          "predicted_bin": "(41.698, 79.027]",
+          "n": 110,
+          "coverage": 0.9,
+          "median_pred": 64.37650887994509,
+          "median_width": 55.68693343708334
+        },
+        {
+          "predicted_bin": "(79.027, 119.993]",
+          "n": 109,
+          "coverage": 0.7981651376146789,
+          "median_pred": 98.22275779775431,
+          "median_width": 84.51676609214543
+        },
+        {
+          "predicted_bin": "(119.993, 155.266]",
+          "n": 109,
+          "coverage": 0.5871559633027523,
+          "median_pred": 139.31452450068846,
+          "median_width": 119.5182447027661
+        },
+        {
+          "predicted_bin": "(155.266, 216.534]",
+          "n": 110,
+          "coverage": 0.7727272727272727,
+          "median_pred": 184.2889966010968,
+          "median_width": 157.82696563527338
+        },
+        {
+          "predicted_bin": "(216.534, 289.052]",
+          "n": 109,
+          "coverage": 0.8073394495412844,
+          "median_pred": 249.02082996434342,
+          "median_width": 212.96477212749588
+        },
+        {
+          "predicted_bin": "(289.052, 390.714]",
+          "n": 109,
+          "coverage": 0.7431192660550459,
+          "median_pred": 327.8901315318464,
+          "median_width": 280.1447060496953
+        },
+        {
+          "predicted_bin": "(390.714, 567.906]",
+          "n": 109,
+          "coverage": 0.6605504587155964,
+          "median_pred": 452.21308347992635,
+          "median_width": 386.0415192696834
+        },
+        {
+          "predicted_bin": "(567.906, 1652.929]",
+          "n": 110,
+          "coverage": 0.7454545454545455,
+          "median_pred": 736.4117338292875,
+          "median_width": 628.1185526881601
+        }
+      ],
+      "shap": [
+        {
+          "feature": "accommodates",
+          "mean_abs_shap": 0.25307456049769744
+        },
+        {
+          "feature": "longitude",
+          "mean_abs_shap": 0.1903714752679525
+        },
+        {
+          "feature": "bedrooms",
+          "mean_abs_shap": 0.13099763708838677
+        },
+        {
+          "feature": "bathrooms",
+          "mean_abs_shap": 0.0904575429275141
+        },
+        {
+          "feature": "reviews_per_month",
+          "mean_abs_shap": 0.0854397974397507
+        },
+        {
+          "feature": "is_private_room",
+          "mean_abs_shap": 0.07160843076956827
+        },
+        {
+          "feature": "log_host_listings",
+          "mean_abs_shap": 0.04808666321048627
+        },
+        {
+          "feature": "review_score",
+          "mean_abs_shap": 0.047048723477616954
+        },
+        {
+          "feature": "minimum_nights_capped",
+          "mean_abs_shap": 0.04123941983392914
+        },
+        {
+          "feature": "census_median_home_value",
+          "mean_abs_shap": 0.04020776340576313
+        },
+        {
+          "feature": "has_hottub",
+          "mean_abs_shap": 0.027186051669013556
+        },
+        {
+          "feature": "distance_to_airport_km",
+          "mean_abs_shap": 0.024683096477735776
+        },
+        {
+          "feature": "has_ac",
+          "mean_abs_shap": 0.019766063146818117
+        },
+        {
+          "feature": "amenity_count",
+          "mean_abs_shap": 0.0191731458634925
+        },
+        {
+          "feature": "has_pool",
+          "mean_abs_shap": 0.017946305339238463
+        }
+      ],
+      "partial_dependence": {
+        "bedrooms": [
+          {
+            "value": 0.0,
+            "mean_pred": 176.5534694300287
+          },
+          {
+            "value": 1.0,
+            "mean_pred": 180.45083026574858
+          },
+          {
+            "value": 2.0,
+            "mean_pred": 208.5216440896438
+          },
+          {
+            "value": 3.0,
+            "mean_pred": 232.47116890684484
+          },
+          {
+            "value": 4.0,
+            "mean_pred": 247.08441637190282
+          },
+          {
+            "value": 5.0,
+            "mean_pred": 257.39364924858296
+          }
+        ],
+        "bathrooms": [
+          {
+            "value": 1.0,
+            "mean_pred": 190.06964336784432
+          },
+          {
+            "value": 1.5,
+            "mean_pred": 200.47140410630914
+          },
+          {
+            "value": 2.0,
+            "mean_pred": 218.04444369331463
+          },
+          {
+            "value": 2.5,
+            "mean_pred": 225.09503896119392
+          },
+          {
+            "value": 3.0,
+            "mean_pred": 243.34945163592377
+          }
+        ],
+        "distance_to_center_km": [
+          {
+            "value": 1.0,
+            "mean_pred": 226.38967081663318
+          },
+          {
+            "value": 3.0,
+            "mean_pred": 219.72464332206334
+          },
+          {
+            "value": 5.0,
+            "mean_pred": 215.11680741570018
+          },
+          {
+            "value": 10.0,
+            "mean_pred": 215.14409731814797
+          },
+          {
+            "value": 20.0,
+            "mean_pred": 217.00937211402615
+          }
+        ],
+        "census_median_income": [
+          {
+            "value": 72766.0,
+            "mean_pred": 213.25698313976574
+          },
+          {
+            "value": 90767.89999999998,
+            "mean_pred": 214.49563066621678
+          },
+          {
+            "value": 112946.0,
+            "mean_pred": 217.7130488841069
+          },
+          {
+            "value": 127500.0,
+            "mean_pred": 221.5929012719445
+          },
+          {
+            "value": 169013.0,
+            "mean_pred": 221.5735286102776
+          }
+        ]
+      },
+      "audit": {
+        "split": {
+          "shared_cells": 0,
+          "shared_hosts": 0,
+          "hosts_still_to_purge": 0,
+          "training_rows_inside_buffer": 0,
+          "min_train_test_km": 1.001009882889088,
+          "passed": true
+        },
+        "columns": {
+          "n_columns": 32,
+          "fold_fit_price_columns": [],
+          "unexpected_price_columns": [],
+          "passed": true
+        }
+      }
+    },
+    "seattle": {
+      "display": "Seattle, WA",
+      "snapshot": "2025-03-16",
+      "cleaning": {
+        "city": "seattle",
+        "snapshot": "2025-03-16",
+        "rows_raw": 6772,
+        "entire_home_only": false,
+        "min_price": 25.0,
+        "max_price": 2000.0,
+        "dropped_not_entire_home": 0,
+        "dropped_missing_or_nonpositive_price": 764,
+        "dropped_below_min_price": 2,
+        "dropped_above_max_price": 2,
+        "dropped_missing_coordinates": 0,
+        "dropped_missing_bedrooms": 10,
+        "dropped_bedroom_range": 2,
+        "dropped_missing_room_type": 0,
+        "rows_final": 5992,
+        "occupancy_observed": 5179,
+        "room_type_counts": {
+          "Entire home/apt": 4978,
+          "Private room": 976,
+          "Hotel room": 27,
+          "Shared room": 11
+        },
+        "n_hosts": 3107,
+        "place": {
+          "census_field_filled_rows": 112,
+          "census_field_filled_fraction": 0.018691588785046728,
+          "census_polygon_fraction": 0.9989986648865153,
+          "census_centroid_fallback_fraction": 0.0010013351134846463,
+          "census_city_median_fraction": 0.0,
+          "outside_poi_bbox": 0
+        }
+      },
+      "split": {
+        "train_before": 3950,
+        "removed_host": 1015,
+        "removed_buffer": 1428,
+        "train_after": 1507,
+        "n_rows": 5992,
+        "n_groups": 46,
+        "n_test": 2042,
+        "test_fraction_of_rows": 0.34078771695594123
+      },
+      "locked_test": {
+        "gbm": {
+          "r2": 0.5321948631341089,
+          "mae": 38.1863244840288,
+          "rmse": 74.44135987352131,
+          "mape": 26.6380703655278,
+          "median_ape": 21.065910781445545,
+          "n": 2042
+        },
+        "previous_spec": {
+          "r2": 0.4575817754649515,
+          "mae": 43.07288514606224,
+          "rmse": 80.15838180695906,
+          "mape": 30.26156187416052,
+          "median_ape": 24.09342692030804,
+          "n": 2042
+        },
+        "ridge": {
+          "r2": 0.46379113230894875,
+          "mae": 40.67582535650091,
+          "rmse": 79.69825285253016,
+          "mape": 28.608904686562596,
+          "median_ape": 21.86272776459961,
+          "n": 2042
+        },
+        "baseline_room": {
+          "r2": -0.05314744063865451,
+          "mae": 61.90058765915769,
+          "rmse": 111.69311246090648,
+          "mape": 46.731599251959025,
+          "median_ape": 34.48275862068966,
+          "n": 2042
+        },
+        "baseline_room_bed": {
+          "r2": -0.052723985092690606,
+          "mae": 61.935847208619,
+          "rmse": 111.6706551005136,
+          "mape": 46.73301164962497,
+          "median_ape": 34.48275862068966,
+          "n": 2042
+        },
+        "interval": {
+          "method": "log_residual_conformal",
+          "nominal": 0.8,
+          "radius_log": 0.44621793570651835,
+          "development_coverage": 0.7974095311064244,
+          "coverage": 0.8658178256611165,
+          "median_width": 109.52160080587021,
+          "mean_width": 130.75797782086906,
+          "n": 2042
+        },
+        "quantile_interval": {
+          "library": "catboost",
+          "alphas": [
+            0.1,
+            0.9
+          ],
+          "cross_rate": 0.0,
+          "coverage": 0.718413320274241,
+          "median_width": 86.60683401063706,
+          "mean_width": 102.71773516973556,
+          "n": 2042
+        }
+      },
+      "residuals_by_predicted_quintile": [
+        {
+          "predicted_bin": "(42.462, 89.215]",
+          "n": 409,
+          "mae": 19.942454897903545,
+          "mean_residual": 1.6195196771439988
+        },
+        {
+          "predicted_bin": "(89.215, 108.277]",
+          "n": 408,
+          "mae": 23.18472146440803,
+          "mean_residual": -1.3593542526607143
+        },
+        {
+          "predicted_bin": "(108.277, 129.919]",
+          "n": 408,
+          "mae": 27.5846237229618,
+          "mean_residual": -0.014295398854397722
+        },
+        {
+          "predicted_bin": "(129.919, 180.499]",
+          "n": 408,
+          "mae": 37.42526391269879,
+          "mean_residual": 2.680060761430796
+        },
+        {
+          "predicted_bin": "(180.499, 737.726]",
+          "n": 409,
+          "mae": 82.73009787363392,
+          "mean_residual": 4.206494996287887
+        }
+      ],
+      "locked_test_by_room_type": [
+        {
+          "room_type": "Entire home/apt",
+          "r2": 0.49471455077204984,
+          "mae": 40.90999109827633,
+          "rmse": 79.21087674484542,
+          "mape": 25.158757435348118,
+          "median_ape": 19.8502800617466,
+          "n": 1685
+        },
+        {
+          "room_type": "Private room",
+          "r2": 0.4340716082081195,
+          "mae": 25.330923237510355,
+          "rmse": 45.635081230820724,
+          "mape": 33.620261646628,
+          "median_ape": 28.23325782593416,
+          "n": 357
+        }
+      ],
+      "interval_by_predicted_bin": [
+        {
+          "predicted_bin": "(42.462, 78.168]",
+          "n": 256,
+          "coverage": 0.87109375,
+          "median_pred": 64.27605250860574,
+          "median_width": 60.20721441988621
+        },
+        {
+          "predicted_bin": "(78.168, 94.153]",
+          "n": 255,
+          "coverage": 0.8274509803921568,
+          "median_pred": 87.97714936044906,
+          "median_width": 82.06786568946617
+        },
+        {
+          "predicted_bin": "(94.153, 106.081]",
+          "n": 255,
+          "coverage": 0.8980392156862745,
+          "median_pred": 100.19400510642717,
+          "median_width": 93.3360540245061
+        },
+        {
+          "predicted_bin": "(106.081, 117.742]",
+          "n": 255,
+          "coverage": 0.8941176470588236,
+          "median_pred": 111.61191701870908,
+          "median_width": 103.86733838241823
+        },
+        {
+          "predicted_bin": "(117.742, 133.995]",
+          "n": 255,
+          "coverage": 0.8941176470588236,
+          "median_pred": 124.19504386371622,
+          "median_width": 115.47335600932806
+        },
+        {
+          "predicted_bin": "(133.995, 164.158]",
+          "n": 255,
+          "coverage": 0.9019607843137255,
+          "median_pred": 148.26814390679598,
+          "median_width": 137.6771235526242
+        },
+        {
+          "predicted_bin": "(164.158, 219.429]",
+          "n": 255,
+          "coverage": 0.8431372549019608,
+          "median_pred": 186.09222385166458,
+          "median_width": 172.56407525938357
+        },
+        {
+          "predicted_bin": "(219.429, 737.726]",
+          "n": 256,
+          "coverage": 0.796875,
+          "median_pred": 274.09191701377296,
+          "median_width": 253.73038650954317
+        }
+      ],
+      "shap": [
+        {
+          "feature": "bedrooms",
+          "mean_abs_shap": 0.14612257060167047
+        },
+        {
+          "feature": "accommodates",
+          "mean_abs_shap": 0.1306444545416047
+        },
+        {
+          "feature": "reviews_per_month",
+          "mean_abs_shap": 0.08215860132541793
+        },
+        {
+          "feature": "is_private_room",
+          "mean_abs_shap": 0.07433809559658186
+        },
+        {
+          "feature": "distance_to_center_km",
+          "mean_abs_shap": 0.05909915947081565
+        },
+        {
+          "feature": "census_median_home_value",
+          "mean_abs_shap": 0.05184019319175627
+        },
+        {
+          "feature": "bathrooms",
+          "mean_abs_shap": 0.048442074353439446
+        },
+        {
+          "feature": "log_host_listings",
+          "mean_abs_shap": 0.04100885879626561
+        },
+        {
+          "feature": "review_score",
+          "mean_abs_shap": 0.03668464367137234
+        },
+        {
+          "feature": "amenity_count",
+          "mean_abs_shap": 0.030987283638563165
+        },
+        {
+          "feature": "census_pop_density",
+          "mean_abs_shap": 0.016872606390120944
+        },
+        {
+          "feature": "minimum_nights_capped",
+          "mean_abs_shap": 0.015707801526758772
+        },
+        {
+          "feature": "latitude",
+          "mean_abs_shap": 0.013370164260704618
+        },
+        {
+          "feature": "is_superhost",
+          "mean_abs_shap": 0.01320722845514969
+        },
+        {
+          "feature": "has_gym",
+          "mean_abs_shap": 0.013107339083934388
+        }
+      ],
+      "partial_dependence": {
+        "bedrooms": [
+          {
+            "value": 0.0,
+            "mean_pred": 112.66594657239173
+          },
+          {
+            "value": 1.0,
+            "mean_pred": 117.24363810961796
+          },
+          {
+            "value": 2.0,
+            "mean_pred": 146.55364490445444
+          },
+          {
+            "value": 3.0,
+            "mean_pred": 166.01464507046808
+          },
+          {
+            "value": 4.0,
+            "mean_pred": 182.11377484754624
+          },
+          {
+            "value": 5.0,
+            "mean_pred": 197.71881733387528
+          }
+        ],
+        "bathrooms": [
+          {
+            "value": 1.0,
+            "mean_pred": 132.6037451957124
+          },
+          {
+            "value": 1.5,
+            "mean_pred": 138.44549755611718
+          },
+          {
+            "value": 2.0,
+            "mean_pred": 144.8815498067461
+          },
+          {
+            "value": 2.5,
+            "mean_pred": 145.6653528215528
+          },
+          {
+            "value": 3.0,
+            "mean_pred": 162.1667894041213
+          }
+        ],
+        "distance_to_center_km": [
+          {
+            "value": 1.0,
+            "mean_pred": 182.9705729564505
+          },
+          {
+            "value": 3.0,
+            "mean_pred": 158.05256352585494
+          },
+          {
+            "value": 5.0,
+            "mean_pred": 150.4167021318811
+          },
+          {
+            "value": 10.0,
+            "mean_pred": 133.99133952365227
+          },
+          {
+            "value": 20.0,
+            "mean_pred": 133.68744908452888
+          }
+        ],
+        "census_median_income": [
+          {
+            "value": 95038.0,
+            "mean_pred": 146.279338201277
+          },
+          {
+            "value": 120398.0,
+            "mean_pred": 148.1057645859087
+          },
+          {
+            "value": 133307.0,
+            "mean_pred": 146.62290095626938
+          },
+          {
+            "value": 160049.0,
+            "mean_pred": 145.89081478154012
+          },
+          {
+            "value": 185945.0,
+            "mean_pred": 148.58193922842082
+          }
+        ]
+      },
+      "audit": {
+        "split": {
+          "shared_cells": 0,
+          "shared_hosts": 0,
+          "hosts_still_to_purge": 0,
+          "training_rows_inside_buffer": 0,
+          "min_train_test_km": 1.001038814544028,
+          "passed": true
+        },
+        "columns": {
+          "n_columns": 32,
+          "fold_fit_price_columns": [],
+          "unexpected_price_columns": [],
+          "passed": true
+        }
+      }
+    }
+  },
+  "development_ablation": {
+    "austin": {
+      "size_and_room": {
+        "r2_mean": 0.38383737683554137,
+        "r2_std": 0.05862092120453678,
+        "mae_mean": 83.62896885156313,
+        "mae_std": 15.061048926706976,
+        "rmse_mean": 180.76329942571618,
+        "rmse_std": 25.275184195206105,
+        "mape_mean": 38.47575743550838,
+        "mape_std": 2.5204238680905156,
+        "median_ape_mean": 32.00316245744939,
+        "median_ape_std": 1.8243961047995654,
+        "n_seeds": 5
+      },
+      "plus_location": {
+        "r2_mean": 0.42511777185977373,
+        "r2_std": 0.07950199242888102,
+        "mae_mean": 81.791080246622,
+        "mae_std": 14.727804969062127,
+        "rmse_mean": 174.16520719275616,
+        "rmse_std": 24.2988021289093,
+        "mape_mean": 38.614927416039045,
+        "mape_std": 2.421884793739762,
+        "median_ape_mean": 30.526408621703006,
+        "median_ape_std": 1.8653177840102675,
+        "n_seeds": 5
+      },
+      "plus_census": {
+        "r2_mean": 0.44857910128810163,
+        "r2_std": 0.0762779349820663,
+        "mae_mean": 79.96256530028958,
+        "mae_std": 16.37338162840562,
+        "rmse_mean": 170.73696594309237,
+        "rmse_std": 25.325484885281867,
+        "mape_mean": 37.36024601901166,
+        "mape_std": 1.6379153578656866,
+        "median_ape_mean": 29.366773629115965,
+        "median_ape_std": 0.9674139563421403,
+        "n_seeds": 5
+      },
+      "plus_osm": {
+        "r2_mean": 0.4445627113610059,
+        "r2_std": 0.07202594970028824,
+        "mae_mean": 80.18025870880342,
+        "mae_std": 15.292501433945265,
+        "rmse_mean": 171.1849535287888,
+        "rmse_std": 22.115731199902125,
+        "mape_mean": 37.58834372853529,
+        "mape_std": 2.754426104809184,
+        "median_ape_mean": 29.55129301750667,
+        "median_ape_std": 1.3047324801060092,
+        "n_seeds": 5
+      },
+      "plus_structure": {
+        "r2_mean": 0.446281451419339,
+        "r2_std": 0.07336426369686394,
+        "mae_mean": 79.56048078508859,
+        "mae_std": 14.869491385955708,
+        "rmse_mean": 171.00451391506914,
+        "rmse_std": 23.444384770164884,
+        "mape_mean": 37.34926364116311,
+        "mape_std": 2.8848657311677752,
+        "median_ape_mean": 29.128480111073657,
+        "median_ape_std": 1.080017281457071,
+        "n_seeds": 5
+      },
+      "osm_without_census": {
+        "r2_mean": 0.4507266331668706,
+        "r2_std": 0.08805881537053369,
+        "mae_mean": 81.41321340664138,
+        "mae_std": 14.153279002275331,
+        "rmse_mean": 169.91647596041858,
+        "rmse_std": 22.476122759811428,
+        "mape_mean": 39.06156787208623,
+        "mape_std": 2.8156486666711587,
+        "median_ape_mean": 30.908193440211374,
+        "median_ape_std": 0.5679330436452171,
+        "n_seeds": 5
+      },
+      "target_smooth": {
+        "r2_mean": 0.355764397185269,
+        "r2_std": 0.10632173710618414,
+        "mae_mean": 85.36398680871748,
+        "mae_std": 13.684943599275309,
+        "rmse_mean": 183.5181300781265,
+        "rmse_std": 18.88558268951656,
+        "mape_mean": 40.44377176084621,
+        "mape_std": 3.651007194929067,
+        "median_ape_mean": 31.825565219341023,
+        "median_ape_std": 1.5499191815835816,
+        "n_seeds": 5
+      },
+      "target_knn": {
+        "r2_mean": 0.44665268360385185,
+        "r2_std": 0.06965467251816307,
+        "mae_mean": 79.34274485737002,
+        "mae_std": 15.16041891628922,
+        "rmse_mean": 170.91641410401127,
+        "rmse_std": 22.489630460744024,
+        "mape_mean": 36.739198242941896,
+        "mape_std": 1.6601706353254682,
+        "median_ape_mean": 28.824534507160546,
+        "median_ape_std": 0.6605468806825093,
+        "n_seeds": 5
+      },
+      "listing_quality": {
+        "r2_mean": 0.5250324708672385,
+        "r2_std": 0.045933946841490804,
+        "mae_mean": 71.2085612992561,
+        "mae_std": 16.154497474745874,
+        "rmse_mean": 158.82065319329485,
+        "rmse_std": 23.458194228549996,
+        "mape_mean": 31.726428814534813,
+        "mape_std": 1.3177261693061384,
+        "median_ape_mean": 24.48252050945187,
+        "median_ape_std": 2.2038729243957613,
+        "n_seeds": 5
+      }
+    },
+    "san-diego": {
+      "size_and_room": {
+        "r2_mean": 0.45257405867311784,
+        "r2_std": 0.07755397781659844,
+        "mae_mean": 71.50018036549878,
+        "mae_std": 13.8674807063671,
+        "rmse_mean": 126.0206245678127,
+        "rmse_std": 39.02712349592338,
+        "mape_mean": 38.1598494069972,
+        "mape_std": 5.30809923361733,
+        "median_ape_mean": 30.83362098401268,
+        "median_ape_std": 4.950742690281713,
+        "n_seeds": 5
+      },
+      "plus_location": {
+        "r2_mean": 0.5144417137916515,
+        "r2_std": 0.06560969007264676,
+        "mae_mean": 64.04312211812153,
+        "mae_std": 17.874316413415617,
+        "rmse_mean": 120.56453639646307,
+        "rmse_std": 41.671589709759644,
+        "mape_mean": 32.23115339385216,
+        "mape_std": 1.9797904559337964,
+        "median_ape_mean": 25.354336616823296,
+        "median_ape_std": 1.404152424823892,
+        "n_seeds": 5
+      },
+      "plus_census": {
+        "r2_mean": 0.49336605613397844,
+        "r2_std": 0.08577552166662152,
+        "mae_mean": 64.00582301973095,
+        "mae_std": 16.88593059325214,
+        "rmse_mean": 122.73731075668077,
+        "rmse_std": 41.589686528082446,
+        "mape_mean": 31.655908918384217,
+        "mape_std": 0.5449362344122783,
+        "median_ape_mean": 24.5889331048815,
+        "median_ape_std": 0.8969412655005526,
+        "n_seeds": 5
+      },
+      "plus_osm": {
+        "r2_mean": 0.5052229023849881,
+        "r2_std": 0.10806387152138407,
+        "mae_mean": 63.280435342843965,
+        "mae_std": 17.302715064308757,
+        "rmse_mean": 121.57684194396771,
+        "rmse_std": 42.911106386585104,
+        "mape_mean": 31.53866529431169,
+        "mape_std": 0.9380544755997265,
+        "median_ape_mean": 24.787943338355994,
+        "median_ape_std": 0.8167781004784288,
+        "n_seeds": 5
+      },
+      "plus_structure": {
+        "r2_mean": 0.5042506833940836,
+        "r2_std": 0.11140526962765214,
+        "mae_mean": 63.37850310617698,
+        "mae_std": 16.819038033437437,
+        "rmse_mean": 121.23652996480541,
+        "rmse_std": 41.421129807283876,
+        "mape_mean": 31.700970242712422,
+        "mape_std": 1.452209383157386,
+        "median_ape_mean": 24.8555867722605,
+        "median_ape_std": 1.3777466336719935,
+        "n_seeds": 5
+      },
+      "osm_without_census": {
+        "r2_mean": 0.5056429749387708,
+        "r2_std": 0.1141998399090564,
+        "mae_mean": 64.10381531446913,
+        "mae_std": 18.126352290452356,
+        "rmse_mean": 121.77686990127177,
+        "rmse_std": 44.31264757651261,
+        "mape_mean": 32.1214174596175,
+        "mape_std": 2.420904444652136,
+        "median_ape_mean": 25.925054300922454,
+        "median_ape_std": 1.7546114172249945,
+        "n_seeds": 5
+      },
+      "target_smooth": {
+        "r2_mean": 0.429134370461549,
+        "r2_std": 0.1170721303018553,
+        "mae_mean": 68.92012702685389,
+        "mae_std": 18.52231107229226,
+        "rmse_mean": 130.74751301098186,
+        "rmse_std": 46.32954221066036,
+        "mape_mean": 35.22529425809416,
+        "mape_std": 1.303923064380728,
+        "median_ape_mean": 27.85274368420046,
+        "median_ape_std": 1.4058464300235127,
+        "n_seeds": 5
+      },
+      "target_knn": {
+        "r2_mean": 0.5013464319564249,
+        "r2_std": 0.09995660124736326,
+        "mae_mean": 63.48163379925798,
+        "mae_std": 17.054015191304792,
+        "rmse_mean": 121.75252989278115,
+        "rmse_std": 41.94025376561772,
+        "mape_mean": 31.57486550751827,
+        "mape_std": 1.2250327940547145,
+        "median_ape_mean": 24.649251076850156,
+        "median_ape_std": 0.926940590894942,
+        "n_seeds": 5
+      },
+      "listing_quality": {
+        "r2_mean": 0.5429953086850337,
+        "r2_std": 0.06571176150317547,
+        "mae_mean": 59.129798136143656,
+        "mae_std": 14.147778878962976,
+        "rmse_mean": 115.35000110583003,
+        "rmse_std": 34.80204189213699,
+        "mape_mean": 29.144086027971486,
+        "mape_std": 1.2848250695133745,
+        "median_ape_mean": 22.312125922438643,
+        "median_ape_std": 0.9501928148030884,
+        "n_seeds": 5
+      }
+    },
+    "seattle": {
+      "size_and_room": {
+        "r2_mean": 0.4108047486919526,
+        "r2_std": 0.07332159732310145,
+        "mae_mean": 51.668455817747216,
+        "mae_std": 3.819491656426915,
+        "rmse_mean": 109.9318857641563,
+        "rmse_std": 20.300610870193488,
+        "mape_mean": 33.35490676410429,
+        "mape_std": 5.933357559131994,
+        "median_ape_mean": 26.384186932798446,
+        "median_ape_std": 5.195109279459001,
+        "n_seeds": 5
+      },
+      "plus_location": {
+        "r2_mean": 0.4626920406753047,
+        "r2_std": 0.09315444439420502,
+        "mae_mean": 49.95382142114758,
+        "mae_std": 5.987601597552417,
+        "rmse_mean": 104.95357749512425,
+        "rmse_std": 21.098264298108187,
+        "mape_mean": 32.588134170774495,
+        "mape_std": 3.017169148275491,
+        "median_ape_mean": 25.085730516487885,
+        "median_ape_std": 1.8281765576322448,
+        "n_seeds": 5
+      },
+      "plus_census": {
+        "r2_mean": 0.46617548941896647,
+        "r2_std": 0.1006347253288886,
+        "mae_mean": 48.9097064422762,
+        "mae_std": 6.5929618161773655,
+        "rmse_mean": 104.66159268098386,
+        "rmse_std": 22.032205271724546,
+        "mape_mean": 31.2353132670819,
+        "mape_std": 2.503704928913038,
+        "median_ape_mean": 24.44602198753485,
+        "median_ape_std": 1.680480943419131,
+        "n_seeds": 5
+      },
+      "plus_osm": {
+        "r2_mean": 0.4283248801218259,
+        "r2_std": 0.08942164803572057,
+        "mae_mean": 49.89430017890662,
+        "mae_std": 5.861648685807666,
+        "rmse_mean": 108.18536070726395,
+        "rmse_std": 20.49217356806258,
+        "mape_mean": 32.644363959186855,
+        "mape_std": 3.467328822452633,
+        "median_ape_mean": 25.55845746905853,
+        "median_ape_std": 2.0000449278983163,
+        "n_seeds": 5
+      },
+      "plus_structure": {
+        "r2_mean": 0.4415601487507955,
+        "r2_std": 0.09326522347720075,
+        "mae_mean": 48.576279400823765,
+        "mae_std": 6.1041347326354805,
+        "rmse_mean": 107.08153434614819,
+        "rmse_std": 21.87202904308367,
+        "mape_mean": 31.335039708700833,
+        "mape_std": 3.0221030399300166,
+        "median_ape_mean": 24.103887076412956,
+        "median_ape_std": 1.847987183063357,
+        "n_seeds": 5
+      },
+      "osm_without_census": {
+        "r2_mean": 0.42584895894652536,
+        "r2_std": 0.07933464924510393,
+        "mae_mean": 49.92684194587792,
+        "mae_std": 6.03563026499092,
+        "rmse_mean": 108.57074690611273,
+        "rmse_std": 21.05583253182831,
+        "mape_mean": 31.696751433131716,
+        "mape_std": 2.969999398520686,
+        "median_ape_mean": 25.413797138607443,
+        "median_ape_std": 1.851995469568871,
+        "n_seeds": 5
+      },
+      "target_smooth": {
+        "r2_mean": 0.1777339379073419,
+        "r2_std": 0.05183064980220679,
+        "mae_mean": 58.35604803913329,
+        "mae_std": 6.060788040573136,
+        "rmse_mean": 129.4810471716892,
+        "rmse_std": 19.078318329674836,
+        "mape_mean": 37.247684885189436,
+        "mape_std": 6.356035937064584,
+        "median_ape_mean": 29.02097103108652,
+        "median_ape_std": 4.7505890574224825,
+        "n_seeds": 5
+      },
+      "target_knn": {
+        "r2_mean": 0.4479169934180341,
+        "r2_std": 0.10112864944519469,
+        "mae_mean": 49.620946759891474,
+        "mae_std": 6.242337850067214,
+        "rmse_mean": 106.34264858787708,
+        "rmse_std": 21.521618287727836,
+        "mape_mean": 31.570433824892895,
+        "mape_std": 2.288357092220417,
+        "median_ape_mean": 24.41145850796763,
+        "median_ape_std": 1.2435622336150804,
+        "n_seeds": 5
+      },
+      "listing_quality": {
+        "r2_mean": 0.5320948138716705,
+        "r2_std": 0.08754664756597035,
+        "mae_mean": 45.77423335463784,
+        "mae_std": 5.728112751832253,
+        "rmse_mean": 97.81873491730735,
+        "rmse_std": 19.390752583012393,
+        "mape_mean": 29.62662985901856,
+        "mape_std": 2.2626397850541045,
+        "median_ape_mean": 23.189407006758934,
+        "median_ape_std": 1.5905843157571018,
+        "n_seeds": 5
+      }
+    }
+  },
+  "development_comparison": {
+    "austin": {
+      "baseline_room": {
+        "r2_mean": 0.002241239495771552,
+        "r2_std": 0.05698858485450752,
+        "mae_mean": 115.31813806192727,
+        "mae_std": 26.225350841526282,
+        "rmse_mean": 230.89454173544874,
+        "rmse_std": 37.291004726257626,
+        "mape_mean": 59.23690729945556,
+        "mape_std": 6.523068571172614,
+        "median_ape_mean": 43.38364903203692,
+        "median_ape_std": 4.142564987178182,
+        "n_seeds": 5
+      },
+      "baseline_room_bed": {
+        "r2_mean": 0.07257626326116492,
+        "r2_std": 0.19861990772560845,
+        "mae_mean": 109.79574617034886,
+        "mae_std": 24.89320538381265,
+        "rmse_mean": 220.92462318871858,
+        "rmse_std": 37.59357827724547,
+        "mape_mean": 55.46016532420507,
+        "mape_std": 9.961409314090352,
+        "median_ape_mean": 36.90490099446414,
+        "median_ape_std": 2.3105471896042897,
+        "n_seeds": 5
+      },
+      "ridge": {
+        "r2_mean": 0.5535892103546017,
+        "r2_std": 0.09606293983302462,
+        "mae_mean": 71.19034933760793,
+        "mae_std": 15.00654978355015,
+        "rmse_mean": 152.92589756816565,
+        "rmse_std": 24.94336390345473,
+        "mape_mean": 33.63124175694744,
+        "mape_std": 1.7564953993594659,
+        "median_ape_mean": 25.677250113324767,
+        "median_ape_std": 1.6352752828902062,
+        "n_seeds": 5
+      },
+      "xgboost": {
+        "r2_mean": 0.5477036297490789,
+        "r2_std": 0.04955675267312461,
+        "mae_mean": 70.46438571340755,
+        "mae_std": 15.975166081949354,
+        "rmse_mean": 154.96911923404176,
+        "rmse_std": 23.62991563826464,
+        "mape_mean": 31.481566686011274,
+        "mape_std": 1.4556897908734892,
+        "median_ape_mean": 24.40662086477284,
+        "median_ape_std": 1.8484630488906038,
+        "n_seeds": 5
+      },
+      "lightgbm": {
+        "r2_mean": 0.5420619720754215,
+        "r2_std": 0.04562119982988264,
+        "mae_mean": 70.89861071410591,
+        "mae_std": 14.408921235334528,
+        "rmse_mean": 155.67874643089297,
+        "rmse_std": 20.266563576320596,
+        "mape_mean": 31.898331951524444,
+        "mape_std": 1.025655320942739,
+        "median_ape_mean": 24.538156016004578,
+        "median_ape_std": 1.5361287471081495,
+        "n_seeds": 5
+      },
+      "catboost": {
+        "r2_mean": 0.5681873942181659,
+        "r2_std": 0.05733580001089742,
+        "mae_mean": 69.73736020883346,
+        "mae_std": 14.53915490917131,
+        "rmse_mean": 151.14055391510888,
+        "rmse_std": 22.390961411898683,
+        "mape_mean": 31.633566960783458,
+        "mape_std": 1.66501646364563,
+        "median_ape_mean": 24.61278067730561,
+        "median_ape_std": 1.517615593732625,
+        "n_seeds": 5
+      },
+      "gbm": {
+        "r2_mean": 0.562001614072426,
+        "r2_std": 0.05374346457780373,
+        "mae_mean": 69.71227607468478,
+        "mae_std": 15.110581775685857,
+        "rmse_mean": 152.34259226249898,
+        "rmse_std": 22.826014283672485,
+        "mape_mean": 31.35758258247908,
+        "mape_std": 1.4906696400783548,
+        "median_ape_mean": 24.586213910525586,
+        "median_ape_std": 1.3490477153421192,
+        "n_seeds": 5
+      }
+    },
+    "san-diego": {
+      "baseline_room": {
+        "r2_mean": -0.08387219989628283,
+        "r2_std": 0.10413353154152659,
+        "mae_mean": 107.37112879507686,
+        "mae_std": 19.78140427032921,
+        "rmse_mean": 178.21073948827149,
+        "rmse_std": 54.71308430288885,
+        "mape_mean": 67.18853022689028,
+        "mape_std": 18.220760740025213,
+        "median_ape_mean": 45.47527527527528,
+        "median_ape_std": 5.554577316796722,
+        "n_seeds": 5
+      },
+      "baseline_room_bed": {
+        "r2_mean": 0.02488310406215588,
+        "r2_std": 0.18385350768901798,
+        "mae_mean": 98.77669795495976,
+        "mae_std": 12.707790422638706,
+        "rmse_mean": 165.70615973443086,
+        "rmse_std": 39.68394283728632,
+        "mape_mean": 63.694302252946684,
+        "mape_std": 19.28265364304048,
+        "median_ape_mean": 40.30449528566779,
+        "median_ape_std": 6.990073696131279,
+        "n_seeds": 5
+      },
+      "ridge": {
+        "r2_mean": 0.5289751611581849,
+        "r2_std": 0.025177072559804507,
+        "mae_mean": 62.34279200920169,
+        "mae_std": 15.888874641551402,
+        "rmse_mean": 117.7369226406338,
+        "rmse_std": 36.49258625456782,
+        "mape_mean": 30.369461317543248,
+        "mape_std": 1.925728826456575,
+        "median_ape_mean": 23.864884769680394,
+        "median_ape_std": 0.5495279600509932,
+        "n_seeds": 5
+      },
+      "xgboost": {
+        "r2_mean": 0.5540612215732913,
+        "r2_std": 0.09397491582715169,
+        "mae_mean": 59.16475937506899,
+        "mae_std": 14.878262525147525,
+        "rmse_mean": 114.11985113292863,
+        "rmse_std": 36.437237507322024,
+        "mape_mean": 29.307620512944844,
+        "mape_std": 1.5511333092945037,
+        "median_ape_mean": 22.106680756690583,
+        "median_ape_std": 1.1348897245191352,
+        "n_seeds": 5
+      },
+      "lightgbm": {
+        "r2_mean": 0.5590345674783939,
+        "r2_std": 0.08489419341216203,
+        "mae_mean": 59.3463569223937,
+        "mae_std": 15.944336828140345,
+        "rmse_mean": 113.96024785856329,
+        "rmse_std": 37.72745055817629,
+        "mape_mean": 29.67565586576466,
+        "mape_std": 2.3433264773558724,
+        "median_ape_mean": 22.73520496810486,
+        "median_ape_std": 1.4205909415717537,
+        "n_seeds": 5
+      },
+      "catboost": {
+        "r2_mean": 0.5685716453723104,
+        "r2_std": 0.06022920377491664,
+        "mae_mean": 58.24413597855404,
+        "mae_std": 16.162006228136793,
+        "rmse_mean": 113.52647414146516,
+        "rmse_std": 40.068138838996276,
+        "mape_mean": 28.460898518979114,
+        "mape_std": 1.772041619593181,
+        "median_ape_mean": 22.04724710437809,
+        "median_ape_std": 0.6624039972024742,
+        "n_seeds": 5
+      },
+      "gbm": {
+        "r2_mean": 0.5683307931365148,
+        "r2_std": 0.06984169698533718,
+        "mae_mean": 58.27673498856465,
+        "mae_std": 15.32343152390075,
+        "rmse_mean": 113.03625514896278,
+        "rmse_std": 38.10553770879729,
+        "mape_mean": 28.675924419565867,
+        "mape_std": 1.6669804854958012,
+        "median_ape_mean": 21.998586331267116,
+        "median_ape_std": 1.0532834704222545,
+        "n_seeds": 5
+      }
+    },
+    "seattle": {
+      "baseline_room": {
+        "r2_mean": -0.06767242193454677,
+        "r2_std": 0.06293551062930076,
+        "mae_mean": 72.58822536549242,
+        "mae_std": 5.385917586789168,
+        "rmse_mean": 147.28862982062583,
+        "rmse_std": 19.191797185284912,
+        "mape_mean": 50.949114672760615,
+        "mape_std": 15.660347409438641,
+        "median_ape_mean": 36.73491543850579,
+        "median_ape_std": 5.4076208127140255,
+        "n_seeds": 5
+      },
+      "baseline_room_bed": {
+        "r2_mean": -0.06943125739100091,
+        "r2_std": 0.05827935987581144,
+        "mae_mean": 72.57092661398146,
+        "mae_std": 4.959324438985991,
+        "rmse_mean": 147.38254936737462,
+        "rmse_std": 18.754117525791692,
+        "mape_mean": 50.754733654617006,
+        "mape_std": 15.873638319531935,
+        "median_ape_mean": 36.883124328788405,
+        "median_ape_std": 6.148569351751753,
+        "n_seeds": 5
+      },
+      "ridge": {
+        "r2_mean": 0.582288322508252,
+        "r2_std": 0.057974132525415396,
+        "mae_mean": 45.25518206639866,
+        "mae_std": 5.722682615800791,
+        "rmse_mean": 92.36246653983189,
+        "rmse_std": 16.348302390123198,
+        "mape_mean": 30.130213535784055,
+        "mape_std": 2.748136559823702,
+        "median_ape_mean": 23.58643827794958,
+        "median_ape_std": 3.034035260560629,
+        "n_seeds": 5
+      },
+      "xgboost": {
+        "r2_mean": 0.5416961275400671,
+        "r2_std": 0.09021205760754644,
+        "mae_mean": 45.48883423918901,
+        "mae_std": 5.890411951519216,
+        "rmse_mean": 96.83392064830291,
+        "rmse_std": 19.831610863764265,
+        "mape_mean": 29.72551415553064,
+        "mape_std": 3.0571724953887403,
+        "median_ape_mean": 23.08768192415379,
+        "median_ape_std": 2.485501700699462,
+        "n_seeds": 5
+      },
+      "lightgbm": {
+        "r2_mean": 0.49498456362731036,
+        "r2_std": 0.08133186706319376,
+        "mae_mean": 46.24469612226454,
+        "mae_std": 5.525097300132795,
+        "rmse_mean": 101.78572133034626,
+        "rmse_std": 20.147339410479855,
+        "mape_mean": 29.801231686458795,
+        "mape_std": 3.402188876615734,
+        "median_ape_mean": 22.906138632341772,
+        "median_ape_std": 1.801963822287782,
+        "n_seeds": 5
+      },
+      "catboost": {
+        "r2_mean": 0.5376257671941269,
+        "r2_std": 0.08220584715040091,
+        "mae_mean": 45.11880196478357,
+        "mae_std": 5.578406475514938,
+        "rmse_mean": 97.42946345044484,
+        "rmse_std": 20.204920361071824,
+        "mape_mean": 29.42590245820403,
+        "mape_std": 3.546979724778478,
+        "median_ape_mean": 22.77935216261008,
+        "median_ape_std": 1.640406478087513,
+        "n_seeds": 5
+      },
+      "gbm": {
+        "r2_mean": 0.5435460575851716,
+        "r2_std": 0.08438726643780763,
+        "mae_mean": 44.877078227346566,
+        "mae_std": 5.483767094379647,
+        "rmse_mean": 96.73490733380709,
+        "rmse_std": 19.89506409810105,
+        "mape_mean": 29.33495673092049,
+        "mape_std": 3.3289771982319833,
+        "median_ape_mean": 23.18985925494168,
+        "median_ape_std": 2.1499366051205615,
+        "n_seeds": 5
+      }
+    }
+  },
+  "learning_curves": {
+    "austin": [
+      {
+        "fraction": 0.15,
+        "n_train": 615,
+        "valid_mae": 84.56038691400569,
+        "train_mae": 33.40838488037646
+      },
+      {
+        "fraction": 0.3,
+        "n_train": 789,
+        "valid_mae": 88.58846992697286,
+        "train_mae": 57.92855539880428
+      },
+      {
+        "fraction": 0.5,
+        "n_train": 1612,
+        "valid_mae": 73.01648696954814,
+        "train_mae": 37.38678151154166
+      },
+      {
+        "fraction": 0.75,
+        "n_train": 2726,
+        "valid_mae": 71.65400301304234,
+        "train_mae": 51.400985749595755
+      },
+      {
+        "fraction": 1.0,
+        "n_train": 3552,
+        "valid_mae": 71.44350706049762,
+        "train_mae": 52.746759663854796
+      }
+    ],
+    "san-diego": [
+      {
+        "fraction": 0.15,
+        "n_train": 216,
+        "valid_mae": 109.58979743323134,
+        "train_mae": 45.00072835663467
+      },
+      {
+        "fraction": 0.3,
+        "n_train": 1598,
+        "valid_mae": 91.10347788792187,
+        "train_mae": 52.5636061695023
+      },
+      {
+        "fraction": 0.5,
+        "n_train": 2457,
+        "valid_mae": 81.9964025912754,
+        "train_mae": 35.592531682297974
+      },
+      {
+        "fraction": 0.75,
+        "n_train": 4176,
+        "valid_mae": 80.27913040373595,
+        "train_mae": 53.431719015269685
+      },
+      {
+        "fraction": 1.0,
+        "n_train": 4392,
+        "valid_mae": 81.96922209895341,
+        "train_mae": 51.46022890946694
+      }
+    ],
+    "seattle": [
+      {
+        "fraction": 0.15,
+        "n_train": 303,
+        "valid_mae": 55.96951152075603,
+        "train_mae": 50.788306448438505
+      },
+      {
+        "fraction": 0.3,
+        "n_train": 402,
+        "valid_mae": 49.97200534490122,
+        "train_mae": 30.822950295961054
+      },
+      {
+        "fraction": 0.5,
+        "n_train": 340,
+        "valid_mae": 48.809431400055956,
+        "train_mae": 20.430477359447437
+      },
+      {
+        "fraction": 0.75,
+        "n_train": 765,
+        "valid_mae": 46.36791817408547,
+        "train_mae": 35.9708819220806
+      },
+      {
+        "fraction": 1.0,
+        "n_train": 873,
+        "valid_mae": 44.554181339253766,
+        "train_mae": 28.931530794783086
+      }
+    ]
+  },
+  "partial_dependence": {
+    "austin": {
+      "bedrooms": [
+        {
+          "value": 0.0,
+          "mean_pred": 118.8867752555666
+        },
+        {
+          "value": 1.0,
+          "mean_pred": 119.07366322266495
+        },
+        {
+          "value": 2.0,
+          "mean_pred": 142.8821635521856
+        },
+        {
+          "value": 3.0,
+          "mean_pred": 183.9503469156771
+        },
+        {
+          "value": 4.0,
+          "mean_pred": 215.73759925045985
+        },
+        {
+          "value": 5.0,
+          "mean_pred": 228.84980829840904
+        }
+      ],
+      "bathrooms": [
+        {
+          "value": 1.0,
+          "mean_pred": 136.34657526421847
+        },
+        {
+          "value": 1.5,
+          "mean_pred": 139.27724465696355
+        },
+        {
+          "value": 2.0,
+          "mean_pred": 154.6028369176526
+        },
+        {
+          "value": 2.5,
+          "mean_pred": 173.68169550045462
+        },
+        {
+          "value": 3.0,
+          "mean_pred": 193.22833547181892
+        }
+      ],
+      "distance_to_center_km": [
+        {
+          "value": 1.0,
+          "mean_pred": 188.43077316119513
+        },
+        {
+          "value": 3.0,
+          "mean_pred": 177.4553553383922
+        },
+        {
+          "value": 5.0,
+          "mean_pred": 171.42039207562735
+        },
+        {
+          "value": 10.0,
+          "mean_pred": 167.41760455379202
+        },
+        {
+          "value": 20.0,
+          "mean_pred": 164.95432966533056
+        }
+      ],
+      "census_median_income": [
+        {
+          "value": 68594.0,
+          "mean_pred": 165.66006439757842
+        },
+        {
+          "value": 85199.0,
+          "mean_pred": 166.62435818012543
+        },
+        {
+          "value": 95339.5,
+          "mean_pred": 167.17586654473948
+        },
+        {
+          "value": 107514.09999999998,
+          "mean_pred": 167.78017936386976
+        },
+        {
+          "value": 137106.0,
+          "mean_pred": 178.32455797577867
+        }
+      ]
+    },
+    "san-diego": {
+      "bedrooms": [
+        {
+          "value": 0.0,
+          "mean_pred": 176.5534694300287
+        },
+        {
+          "value": 1.0,
+          "mean_pred": 180.45083026574858
+        },
+        {
+          "value": 2.0,
+          "mean_pred": 208.5216440896438
+        },
+        {
+          "value": 3.0,
+          "mean_pred": 232.47116890684484
+        },
+        {
+          "value": 4.0,
+          "mean_pred": 247.08441637190282
+        },
+        {
+          "value": 5.0,
+          "mean_pred": 257.39364924858296
+        }
+      ],
+      "bathrooms": [
+        {
+          "value": 1.0,
+          "mean_pred": 190.06964336784432
+        },
+        {
+          "value": 1.5,
+          "mean_pred": 200.47140410630914
+        },
+        {
+          "value": 2.0,
+          "mean_pred": 218.04444369331463
+        },
+        {
+          "value": 2.5,
+          "mean_pred": 225.09503896119392
+        },
+        {
+          "value": 3.0,
+          "mean_pred": 243.34945163592377
+        }
+      ],
+      "distance_to_center_km": [
+        {
+          "value": 1.0,
+          "mean_pred": 226.38967081663318
+        },
+        {
+          "value": 3.0,
+          "mean_pred": 219.72464332206334
+        },
+        {
+          "value": 5.0,
+          "mean_pred": 215.11680741570018
+        },
+        {
+          "value": 10.0,
+          "mean_pred": 215.14409731814797
+        },
+        {
+          "value": 20.0,
+          "mean_pred": 217.00937211402615
+        }
+      ],
+      "census_median_income": [
+        {
+          "value": 72766.0,
+          "mean_pred": 213.25698313976574
+        },
+        {
+          "value": 90767.89999999998,
+          "mean_pred": 214.49563066621678
+        },
+        {
+          "value": 112946.0,
+          "mean_pred": 217.7130488841069
+        },
+        {
+          "value": 127500.0,
+          "mean_pred": 221.5929012719445
+        },
+        {
+          "value": 169013.0,
+          "mean_pred": 221.5735286102776
+        }
+      ]
+    },
+    "seattle": {
+      "bedrooms": [
+        {
+          "value": 0.0,
+          "mean_pred": 112.66594657239173
+        },
+        {
+          "value": 1.0,
+          "mean_pred": 117.24363810961796
+        },
+        {
+          "value": 2.0,
+          "mean_pred": 146.55364490445444
+        },
+        {
+          "value": 3.0,
+          "mean_pred": 166.01464507046808
+        },
+        {
+          "value": 4.0,
+          "mean_pred": 182.11377484754624
+        },
+        {
+          "value": 5.0,
+          "mean_pred": 197.71881733387528
+        }
+      ],
+      "bathrooms": [
+        {
+          "value": 1.0,
+          "mean_pred": 132.6037451957124
+        },
+        {
+          "value": 1.5,
+          "mean_pred": 138.44549755611718
+        },
+        {
+          "value": 2.0,
+          "mean_pred": 144.8815498067461
+        },
+        {
+          "value": 2.5,
+          "mean_pred": 145.6653528215528
+        },
+        {
+          "value": 3.0,
+          "mean_pred": 162.1667894041213
+        }
+      ],
+      "distance_to_center_km": [
+        {
+          "value": 1.0,
+          "mean_pred": 182.9705729564505
+        },
+        {
+          "value": 3.0,
+          "mean_pred": 158.05256352585494
+        },
+        {
+          "value": 5.0,
+          "mean_pred": 150.4167021318811
+        },
+        {
+          "value": 10.0,
+          "mean_pred": 133.99133952365227
+        },
+        {
+          "value": 20.0,
+          "mean_pred": 133.68744908452888
+        }
+      ],
+      "census_median_income": [
+        {
+          "value": 95038.0,
+          "mean_pred": 146.279338201277
+        },
+        {
+          "value": 120398.0,
+          "mean_pred": 148.1057645859087
+        },
+        {
+          "value": 133307.0,
+          "mean_pred": 146.62290095626938
+        },
+        {
+          "value": 160049.0,
+          "mean_pred": 145.89081478154012
+        },
+        {
+          "value": 185945.0,
+          "mean_pred": 148.58193922842082
+        }
+      ]
+    }
+  },
+  "leakage_demo": {
+    "role": "demonstration_of_the_old_target_not_a_reported_result",
+    "n": 10296,
+    "n_clusters": 15,
+    "correlation_price_with_median_that_includes_itself": 0.6476704184444085,
+    "correlation_price_with_leave_one_out_median": 0.6353512870759299,
+    "cv_r2_against_smoothed_target": 0.9734971183580435,
+    "cv_mae_against_smoothed_target": 7.166766083694375,
+    "cv_r2_against_actual_price": 0.3853646075772761,
+    "cv_mae_against_actual_price": 84.3952077659601,
+    "cv_rmse_against_actual_price": 170.07284048809476
+  },
+  "audit_passed": true,
+  "smoke": false,
+  "feature_labels": {
+    "bedrooms": "Bedrooms",
+    "bathrooms": "Bathrooms",
+    "accommodates": "Guest capacity",
+    "is_private_room": "Private room",
+    "is_shared_room": "Shared room",
+    "is_hotel_room": "Hotel room",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "distance_to_center_km": "Distance to downtown",
+    "distance_to_airport_km": "Distance to the airport",
+    "census_median_income": "Tract median income",
+    "census_median_rent": "Tract median rent",
+    "census_median_home_value": "Tract median home value",
+    "census_pop_density": "Tract population density",
+    "minimum_nights_capped": "Minimum nights",
+    "amenity_count": "Amenity count",
+    "has_ac": "Air conditioning",
+    "has_parking": "Parking",
+    "has_washer": "Washer",
+    "has_dryer": "Dryer",
+    "has_pool": "Pool",
+    "has_hottub": "Hot tub",
+    "has_gym": "Gym",
+    "has_waterfront": "Waterfront",
+    "has_kitchen": "Kitchen",
+    "has_workspace": "Workspace",
+    "review_score": "Review score",
+    "log_reviews": "Review count",
+    "reviews_per_month": "Reviews per month",
+    "is_superhost": "Superhost",
+    "log_host_listings": "Host's listing count",
+    "instant_bookable": "Instant book"
+  }
+}

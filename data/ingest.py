@@ -53,6 +53,19 @@ _WANTED = [
     "instant_bookable",
     "amenities",
     "host_id",
+    "description",
+    "neighborhood_overview",
+    "host_since",
+    "host_response_time",
+    "host_response_rate",
+    "host_acceptance_rate",
+    "host_identity_verified",
+    "beds",
+    "review_scores_accuracy",
+    "review_scores_cleanliness",
+    "review_scores_checkin",
+    "review_scores_communication",
+    "review_scores_location",
 ]
 
 

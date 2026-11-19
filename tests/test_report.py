@@ -16,9 +16,12 @@ from evaluation.select import (
     choose_addon,
     choose_blend,
     choose_depth,
+    choose_interval,
     choose_library,
     choose_monotonic,
+    choose_pooled,
     choose_quality,
+    choose_sequential,
     choose_simpler,
     feature_label,
 )
@@ -26,6 +29,9 @@ from evaluation.select import (
 ROOT = Path(__file__).resolve().parents[1]
 JSON_PATH = ROOT / "reports" / "metrics.json"
 CSV_PATH = ROOT / "reports" / "locked_test_predictions.csv"
+CONFIRM_PATH = ROOT / "reports" / "confirmation_predictions.csv"
+V2_JSON = ROOT / "reports" / "v2_metrics.json"
+V2_CSV = ROOT / "reports" / "v2_locked_test_predictions.csv"
 FINDINGS = ROOT / "reports" / "FINDINGS.md"
 README = ROOT / "README.md"
 
@@ -48,6 +54,15 @@ def test_predictions_match_the_json():
         saved_interval = report["locked_test"]["interval"]
         assert abs(interval["coverage"] - saved_interval["coverage"]) < 1e-6
         assert report["audit"]["split"]["passed"] is True
+        assert report["audit"]["confirmation"]["passed"] is True
+        confirm = payload["cities"][city]["confirmation"]
+        confirm_part = pd.read_csv(CONFIRM_PATH)
+        confirm_part = confirm_part[confirm_part["city"] == city]
+        recomputed_confirm = regression_metrics(
+            confirm_part["y_true"].to_numpy(), confirm_part["pred_gbm"].to_numpy()
+        )
+        for key in ("r2", "mae", "rmse", "mape", "median_ape", "n"):
+            assert abs(recomputed_confirm[key] - confirm["gbm"][key]) < 1e-6, city
 
 
 def test_prose_quotes_the_locked_test():
@@ -65,12 +80,19 @@ def test_prose_quotes_the_locked_test():
         dev = payload["development_comparison"][city]["gbm"]
         assert f"{dev['r2_mean']:.3f} ± {dev['r2_std']:.3f}" in findings
         assert f"{dev['mae_mean']:.2f} ± {dev['mae_std']:.2f}" in findings
+        coverage = report["locked_test"]["interval"]["coverage"]
+        assert f"{coverage * 100:.1f}%" in findings
+        assert f"{coverage * 100:.1f}%" in readme
 
 
 def test_recorded_choices_follow_the_pre_set_rule():
-    """The JSON winner is what the rule says, not a later edit."""
-    payload, _preds = _load()
-    protocol = payload["protocol"]
+    """The JSON winner is what the rule says, not a later edit.
+
+    v2's search is replayed from the archived metrics. This round's add-ons,
+    depth, pooling, and interval are replayed from the new file.
+    """
+    archive = json.loads(V2_JSON.read_text())
+    protocol = archive["protocol"]
     stage1 = [(name, protocol["stage1_development_mae"][name]) for name, _cols, _mode in STAGE1]
     assert choose_simpler(stage1) == protocol["stage1"]
     base = protocol["stage1_development_mae"][protocol["stage1"]]
@@ -101,6 +123,43 @@ def test_recorded_choices_follow_the_pre_set_rule():
         else protocol["library_development_mae"][protocol["component_library"]]
     )
     assert choose_blend(winner, protocol["blend_development_mae"]) == protocol["blend"]
+
+    payload, _preds = _load()
+    current_protocol = payload["protocol"]
+    kept = choose_sequential(
+        current_protocol["v3_base_mae"],
+        [(item["name"], item["mae"]) for item in current_protocol["v3_trials"]],
+    )
+    assert kept == current_protocol["v3_kept"]
+    depth_pairs = [
+        (int(depth), mae) for depth, mae in current_protocol["depth_development_mae"].items()
+    ]
+    assert choose_depth(depth_pairs) == current_protocol["chosen_depth"]
+    assert (
+        choose_pooled(
+            current_protocol["per_city_development_mae"],
+            current_protocol["pooled_development_mae"],
+        )
+        == current_protocol["pooled"]
+    )
+    assert (
+        choose_interval(current_protocol["interval_candidates"])
+        == current_protocol["interval_method"]
+    )
+
+
+def test_published_v2_archive_matches_its_predictions():
+    """The v2 numbers in the write-up are the archived file, not a retype."""
+    archive = json.loads(V2_JSON.read_text())
+    preds = pd.read_csv(V2_CSV)
+    payload, _preds = _load()
+    for city, report in archive["cities"].items():
+        part = preds[preds["city"] == city]
+        recomputed = regression_metrics(part["y_true"].to_numpy(), part["pred_gbm"].to_numpy())
+        saved = report["locked_test"]["gbm"]
+        for key in ("r2", "mae", "rmse"):
+            assert abs(recomputed[key] - saved[key]) < 1e-6
+        assert abs(recomputed["mae"] - payload["published_v2"][city]["gbm"]["mae"]) < 1e-6
 
 
 def test_leakage_demo_is_quoted_as_a_demo_not_a_result():

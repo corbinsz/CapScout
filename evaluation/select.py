@@ -10,7 +10,12 @@ from __future__ import annotations
 from evaluation.protocol import (
     ADDON_MUST_BEAT,
     BLEND_MUST_BEAT,
+    INTERVAL_MEAN_COVERAGE_FLOOR,
+    INTERVAL_TAIL_GAIN,
+    INTERVAL_WIDTH_CAP,
+    INTERVAL_WORST_SLACK,
     LIBRARY_MUST_BEAT,
+    POINT_INSIDE_FLOOR,
     SIMPLER_WITHIN,
 )
 
@@ -87,3 +92,84 @@ def feature_label(stage1: str, addon: str | None, quality: bool) -> str:
     if quality:
         parts.append("listing_quality")
     return "+".join(parts)
+
+
+def choose_sequential(base_mae: float, steps: list[tuple[str, float]]) -> list[str]:
+    """Keep each step that beats the stack so far by 1%.
+
+    `steps` is the order the add-ons were tried. A step's MAE is the stack
+    with that add-on on top of whatever earlier steps were kept, not the
+    add-on on its own. Alone-on-the-base numbers are an ablation, and this
+    function does not see them.
+    """
+    kept: list[str] = []
+    current = float(base_mae)
+    for name, mae in steps:
+        if float(mae) < current * ADDON_MUST_BEAT:
+            kept.append(name)
+            current = float(mae)
+    return kept
+
+
+def choose_pooled(per_city_mae: float, pooled_mae: float) -> bool:
+    """One model for all three cities has to beat the per-city blend by 1%."""
+    return float(pooled_mae) < float(per_city_mae) * ADDON_MUST_BEAT
+
+
+def choose_interval(candidates: list[dict]) -> str:
+    """Pick an interval method. The first candidate is the incumbent.
+
+    A challenger has to stay calibrated (mean coverage, and it must not
+    open a hole in the worst city), stay about as tight, and actually
+    contain the point estimate. It then has to cover the expensive
+    listings better, or be clearly tighter at the same tail coverage.
+    The incumbent does not have to pass those floors. It is what we
+    already ship.
+    """
+    if not candidates:
+        raise ValueError("no interval candidates")
+    baseline = candidates[0]
+    best = baseline
+    for challenger in candidates[1:]:
+        if not _interval_ok(
+            challenger,
+            baseline,
+            INTERVAL_MEAN_COVERAGE_FLOOR,
+            INTERVAL_WIDTH_CAP,
+            INTERVAL_WORST_SLACK,
+            POINT_INSIDE_FLOOR,
+        ):
+            continue
+        if _interval_better(challenger, best, INTERVAL_TAIL_GAIN):
+            best = challenger
+    return str(best["name"])
+
+
+def _interval_ok(challenger, baseline, floor, width_cap, slack, point_floor) -> bool:
+    required = (
+        "mean_coverage",
+        "point_inside",
+        "worst_coverage",
+        "mean_median_width",
+        "worst_upper_coverage",
+    )
+    if any(challenger.get(key) is None for key in required):
+        return False
+    if challenger["mean_coverage"] < floor:
+        return False
+    if challenger["point_inside"] < point_floor:
+        return False
+    if challenger["worst_coverage"] < baseline["worst_coverage"] - slack:
+        return False
+    if challenger["mean_median_width"] > baseline["mean_median_width"] * width_cap:
+        return False
+    upper = challenger["worst_upper_coverage"]
+    return upper == upper  # reject NaN
+
+
+def _interval_better(challenger, best, tail_gain: float) -> bool:
+    if challenger["worst_upper_coverage"] >= best["worst_upper_coverage"] + tail_gain:
+        return True
+    narrower = challenger["mean_median_width"] < best["mean_median_width"] * 0.90
+    tail_holds = challenger["worst_upper_coverage"] >= best["worst_upper_coverage"] - 0.005
+    return bool(narrower and tail_holds)
