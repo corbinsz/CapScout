@@ -1,3 +1,5 @@
+> Background from an earlier round. The current measurement, including the nights bar and the rough-estimate label, is in [reports/FINDINGS.md](../reports/FINDINGS.md).
+
 # How the nights estimate was chosen
 
 CapScout already predicts an advertised nightly rate. This note is the reading behind a second number: how many nights a home would likely book in a year, and a plain grade of the gross those two numbers imply. It is a personal project. The measurement is in [reports/FINDINGS.md](../reports/FINDINGS.md). On the seed-31 holdout the nights model did not clear the bar written down in that note.

@@ -1,6 +1,8 @@
 # Data
 
-Every source below can be downloaded by a script and reused for this study. Derived columns (distances, counts, tract attributes joined to listings) are what the model sees. The national Census files and the raw Overpass responses are caches and are not committed. The city extracts under `data/external/` are.
+The current scored model is the simple spatial study in `reports/FINDINGS.md`: ridge regression for the nightly rate, and a linear model for a rough nights estimate. Raw Inside Airbnb files are not in git. Download them with `python -m data.download austin san-diego seattle`. Older history files, if you want them, come from `python -m data.history` and are gitignored the same way.
+
+Every source below can be downloaded by a script and reused for this study. Derived columns (distances, counts, tract attributes joined to listings) are what a model can see. The national Census files and the raw Overpass responses are caches and are not committed. The city extracts under `data/external/` are small and stay in the repo.
 
 No Redfin, Zillow, AirDNA, or other source whose terms forbid automated collection is downloaded or used.
 
@@ -10,13 +12,13 @@ No Redfin, Zillow, AirDNA, or other source whose terms forbid automated collecti
 - **Markets in the model:** Austin (2025-06-13), San Diego (2025-03-16), Seattle (2025-03-16).
 - **License:** Creative Commons Attribution 4.0 (CC BY 4.0). Credit Inside Airbnb. These files are filtered (price window, required bedrooms and coordinates) and are not a verbatim republication of the full dump.
 - **Source:** [insideairbnb.com/get-the-data](https://insideairbnb.com/get-the-data/) and [insideairbnb.com/data-policies](https://insideairbnb.com/data-policies/). Inside Airbnb is not Airbnb and is not affiliated with this project.
-- **Join:** there is no join. The row is the listing. `python -m data.download` can refresh a snapshot; the committed files are the ones the metrics were computed on.
+- **Join:** there is no join. The row is the listing. `python -m data.download austin san-diego seattle` fetches the three snapshots the metrics were computed on. Those dates are pinned in `data/cities.py`. The files are gitignored, so they are not in a fresh clone until that command runs.
 
 Other snapshots are on disk and were screened. They are not in the model. Hawaii is several islands in one file. Asheville has almost no bedrooms. Las Vegas, Fort Lauderdale, Nashville, and Washington are missing a nightly price on roughly 20–30% of rows. Boston, Denver, Dallas, Fort Worth, and New Orleans are missing a price on about 9–20%. A fourth market with a large unpriced slice would not make the spatial test more honest.
 
 ### Earlier snapshots of the same three cities
 
-Inside Airbnb's public page keeps about the last 12 months. On the day this round was frozen, every file still hosted for San Diego and Seattle before their study dates was one snapshot, 2025-02-18. Austin still had a monthly file from 2024-04-21 through 2025-05-11. Files dated after the study snapshot (Austin 2025-06-13, San Diego and Seattle 2025-03-16) were left alone: a later scrape is a price from after the label. The files are under `data/raw/cities/<city>/history/<date>.csv.gz`, CC BY 4.0, credit Inside Airbnb. `python -m data.history` downloads any that are missing.
+Inside Airbnb's public page keeps about the last 12 months. On the day this round was frozen, every file still hosted for San Diego and Seattle before their study dates was one snapshot, 2025-02-18. Austin still had a monthly file from 2024-04-21 through 2025-05-11. Files dated after the study snapshot (Austin 2025-06-13, San Diego and Seattle 2025-03-16) were left alone: a later scrape is a price from after the label. The files belong under `data/raw/cities/<city>/history/<date>.csv.gz`, CC BY 4.0, credit Inside Airbnb. `python -m data.history` downloads any that are missing. They are gitignored, same as the current snapshots, and the current model does not use them.
 
 A listing that is already in the study file is not repeated. The newest earlier snapshot is kept for ids the study file does not have. Those rows can enter training only. They are dropped when they share a host with a held-out listing, sit in a held-out cell, or fall inside the 1 km buffer. Whether they cleared the error bar is in the findings, not here.
 
@@ -46,7 +48,7 @@ A listing that is already in the study file is not repeated. The newest earlier 
 
   Land area is the `ALAND` field, in square meters.
 
-- **Join:** point-in-polygon. The listing coordinate is tested against tract polygons whose bounding box meets the city, padded by 0.12 degrees so the edge of the metro is included. Polygons are simplified by about 15 meters before they are stored, which is smaller than the roughly 150 meter coordinate jitter Inside Airbnb applies. If a point misses every polygon but is within 2 km of a tract centroid, that tract is used (about 0.1–0.2% of rows). If an estimate is missing (ACS uses negative sentinels; a handful of tracts have no median rent or home value), the city median of the tracts that do have the value is filled in. That fill does not use listing prices. In this run, 99.8% of Austin rows, 99.9% of San Diego rows, and 99.9% of Seattle rows hit a polygon directly.
+- **Join:** point-in-polygon. The listing coordinate is tested against tract polygons whose bounding box meets the city, padded by 0.12 degrees so the edge of the metro is included. Polygons are simplified by about 15 meters before they are stored, which is smaller than the roughly 150 meter coordinate jitter Inside Airbnb applies. If a point misses every polygon but is within 2 km of a tract centroid, that tract is used. If an estimate is missing (ACS uses negative sentinels; a handful of tracts have no median rent or home value), the city median of the tracts that do have the value is filled in. That fill does not use listing prices. On the cleaned rows in this study, 99.8% of Austin listings, 100.0% of San Diego listings, and 99.9% of Seattle listings hit a polygon directly. Census columns were joined and then left out of the scored model, because they did not cut training-fold error by the pre-set 2%.
 
 | City | Tracts kept | Tracts with income | Median income | Median rent | Median home value | People per km² |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -77,4 +79,4 @@ Distance to downtown uses the city reference point in `data/cities.py`. Distance
 
 ## What the scored model actually uses
 
-Census tract attributes, plus the listing's own size, coordinates, distances, amenities, review scores, and host fields. v3 added beds, a shared-bath flag, host tenure and response, the separate review scores other than value, and a few more amenity flags. This round measured earlier snapshots, matched comps, a sentence embedding, tail weights, a third tree library, a small hyperparameter grid, a weighted blend, and two retransformation fixes. None of them cleared the error bar, so the scored columns are still v3's. The 80% band is now fit separately in bands of the predicted price. OpenStreetMap columns were measured in v2 and left out. The findings record the comparisons.
+The nightly-rate model is ridge regression on the log of the advertised rate. Its columns are size (bedrooms, bathrooms, beds, guests), room type, house versus condo, latitude and longitude, distance to downtown and to the airport, a short amenity list, review score, review count, and superhost. The nights model uses the same home and amenity columns and does not use reviews, price, minimum stay, or availability. Census tract attributes are joined and documented above, and they are not in the scored models. OpenStreetMap columns were measured in an earlier round and were not added again. Nearby ads shown in the app are not model inputs.

@@ -1,0 +1,490 @@
+{
+  "cities": {
+    "austin": {
+      "city": "austin",
+      "display": "Austin, TX",
+      "snapshot": "2025-06-13",
+      "url": "https://data.insideairbnb.com/united-states/tx/austin/2025-06-13/data/listings.csv.gz",
+      "file": "data/raw/cities/austin/listings.csv.gz",
+      "license": "CC BY 4.0",
+      "credit": "Inside Airbnb",
+      "catalog": "https://insideairbnb.com/get-the-data/",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "steps": [
+        {
+          "id": "file",
+          "description": "Rows in the Inside Airbnb file",
+          "before": 10533,
+          "removed": 0,
+          "remaining": 10533
+        },
+        {
+          "id": "duplicate_id",
+          "description": "Duplicate listing id (kept the copy with more reviews in the last year)",
+          "before": 10533,
+          "removed": 0,
+          "remaining": 10533
+        },
+        {
+          "id": "bad_price",
+          "description": "Price missing, not a number, or not positive",
+          "before": 10533,
+          "removed": 16,
+          "remaining": 10517
+        },
+        {
+          "id": "price_under_25",
+          "description": "Price under $25",
+          "before": 10517,
+          "removed": 72,
+          "remaining": 10445
+        },
+        {
+          "id": "price_over_2000",
+          "description": "Price over $2,000",
+          "before": 10445,
+          "removed": 122,
+          "remaining": 10323
+        },
+        {
+          "id": "missing_coordinates",
+          "description": "Missing latitude or longitude",
+          "before": 10323,
+          "removed": 0,
+          "remaining": 10323
+        },
+        {
+          "id": "outside_city",
+          "description": "More than 60 km from downtown",
+          "before": 10323,
+          "removed": 0,
+          "remaining": 10323
+        },
+        {
+          "id": "missing_room_type",
+          "description": "Missing room type",
+          "before": 10323,
+          "removed": 0,
+          "remaining": 10323
+        },
+        {
+          "id": "missing_bedrooms",
+          "description": "Missing bedrooms",
+          "before": 10323,
+          "removed": 13,
+          "remaining": 10310
+        },
+        {
+          "id": "bedroom_range",
+          "description": "Bedrooms outside 0 to 10",
+          "before": 10310,
+          "removed": 14,
+          "remaining": 10296
+        },
+        {
+          "id": "bathroom_range",
+          "description": "Bathrooms outside 0 to 12",
+          "before": 10296,
+          "removed": 0,
+          "remaining": 10296
+        },
+        {
+          "id": "guest_range",
+          "description": "Guest capacity outside 1 to 16",
+          "before": 10296,
+          "removed": 0,
+          "remaining": 10296
+        },
+        {
+          "id": "minimum_nights",
+          "description": "Minimum stay over 90 nights",
+          "before": 10296,
+          "removed": 55,
+          "remaining": 10241
+        },
+        {
+          "id": "no_reviews_ltm",
+          "description": "No reviews in the last 12 months",
+          "before": 10241,
+          "removed": 2422,
+          "remaining": 7819
+        },
+        {
+          "id": "blocked_all_year",
+          "description": "Unavailable every night of the year",
+          "before": 7819,
+          "removed": 41,
+          "remaining": 7778
+        },
+        {
+          "id": "near_duplicate",
+          "description": "Same host, spot, room type, bedrooms, and price (kept the reviewed copy)",
+          "before": 7778,
+          "removed": 58,
+          "remaining": 7720
+        },
+        {
+          "id": "label_undefined",
+          "description": "Price or review-based nights could not be computed",
+          "before": 7720,
+          "removed": 0,
+          "remaining": 7720
+        }
+      ],
+      "notes": {
+        "prices_with_dollar_sign": 10517,
+        "prices_with_thousands_comma": 314,
+        "bathrooms_filled_from_text": 0,
+        "half_baths_parsed": 0,
+        "host_id_filled_from_listing": 0,
+        "accommodates_filled": 0,
+        "final_missing_bathrooms": 3,
+        "final_missing_beds": 2,
+        "final_missing_amenities": 0,
+        "final_missing_review_score": 0,
+        "farthest_listing_km": 30.004232338088492,
+        "max_km_from_center": 60.0,
+        "min_price": 25.0,
+        "max_price": 2000.0
+      },
+      "rows_raw": 10533,
+      "rows_final": 7720,
+      "census": {
+        "vintage": "ACS 2024 5-year",
+        "tables": "B19013 income, B25064 rent, B25077 home value, B01003 population",
+        "boundaries": "TIGER/Line 2024 census tracts",
+        "license": "U.S. government work, public domain",
+        "polygon_fraction": 0.9983160621761658,
+        "centroid_fallback_fraction": 0.001683937823834197,
+        "city_median_fraction": 0.0,
+        "field_imputed_fraction": 0.07007772020725389
+      },
+      "rows_model": 7720,
+      "n_cells": 154
+    },
+    "san-diego": {
+      "city": "san-diego",
+      "display": "San Diego, CA",
+      "snapshot": "2025-03-16",
+      "url": "https://data.insideairbnb.com/united-states/ca/san-diego/2025-03-16/data/listings.csv.gz",
+      "file": "data/raw/cities/san-diego/listings.csv.gz",
+      "license": "CC BY 4.0",
+      "credit": "Inside Airbnb",
+      "catalog": "https://insideairbnb.com/get-the-data/",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "steps": [
+        {
+          "id": "file",
+          "description": "Rows in the Inside Airbnb file",
+          "before": 12991,
+          "removed": 0,
+          "remaining": 12991
+        },
+        {
+          "id": "duplicate_id",
+          "description": "Duplicate listing id (kept the copy with more reviews in the last year)",
+          "before": 12991,
+          "removed": 0,
+          "remaining": 12991
+        },
+        {
+          "id": "bad_price",
+          "description": "Price missing, not a number, or not positive",
+          "before": 12991,
+          "removed": 1287,
+          "remaining": 11704
+        },
+        {
+          "id": "price_under_25",
+          "description": "Price under $25",
+          "before": 11704,
+          "removed": 3,
+          "remaining": 11701
+        },
+        {
+          "id": "price_over_2000",
+          "description": "Price over $2,000",
+          "before": 11701,
+          "removed": 88,
+          "remaining": 11613
+        },
+        {
+          "id": "missing_coordinates",
+          "description": "Missing latitude or longitude",
+          "before": 11613,
+          "removed": 0,
+          "remaining": 11613
+        },
+        {
+          "id": "outside_city",
+          "description": "More than 60 km from downtown",
+          "before": 11613,
+          "removed": 0,
+          "remaining": 11613
+        },
+        {
+          "id": "missing_room_type",
+          "description": "Missing room type",
+          "before": 11613,
+          "removed": 0,
+          "remaining": 11613
+        },
+        {
+          "id": "missing_bedrooms",
+          "description": "Missing bedrooms",
+          "before": 11613,
+          "removed": 19,
+          "remaining": 11594
+        },
+        {
+          "id": "bedroom_range",
+          "description": "Bedrooms outside 0 to 10",
+          "before": 11594,
+          "removed": 4,
+          "remaining": 11590
+        },
+        {
+          "id": "bathroom_range",
+          "description": "Bathrooms outside 0 to 12",
+          "before": 11590,
+          "removed": 0,
+          "remaining": 11590
+        },
+        {
+          "id": "guest_range",
+          "description": "Guest capacity outside 1 to 16",
+          "before": 11590,
+          "removed": 0,
+          "remaining": 11590
+        },
+        {
+          "id": "minimum_nights",
+          "description": "Minimum stay over 90 nights",
+          "before": 11590,
+          "removed": 31,
+          "remaining": 11559
+        },
+        {
+          "id": "no_reviews_ltm",
+          "description": "No reviews in the last 12 months",
+          "before": 11559,
+          "removed": 2995,
+          "remaining": 8564
+        },
+        {
+          "id": "blocked_all_year",
+          "description": "Unavailable every night of the year",
+          "before": 8564,
+          "removed": 104,
+          "remaining": 8460
+        },
+        {
+          "id": "near_duplicate",
+          "description": "Same host, spot, room type, bedrooms, and price (kept the reviewed copy)",
+          "before": 8460,
+          "removed": 73,
+          "remaining": 8387
+        },
+        {
+          "id": "label_undefined",
+          "description": "Price or review-based nights could not be computed",
+          "before": 8387,
+          "removed": 0,
+          "remaining": 8387
+        }
+      ],
+      "notes": {
+        "prices_with_dollar_sign": 11704,
+        "prices_with_thousands_comma": 369,
+        "bathrooms_filled_from_text": 0,
+        "half_baths_parsed": 0,
+        "host_id_filled_from_listing": 0,
+        "accommodates_filled": 0,
+        "final_missing_bathrooms": 0,
+        "final_missing_beds": 23,
+        "final_missing_amenities": 0,
+        "final_missing_review_score": 0,
+        "farthest_listing_km": 42.93222894294941,
+        "max_km_from_center": 60.0,
+        "min_price": 25.0,
+        "max_price": 2000.0
+      },
+      "rows_raw": 12991,
+      "rows_final": 8387,
+      "census": {
+        "vintage": "ACS 2024 5-year",
+        "tables": "B19013 income, B25064 rent, B25077 home value, B01003 population",
+        "boundaries": "TIGER/Line 2024 census tracts",
+        "license": "U.S. government work, public domain",
+        "polygon_fraction": 0.9995230714200548,
+        "centroid_fallback_fraction": 0.0004769285799451532,
+        "city_median_fraction": 0.0,
+        "field_imputed_fraction": 0.0062000715392869915
+      },
+      "rows_model": 8387,
+      "n_cells": 114
+    },
+    "seattle": {
+      "city": "seattle",
+      "display": "Seattle, WA",
+      "snapshot": "2025-03-16",
+      "url": "https://data.insideairbnb.com/united-states/wa/seattle/2025-03-16/data/listings.csv.gz",
+      "file": "data/raw/cities/seattle/listings.csv.gz",
+      "license": "CC BY 4.0",
+      "credit": "Inside Airbnb",
+      "catalog": "https://insideairbnb.com/get-the-data/",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "steps": [
+        {
+          "id": "file",
+          "description": "Rows in the Inside Airbnb file",
+          "before": 6772,
+          "removed": 0,
+          "remaining": 6772
+        },
+        {
+          "id": "duplicate_id",
+          "description": "Duplicate listing id (kept the copy with more reviews in the last year)",
+          "before": 6772,
+          "removed": 0,
+          "remaining": 6772
+        },
+        {
+          "id": "bad_price",
+          "description": "Price missing, not a number, or not positive",
+          "before": 6772,
+          "removed": 764,
+          "remaining": 6008
+        },
+        {
+          "id": "price_under_25",
+          "description": "Price under $25",
+          "before": 6008,
+          "removed": 2,
+          "remaining": 6006
+        },
+        {
+          "id": "price_over_2000",
+          "description": "Price over $2,000",
+          "before": 6006,
+          "removed": 2,
+          "remaining": 6004
+        },
+        {
+          "id": "missing_coordinates",
+          "description": "Missing latitude or longitude",
+          "before": 6004,
+          "removed": 0,
+          "remaining": 6004
+        },
+        {
+          "id": "outside_city",
+          "description": "More than 60 km from downtown",
+          "before": 6004,
+          "removed": 0,
+          "remaining": 6004
+        },
+        {
+          "id": "missing_room_type",
+          "description": "Missing room type",
+          "before": 6004,
+          "removed": 0,
+          "remaining": 6004
+        },
+        {
+          "id": "missing_bedrooms",
+          "description": "Missing bedrooms",
+          "before": 6004,
+          "removed": 10,
+          "remaining": 5994
+        },
+        {
+          "id": "bedroom_range",
+          "description": "Bedrooms outside 0 to 10",
+          "before": 5994,
+          "removed": 2,
+          "remaining": 5992
+        },
+        {
+          "id": "bathroom_range",
+          "description": "Bathrooms outside 0 to 12",
+          "before": 5992,
+          "removed": 4,
+          "remaining": 5988
+        },
+        {
+          "id": "guest_range",
+          "description": "Guest capacity outside 1 to 16",
+          "before": 5988,
+          "removed": 0,
+          "remaining": 5988
+        },
+        {
+          "id": "minimum_nights",
+          "description": "Minimum stay over 90 nights",
+          "before": 5988,
+          "removed": 32,
+          "remaining": 5956
+        },
+        {
+          "id": "no_reviews_ltm",
+          "description": "No reviews in the last 12 months",
+          "before": 5956,
+          "removed": 1272,
+          "remaining": 4684
+        },
+        {
+          "id": "blocked_all_year",
+          "description": "Unavailable every night of the year",
+          "before": 4684,
+          "removed": 61,
+          "remaining": 4623
+        },
+        {
+          "id": "near_duplicate",
+          "description": "Same host, spot, room type, bedrooms, and price (kept the reviewed copy)",
+          "before": 4623,
+          "removed": 13,
+          "remaining": 4610
+        },
+        {
+          "id": "label_undefined",
+          "description": "Price or review-based nights could not be computed",
+          "before": 4610,
+          "removed": 0,
+          "remaining": 4610
+        }
+      ],
+      "notes": {
+        "prices_with_dollar_sign": 6008,
+        "prices_with_thousands_comma": 20,
+        "bathrooms_filled_from_text": 0,
+        "half_baths_parsed": 0,
+        "host_id_filled_from_listing": 0,
+        "accommodates_filled": 0,
+        "final_missing_bathrooms": 0,
+        "final_missing_beds": 3,
+        "final_missing_amenities": 0,
+        "final_missing_review_score": 0,
+        "farthest_listing_km": 14.49176509055555,
+        "max_km_from_center": 60.0,
+        "min_price": 25.0,
+        "max_price": 2000.0
+      },
+      "rows_raw": 6772,
+      "rows_final": 4610,
+      "census": {
+        "vintage": "ACS 2024 5-year",
+        "tables": "B19013 income, B25064 rent, B25077 home value, B01003 population",
+        "boundaries": "TIGER/Line 2024 census tracts",
+        "license": "U.S. government work, public domain",
+        "polygon_fraction": 0.9989154013015185,
+        "centroid_fallback_fraction": 0.0010845986984815619,
+        "city_median_fraction": 0.0,
+        "field_imputed_fraction": 0.01388286334056399
+      },
+      "rows_model": 4610,
+      "n_cells": 40
+    }
+  }
+}
