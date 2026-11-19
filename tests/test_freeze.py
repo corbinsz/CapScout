@@ -47,6 +47,33 @@ def test_freeze_file_lives_with_the_protocol():
     assert Path(PATH).name == "locked_test_ids.json"
 
 
+def test_score_split_drops_every_listing_in_a_held_out_cell():
+    from evaluation.blocking import score_split
+
+    lat = np.array([30.0, 30.001, 30.5])
+    lon = np.array([-97.0, -97.001, -97.5])
+    hosts = np.array(["a", "b", "c"])
+    train, _info = score_split(lat, lon, hosts, np.array([0]))
+    assert list(train) == [2]
+
+
+def test_final_ids_are_disjoint_from_the_holdouts_already_read():
+    from evaluation.confirm import PATH as CONFIRM_PATH
+    from evaluation.final import PATH as FINAL_PATH
+    from evaluation.final import computed_ids
+
+    saved = json.loads(FINAL_PATH.read_text())
+    assert saved["final_seed"] == 23
+    assert "price" not in json.dumps(saved["cities"])
+    recomputed = computed_ids(tuple(saved["cities"]))
+    locked = json.loads(PATH.read_text())
+    confirm = json.loads(CONFIRM_PATH.read_text())
+    for city, ids in saved["cities"].items():
+        assert ids == recomputed[city]
+        assert set(ids).isdisjoint(locked["cities"][city])
+        assert set(ids).isdisjoint(confirm["cities"][city])
+
+
 def test_confirmation_ids_are_disjoint_from_the_locked_test():
     from evaluation.confirm import PATH as CONFIRM_PATH
     from evaluation.confirm import computed_ids

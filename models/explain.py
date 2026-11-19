@@ -88,7 +88,7 @@ def collapse_wording(
     wording_seen = False
     wording_observed = False
     for index, name in enumerate(names):
-        if str(name).startswith("text_svd_"):
+        if str(name).startswith("text_svd_") or str(name).startswith("text_embed_"):
             wording += float(values[index])
             wording_seen = True
             if observed is None or bool(observed[index]):
@@ -146,7 +146,10 @@ def _fact(feature: str, value: float | None) -> str:
         feature in {"census_median_income", "census_median_rent", "census_median_home_value"}
         and not missing
     ):
-        return f"A tract {pretty(feature).lower()} of ${_number(value)}"
+        # pretty() already starts with "Tract", so the sentence is
+        # "A tract median rent of $1,800", not "A tract tract median rent".
+        label = pretty(feature)
+        return f"A {label[0].lower()}{label[1:]} of ${_number(value)}"
     if feature == "census_pop_density" and not missing:
         return f"A tract density of {_number(value)} people per km²"
     if feature == "reviews_per_month" and not missing:

@@ -106,22 +106,32 @@ def _bathrooms(df: pd.DataFrame) -> pd.Series:
     return baths
 
 
-def load_listings(city_key: str, *, entire_home_only: bool = False) -> tuple[pd.DataFrame, dict]:
+def load_listings(
+    city_key: str,
+    *,
+    entire_home_only: bool = False,
+    path: Path | None = None,
+    snapshot: str | None = None,
+) -> tuple[pd.DataFrame, dict]:
     """Return the modeling frame and a count of how many rows each rule removed.
 
     `occupancy_rate` is the San Francisco review proxy (NaN when the listing
     has no reviews). It is not a training target for the price model.
+    `path` and `snapshot` load an earlier file of the same city. The cleaning
+    rules do not change. Host tenure in that case is retargeted by the caller,
+    because `attach_base_features` measures it as of the study date.
     """
     if city_key not in CITIES:
         raise KeyError(f"Unknown city: {city_key}")
 
-    path = listings_path(city_key)
+    path = path or listings_path(city_key)
+    snapshot = snapshot or CITIES[city_key]["ia_date"]
     header = pd.read_csv(path, nrows=0).columns
     usecols = [col for col in _WANTED if col in header]
     raw = pd.read_csv(path, usecols=usecols, low_memory=False)
     stats: dict = {
         "city": city_key,
-        "snapshot": CITIES[city_key]["ia_date"],
+        "snapshot": snapshot,
         "rows_raw": int(len(raw)),
         "entire_home_only": entire_home_only,
         "min_price": MIN_PRICE,

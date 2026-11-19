@@ -12,8 +12,16 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from evaluation.fitting import predict_dollars, predict_log
-from evaluation.intervals import apply_log_interval, apply_log_radii, cqr_bounds, sigma_of
+from evaluation.intervals import (
+    apply_log_interval,
+    apply_log_radii,
+    apply_mondrian,
+    apply_signed_interval,
+    cqr_bounds,
+    sigma_of,
+)
 from evaluation.protocol import city_dummies
+from evaluation.v4 import apply_correction
 from features.columns import CENSUS_COLUMNS, LEXICON_COLUMNS, OSM_COLUMNS
 from features.frame import AMENITY_FLAGS, EXTRA_AMENITY_FLAGS, attach_base_features
 from features.place import features_at
@@ -102,6 +110,12 @@ def _predict_matrix(artifact: dict, matrix: pd.DataFrame) -> np.ndarray:
         stacked = [
             predict_dollars(artifact["models"][library], matrix, library) for library in libraries
         ]
+        weights = artifact.get("blend_weights")
+        if weights:
+            total = np.zeros(len(matrix), dtype=float)
+            for library, column in zip(libraries, stacked, strict=True):
+                total = total + float(weights[library]) * column
+            return total
         return np.mean(stacked, axis=0)
     return predict_dollars(artifact["model"], matrix, artifact["library"])
 
@@ -139,6 +153,10 @@ def _interval(
     if method == "scaled_log" and params:
         sigma = sigma_of(pred, float(params["a"]), float(params["b"]), float(params["floor"]))
         low, high = apply_log_radii(pred, float(params["quantile"]) * sigma)
+    elif method == "asymmetric" and params:
+        low, high = apply_signed_interval(pred, float(params["q_lo"]), float(params["q_hi"]))
+    elif method == "mondrian_asymmetric" and params:
+        low, high = apply_mondrian(pred, params)
     elif method == "cqr" and artifact.get("quantile_models") and params:
         models = artifact["quantile_models"]
         q_lo = predict_log(models["lo"], matrix, models["library"])
@@ -166,6 +184,27 @@ def score_features(features: dict, city_key: str) -> dict:
     elif text_encoder is not None:
         for name in text_encoder.column_names:
             row[name] = np.nan
+    embed = artifact.get("embed")
+    if embed is not None and supplied_text:
+        reduced = embed.transform([str(row["listing_text"])])[0]
+        for index, name in enumerate(embed.column_names):
+            value = float(reduced[index])
+            row[name] = value if np.isfinite(value) else np.nan
+    elif embed is not None:
+        for name in embed.column_names:
+            row[name] = np.nan
+    comp = artifact.get("comp")
+    if comp is not None:
+        matched = comp.transform(
+            np.array([float(features["latitude"])]),
+            np.array([float(features["longitude"])]),
+            np.array([row["room_type"]]),
+            np.array([float(row["bedrooms"])]),
+            row_index=None,
+        )
+        row["comp_log_price"] = float(matched[0])
+    if "months_before" in set(artifact["columns"]):
+        row["months_before"] = 0.0
     kernel = artifact.get("kernel")
     if kernel is not None:
         smoothed = kernel.transform(
@@ -193,7 +232,13 @@ def score_features(features: dict, city_key: str) -> dict:
             matrix["neigh_bed_log_price"] = bed
         if mode in ("knn", "both"):
             matrix["knn_log_price"] = knn
-    nightly = float(_predict_matrix(artifact, matrix)[0])
+    nightly_raw = _predict_matrix(artifact, matrix)
+    nightly_adjusted = apply_correction(
+        nightly_raw,
+        artifact.get("correction") or "none",
+        artifact.get("correction_params") or {},
+    )
+    nightly = float(nightly_adjusted[0])
     low, high = _interval(artifact, matrix, nightly)
     neighbourhood_name = features.get("neighbourhood") or ""
     occupancy = artifact["occupancy_by_neighbourhood"].get(

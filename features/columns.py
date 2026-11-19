@@ -157,6 +157,9 @@ SMOOTH_COLUMNS = ["neigh_log_price", "neigh_bed_log_price"]
 KNN_COLUMNS = ["knn_log_price"]
 # Gaussian weights on the nearest training listings. Same leakage rule.
 KERNEL_COLUMNS = ["kernel_log_price"]
+# Median log price of training listings with the same room type and bedroom
+# bin, within 15 km. Fit inside the training fold only.
+COMP_COLUMNS = ["comp_log_price"]
 
 # Monotone directions. A constraint is an inductive bias, not a claim that
 # the world is perfectly monotone: more bedrooms should not lower the
@@ -262,7 +265,10 @@ PRETTY = {
     "text_mentions_downtown": "Text mentions downtown",
     "text_mentions_water": "Text mentions water",
     "kernel_log_price": "Smoothed nearby prices",
+    "comp_log_price": "Comparable listings",
+    "months_before": "Months before the study snapshot",
     "listing_wording": "Wording of the listing",
+    "listing_embedding": "Wording of the listing",
     "city_austin": "Austin",
     "city_san_diego": "San Diego",
     "city_seattle": "Seattle",
@@ -270,9 +276,14 @@ PRETTY = {
 
 
 def pretty(name: str) -> str:
-    if name.startswith("text_svd_"):
+    if name.startswith("text_svd_") or name.startswith("text_embed_"):
         # Components are numbered for the chart. The app collapses them
-        # into one "wording" reason because a single component is not a
+        # into one wording reason because a single component is not a
         # sentence a person can say.
         return f"Listing wording {int(name.rsplit('_', 1)[-1]) + 1}"
     return PRETTY.get(name, name.replace("_", " "))
+
+
+def embed_component_names(n_components: int) -> list[str]:
+    """Fold-fit sentence-embedding components. The count is fixed in the protocol."""
+    return [f"text_embed_{index:02d}" for index in range(n_components)]

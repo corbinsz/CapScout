@@ -10,6 +10,7 @@ from __future__ import annotations
 from evaluation.protocol import (
     ADDON_MUST_BEAT,
     BLEND_MUST_BEAT,
+    INTERVAL_BAND_GAIN,
     INTERVAL_MEAN_COVERAGE_FLOOR,
     INTERVAL_TAIL_GAIN,
     INTERVAL_WIDTH_CAP,
@@ -114,6 +115,60 @@ def choose_sequential(base_mae: float, steps: list[tuple[str, float]]) -> list[s
 def choose_pooled(per_city_mae: float, pooled_mae: float) -> bool:
     """One model for all three cities has to beat the per-city blend by 1%."""
     return float(pooled_mae) < float(per_city_mae) * ADDON_MUST_BEAT
+
+
+def choose_confirmed(default_mae: float, candidate_mae: float) -> bool:
+    """A change fit on some development seeds must still clear 1% on the others."""
+    return float(candidate_mae) < float(default_mae) * ADDON_MUST_BEAT
+
+
+def choose_correction(base_mae: float, options: list[tuple[str, float]]) -> str:
+    """None, unless a correction beats it by 1%. The simpler correction wins a tie.
+
+    `options` is in simplicity order. Smearing is one number. Isotonic is a
+    curve. Pass smearing first.
+    """
+    earned = [
+        (name, mae) for name, mae in options if float(mae) < float(base_mae) * ADDON_MUST_BEAT
+    ]
+    if not earned:
+        return "none"
+    best = min(mae for _name, mae in earned)
+    near = [(name, mae) for name, mae in earned if mae <= best * SIMPLER_WITHIN]
+    return near[0][0]
+
+
+def choose_band_interval(candidates: list[dict]) -> str:
+    """The scaled log band, unless a challenger covers the worst price band better.
+
+    The floors are the v3 ones: calibration, width, and the point estimate
+    staying inside the band. The gain that matters this round is the worst
+    city's worst predicted-price band, which is where Austin's cheap listings
+    were missed. A challenger has to move that by the pre-set amount. If two
+    do, the one with the better worst band wins, and a half-point tie keeps
+    the earlier, simpler method.
+    """
+    if not candidates:
+        raise ValueError("no interval candidates")
+    baseline = candidates[0]
+    best = baseline
+    for challenger in candidates[1:]:
+        if not _interval_ok(
+            challenger,
+            baseline,
+            INTERVAL_MEAN_COVERAGE_FLOOR,
+            INTERVAL_WIDTH_CAP,
+            INTERVAL_WORST_SLACK,
+            POINT_INSIDE_FLOOR,
+        ):
+            continue
+        if challenger.get("worst_band_coverage") is None:
+            continue
+        if challenger["worst_band_coverage"] < baseline["worst_band_coverage"] + INTERVAL_BAND_GAIN:
+            continue
+        if challenger["worst_band_coverage"] > best["worst_band_coverage"] + 0.005:
+            best = challenger
+    return str(best["name"])
 
 
 def choose_interval(candidates: list[dict]) -> str:

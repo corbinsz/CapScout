@@ -67,6 +67,14 @@ INTERVAL_NOTE = {
         "The band is wider where the model is usually less sure. That is mostly "
         "the expensive listings."
     ),
+    "asymmetric": (
+        "The band can be wider above the estimate than below it, because the "
+        "model tends to sit a bit low."
+    ),
+    "mondrian_asymmetric": (
+        "The band is fit separately for cheaper and more expensive estimates, "
+        "and it can be wider above the estimate than below it."
+    ),
     "cqr": (
         "The band comes from a low estimate and a high estimate, adjusted so the "
         "held-out blocks were covered about 80 percent of the time."
@@ -496,18 +504,29 @@ def _result(scored: dict, comps: pd.DataFrame, unknowns: list[str]) -> None:
         )
 
 
+def _headline_block(city_report: dict) -> tuple[dict, str]:
+    """The final holdout is the result. Seed 7 remains as a comparison."""
+    if "final_holdout" in city_report:
+        return city_report["final_holdout"], "Final holdout · scored once"
+    return city_report["locked_test"], "Locked spatial test · scored once"
+
+
 def _results_page() -> None:
-    st.markdown('<p class="eyebrow">Locked spatial test · scored once</p>', unsafe_allow_html=True)
-    st.markdown('<p class="wordmark">What the model actually did</p>', unsafe_allow_html=True)
     payload = _metrics()
     if not payload or payload.get("smoke"):
+        st.markdown('<p class="eyebrow">Holdout · scored once</p>', unsafe_allow_html=True)
+        st.markdown('<p class="wordmark">What the model actually did</p>', unsafe_allow_html=True)
         st.info("No full report yet. From the repo root: python -m evaluation.run_eval")
         return
     cities = payload["study_cities"]
+    _block, eyebrow = _headline_block(payload["cities"][cities[0]])
+    st.markdown(f'<p class="eyebrow">{eyebrow}</p>', unsafe_allow_html=True)
+    st.markdown('<p class="wordmark">What the model actually did</p>', unsafe_allow_html=True)
     cards = []
     for city in cities:
-        report = payload["cities"][city]["locked_test"]["gbm"]
-        coverage = payload["cities"][city]["locked_test"]["interval"]["coverage"]
+        report_block, _label = _headline_block(payload["cities"][city])
+        report = report_block["gbm"]
+        coverage = report_block["interval"]["coverage"]
         cards.append(
             '<div class="card">'
             f"<p class=\"eyebrow\">{payload['cities'][city]['display']}</p>"
@@ -523,9 +542,10 @@ def _results_page() -> None:
     )
     rows = []
     for city in cities:
-        locked = payload["cities"][city]["locked_test"]
+        locked, _label = _headline_block(payload["cities"][city])
         labels = [
             ("gbm", "This round"),
+            ("v3_refit", "v3 specification, refit"),
             ("v2_refit", "v2 specification, refit"),
             ("previous_spec", "Size and location only"),
             ("ridge", "Ridge, same columns"),
@@ -550,17 +570,20 @@ def _results_page() -> None:
     protocol = payload["protocol"]
     coverage = []
     for city in cities:
-        interval = payload["cities"][city]["locked_test"]["interval"]
+        locked, _label = _headline_block(payload["cities"][city])
+        interval = locked["interval"]
         row = {
             "City": payload["cities"][city]["display"],
             "Method": interval.get("method", "log_conformal").replace("_", " "),
             "Coverage": f"{interval['coverage']:.1%}",
             "Median width": _money(interval["median_width"]),
         }
-        methods = payload["cities"][city]["locked_test"].get("interval_methods") or {}
+        methods = locked.get("interval_methods") or {}
         for name, label in (
-            ("log_conformal", "Log band"),
             ("scaled_log", "Scaled band"),
+            ("asymmetric", "Asymmetric"),
+            ("mondrian_asymmetric", "By price band"),
+            ("log_conformal", "Log band"),
             ("cqr", "Conformalized quantiles"),
         ):
             if name in methods:
@@ -574,21 +597,45 @@ def _results_page() -> None:
         "The band in the estimator is the one chosen on the development folds. "
         "The other coverages were scored once and were not used to switch methods."
     )
+    if any("final_holdout" in payload["cities"][city] for city in cities):
+        st.markdown("##### Seed 7, the previous locked test")
+        st.caption(
+            "Seed 7 was already published, so it was not used to choose anything. "
+            "These rows are the same listings as v3."
+        )
+        seed_rows = []
+        for city in cities:
+            block = payload["cities"][city].get("locked_test")
+            if not block or "v3_refit" not in block:
+                continue
+            seed_rows.append(
+                {
+                    "City": payload["cities"][city]["display"],
+                    "This round R²": f"{block['gbm']['r2']:.3f}",
+                    "This round MAE": _money(block["gbm"]["mae"]),
+                    "v3 MAE": _money(block["v3_refit"]["mae"]),
+                    "Baseline MAE": _money(block["baseline_room"]["mae"]),
+                    "80% coverage": f"{block['interval']['coverage']:.1%}",
+                }
+            )
+        if seed_rows:
+            st.table(pd.DataFrame(seed_rows))
     if any("confirmation" in payload["cities"][city] for city in cities):
-        st.markdown("##### Confirmation holdout")
-        st.caption(payload.get("confirmation_note") or "")
+        st.markdown("##### Seed 11")
+        st.caption(payload.get("holdout_note") or payload.get("confirmation_note") or "")
         confirm_rows = []
         for city in cities:
             block = payload["cities"][city].get("confirmation")
             if not block:
                 continue
+            previous = block.get("v3_refit") or block.get("v2_refit")
             confirm_rows.append(
                 {
                     "City": payload["cities"][city]["display"],
                     "Listings": f"{block['gbm']['n']:,}",
                     "This round R²": f"{block['gbm']['r2']:.3f}",
                     "This round MAE": _money(block["gbm"]["mae"]),
-                    "v2 spec MAE": _money(block["v2_refit"]["mae"]),
+                    "Previous spec MAE": _money(previous["mae"]),
                     "Interval coverage": f"{block['interval']['coverage']:.1%}",
                 }
             )
@@ -612,7 +659,7 @@ def _results_page() -> None:
 
 def main() -> None:
     page = st.sidebar.radio(
-        "Study", ["Estimate a rate", "Locked-test results"], label_visibility="collapsed"
+        "Study", ["Estimate a rate", "Holdout results"], label_visibility="collapsed"
     )
     st.sidebar.markdown("---")
     st.sidebar.markdown(

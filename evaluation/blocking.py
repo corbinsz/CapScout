@@ -14,6 +14,8 @@ from evaluation.protocol import (
     BUFFER_KM,
     CONFIRM_GROUP_FRACTION,
     CONFIRM_SEED,
+    FINAL_GROUP_FRACTION,
+    FINAL_SEED,
     INNER_GROUP_FRACTION,
     INNER_SEEDS,
     SPATIAL_STEP_DEGREES,
@@ -131,6 +133,64 @@ def confirmation_split(
         "train_idx": train_idx,
         "info": info,
     }
+
+
+def final_split(
+    lat: np.ndarray,
+    lon: np.ndarray,
+    hosts: np.ndarray,
+    pool_idx: np.ndarray,
+    groups: np.ndarray,
+) -> dict:
+    """Hold out cells that are in neither the locked test nor the confirmation set.
+
+    `selection_idx` is what model selection is allowed to see. `train_idx`
+    is that pool after the host purge and the 1 km buffer against the final
+    cells. The model that scores the final holdout is trained on a wider
+    set (see `score_split`); this training index is the selection pool only.
+    """
+    pool = np.asarray(pool_idx, dtype=int)
+    rel_keep, rel_final = holdout_groups(groups[pool], FINAL_GROUP_FRACTION, FINAL_SEED)
+    final_idx = pool[rel_final]
+    selection_idx = pool[rel_keep]
+    train_idx, info = protect_train(lat, lon, hosts, selection_idx, final_idx)
+    info.update(
+        {
+            "n_final": int(len(final_idx)),
+            "n_selection": int(len(selection_idx)),
+            "final_seed": FINAL_SEED,
+            "final_group_fraction": FINAL_GROUP_FRACTION,
+        }
+    )
+    return {
+        "final_idx": final_idx,
+        "selection_idx": selection_idx,
+        "train_idx": train_idx,
+        "info": info,
+    }
+
+
+def score_split(
+    lat: np.ndarray,
+    lon: np.ndarray,
+    hosts: np.ndarray,
+    holdout_idx: np.ndarray,
+) -> tuple[np.ndarray, dict]:
+    """Every row outside the holdout's cells, then the host purge and the buffer.
+
+    A cell is held out whole. Listings in that cell which were already
+    removed from an earlier pool (the 1 km buffer around a different
+    holdout) are not training rows either. Leaving them in would put the
+    same block on both sides. Selection does not use this function. It uses
+    `final_split`'s selection pool, which also excludes the other two holdouts.
+    """
+    holdout = np.asarray(holdout_idx, dtype=int)
+    groups = spatial_group_ids(lat, lon, SPATIAL_STEP_DEGREES)
+    blocked = set(groups[holdout])
+    pool = np.array([i for i in range(len(lat)) if groups[i] not in blocked], dtype=int)
+    train_idx, info = protect_train(lat, lon, hosts, pool, holdout)
+    info["n_holdout"] = int(len(holdout))
+    return train_idx, info
 
 
 def development_splits(
