@@ -1,0 +1,16 @@
+{
+  "city": "seattle",
+  "mode": "airbnb_public",
+  "attempted": 300,
+  "succeeded": 292,
+  "missing": 8,
+  "failed": 0,
+  "blocked": false,
+  "block_reason": "",
+  "complete": true,
+  "rows": 106580,
+  "path": "/home/runner/work/_temp/calendars/daily/seattle/2026-11-22.csv.gz",
+  "notes": [],
+  "date": "2026-11-22",
+  "max_listings": null
+}
