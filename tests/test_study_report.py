@@ -55,7 +55,6 @@ def test_docs_quote_the_rendered_tables_and_the_reasons():
     tables = [
         price_comparison_table(METRICS),
         price_result_table(METRICS),
-        price_confirmation_table(METRICS),
         nights_comparison_table(METRICS),
         nights_result_table(METRICS),
         nights_confirmation_table(METRICS),
@@ -63,6 +62,9 @@ def test_docs_quote_the_rendered_tables_and_the_reasons():
     for table in tables:
         assert table in README
         assert table in FINDINGS
+    # The earlier-column confirmation table stays in the findings.
+    # The README quotes the shipped linear model's seeds instead.
+    assert price_confirmation_table(METRICS) in FINDINGS
     for key in (
         "selection_reason",
         "nights_selection_reason",
@@ -74,6 +76,30 @@ def test_docs_quote_the_rendered_tables_and_the_reasons():
     assert "0.973" in FINDINGS
     assert "0.385" in FINDINGS
     assert "demonstration" in FINDINGS.lower()
+
+
+def test_shipped_linear_checks_match_the_saved_rows_and_the_docs():
+    checks = json.loads((ROOT / "reports" / "linear_checks.json").read_text())
+    assert checks["model"] == "linear"
+    assert checks["confirm_seeds"] == [19, 29, 37]
+    assert checks["confirmation_table"] in README
+    assert checks["confirmation_table"] in FINDINGS
+    assert checks["later_table"] in README
+    assert checks["later_table"] in FINDINGS
+    confirm = pd.read_csv(ROOT / "reports" / "linear_confirmation.csv")
+    san_diego = confirm[(confirm["city"] == "san-diego") & (confirm["seed"] == 37)]
+    metrics = regression_metrics(san_diego["y_price"], san_diego["pred"])
+    assert metrics["r2"] < 0
+    assert abs(metrics["r2"] - checks["confirmation"]["san-diego"]["r2"][2]) < 1e-9
+    later = pd.read_csv(ROOT / "reports" / "linear_later.csv")
+    assert later.groupby("city").size().to_dict() == {
+        "austin": 4794,
+        "san-diego": 3855,
+        "seattle": 3093,
+    }
+    pooled = regression_metrics(later["y_price"], later["pred"])
+    assert abs(pooled["r2"] - checks["later"]["every_home"]["r2"]) < 1e-9
+    assert abs(pooled["mae"] - checks["later"]["every_home"]["mae"]) < 1e-6
 
 
 def test_holdout_csv_matches_the_json_and_the_rules():
@@ -142,10 +168,10 @@ def test_holdout_csv_matches_the_json_and_the_rules():
 def test_artifact_is_the_simple_model_and_docs_have_no_deployed_site():
     artifact = load_artifact("austin")
     assert artifact["kind"] == "simple-study"
-    assert artifact["library"] == "ridge"
+    assert artifact["library"] == "linear"
     assert artifact["nights_library"] == "linear"
     assert artifact["nights_rough_estimate"] is True
-    assert type(artifact["model"].estimator.named_steps["model"]).__name__ == "Ridge"
+    assert type(artifact["model"].estimator.named_steps["model"]).__name__ == "LinearRegression"
     assert "attraction_index" in artifact["columns"]
     assert not (ROOT / "vercel.json").exists()
     adopted = pd.read_csv(ROOT / "reports" / "study_adopted_predictions.csv")

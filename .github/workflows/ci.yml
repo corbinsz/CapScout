@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
@@ -16,9 +17,9 @@ jobs:
         run: pip install -r requirements.txt
       - name: Lint
         run: |
-          ruff check data features models evaluation tests app scripts
-          black --check data features models evaluation tests app scripts
+          python -m ruff check data features models evaluation tests app scripts
+          python -m black --check data features models evaluation tests app scripts
       - name: Download the three study snapshots
         run: python -m data.download austin san-diego seattle
       - name: Tests
-        run: pytest
+        run: python -m pytest

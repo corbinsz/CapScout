@@ -118,7 +118,7 @@ def _predict_page() -> None:
     st.caption("Examples")
     buttons = st.columns(3)
     for column, (label, (city, lat, lon)) in zip(buttons, EXAMPLES.items(), strict=True):
-        if column.button(label, use_container_width=True):
+        if column.button(label, width="stretch"):
             st.session_state.city = city
             st.session_state.coords_city = city
             st.session_state.lat = lat
@@ -141,7 +141,7 @@ def _predict_page() -> None:
                 st.session_state.pop("scored", None)
             st.session_state.coords_city = city
         address = st.text_input("Address", placeholder="1100 Congress Ave")
-        if st.button("Locate address", use_container_width=True):
+        if st.button("Locate address", width="stretch"):
             try:
                 found = locate_address(address, city, _fetch)
             except LocateError as exc:
@@ -166,17 +166,19 @@ def _predict_page() -> None:
                 "Building",
                 ["Not specified", "House", "Condo", "Townhouse", "Guest unit", "Cabin"],
             )
-            extras = _optional_inputs()
-            knows_price = st.checkbox("Add a purchase price for a rough gross yield")
-            home_price = None
-            if knows_price:
-                home_price = float(
-                    st.number_input("Purchase price ($)", min_value=10000, value=500000, step=5000)
-                )
             with st.expander("Advanced"):
                 lat = st.number_input("Latitude", key="lat", format="%.5f")
                 lon = st.number_input("Longitude", key="lon", format="%.5f")
             go = st.form_submit_button("Estimate this home", type="primary")
+        # Outside the form so a checkbox can reveal the next field immediately.
+        physical = _physical_extras()
+        extras = _optional_inputs()
+        knows_price = st.checkbox("Add a purchase price for a rough gross yield")
+        home_price = None
+        if knows_price:
+            home_price = float(
+                st.number_input("Purchase price ($)", min_value=10000, value=500000, step=5000)
+            )
 
     pin_lat = float(st.session_state.lat)
     pin_lon = float(st.session_state.lon)
@@ -210,6 +212,7 @@ def _predict_page() -> None:
             }
             if building != "Not specified":
                 spec["property_type"] = building
+            spec.update(physical)
             spec.update(extras)
             shown = nearby_comps(_comps_source(city), use_lat, use_lon, room, float(bedrooms))
             if len(shown):
@@ -222,7 +225,9 @@ def _predict_page() -> None:
             st.error(exc.message)
         except FileNotFoundError:
             st.error(
-                "No saved model for this city. From the repo root: python -m evaluation.run_study"
+                "The saved model for this city is missing from models/artifacts. "
+                "It ships with the repository. python -m evaluation.run_study refreshes "
+                "the comparison reports and does not rebuild that file."
             )
 
     if st.session_state.get("scored") and st.session_state.get("scored_city") == city:
@@ -236,12 +241,30 @@ def _predict_page() -> None:
         )
 
 
+def _physical_extras() -> dict:
+    """Beds and a shared bath. Both are known for a home that has never been listed."""
+    features: dict = {}
+    with st.expander("Beds and bathroom"):
+        st.caption("Optional. Leave these alone to use the typical training home, not zero.")
+        if st.checkbox("I know the bed count"):
+            features["beds"] = int(
+                st.number_input("Beds", min_value=0, max_value=16, value=2, step=1)
+            )
+        bath = st.selectbox("Bathroom", ["Unknown", "Private", "Shared"])
+        if bath == "Private":
+            features["bath_is_shared"] = False
+        elif bath == "Shared":
+            features["bath_is_shared"] = True
+    return features
+
+
 def _optional_inputs() -> dict:
     features: dict = {}
     with st.expander("If this home already has a listing"):
         st.caption(
             "Optional. Leave these alone for a home that has never been listed. "
-            "A blank is the training median, not a zero."
+            "A blank is the training median, not a zero. "
+            "The amenity count stays the typical count, because this list is only seven items."
         )
         if st.checkbox("I know the amenities"):
             picked = st.multiselect("Amenities", list(AMENITY_CHOICES))
@@ -306,7 +329,7 @@ def _rate(scored: dict, comps: pd.DataFrame) -> None:
     m2.metric("Low end of the range", _money(low))
     m3.metric("High end of the range", _money(high))
     st.caption(
-        f"Ridge regression, a linear model. The band was built as an 80% range from training residuals. "
+        f"Linear regression. The band was built as an 80% range from training residuals. "
         f"On held-out blocks it covered {coverage:.0%} of homes. "
         "That is the measured coverage, not a promise for this address."
     )
@@ -349,9 +372,9 @@ def _comparison(rate: float, low: float, high: float, comps: pd.DataFrame) -> No
         .mark_rule(color="#1c1915", strokeWidth=2)
         .encode(y="Home:N", x="Low:Q", x2="High:Q")
     )
-    st.altair_chart(bars + span, use_container_width=True)
+    st.altair_chart(bars + span, width="stretch")
     if table_rows:
-        st.dataframe(pd.DataFrame(table_rows), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(table_rows), hide_index=True, width="stretch")
         median = float(pd.Series([row["Rate"] for row in rows[1:]]).median())
         st.caption(
             f"The five ads have a median advertised rate of {_money(median)}. "
@@ -363,12 +386,20 @@ def _reasons(scored: dict) -> None:
     reasons = scored["reasons"]
     st.markdown("#### Why this rate")
     st.caption(
-        "Each bar is the dollar change from putting one filled-in fact back to the training median. "
-        "Ridge regression, a linear model, is what produces the rate."
+        "Each bar puts one fact back to the training median. "
+        "Bedrooms times guests moves with bedrooms or guests, and the pin moves "
+        "with the distances and the public-place score. "
+        "Linear regression is what produces the rate."
     )
     if not reasons:
-        st.caption("No single filled-in fact moved this estimate by a dollar or more.")
+        st.caption("No filled-in fact moved this estimate by a dollar or more.")
         return
+    top = reasons[0]
+    direction = "raises" if top["dollars"] > 0 else "lowers"
+    st.caption(
+        f"Largest driver: {top['label']} {direction} this rate by "
+        f"${abs(top['dollars']):,.0f} versus the typical training home."
+    )
     frame = pd.DataFrame(
         {
             "Fact": [item["label"] for item in reasons],
@@ -385,7 +416,7 @@ def _reasons(scored: dict) -> None:
             tooltip=["Fact", alt.Tooltip("Dollars:Q", format="$,.0f")],
         )
     )
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
     for item in reasons:
         st.markdown(f"**{item['label']}.** {item['sentence']}")
     if scored["blank_fields"]:
@@ -452,7 +483,8 @@ def _results_page() -> None:
             f"{homes['r2']['point']:.3f}",
             help="Pooled holdout. Seattle's interval resamples 8 cells.",
         )
-        share = _within(predictions["y_price"], predictions["price_ridge"], 0.20)
+        pred_col = "price_model" if "price_model" in predictions.columns else "price_ridge"
+        share = _within(predictions["y_price"], predictions[pred_col], 0.20)
         base = _within(predictions["y_price"], predictions["price_area_median"], 0.20)
         rows = [
             {
@@ -475,7 +507,7 @@ def _results_page() -> None:
                 {
                     "Slice": labels.get(city, city),
                     "Homes": f"{block['n']:,}",
-                    "Within ±20%": f"{100 * _within(part['y_price'], part['price_ridge'], 0.20):.1f}%",
+                    "Within ±20%": f"{100 * _within(part['y_price'], part[pred_col], 0.20):.1f}%",
                     "Local median within ±20%": (
                         f"{100 * _within(part['y_price'], part['price_area_median'], 0.20):.1f}%"
                     ),
@@ -492,7 +524,7 @@ def _results_page() -> None:
             path = FIGURES / name
             if path.exists():
                 st.image(str(path))
-        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
         st.caption(
             "Within ±20% is the share of held-out homes whose prediction is within 20% of the "
             "advertised rate. The local median column is the same share for the neighbourhood "

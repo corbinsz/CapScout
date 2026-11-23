@@ -217,9 +217,14 @@ def choose_params(trials: list[dict], margin: float = PARAM_MARGIN) -> dict:
 
 def choose_nights_target(raw_mae: float, log_mae: float, margin: float = FEATURE_MARGIN) -> str:
     """Direct nights, unless the log target is better by `margin` on CV MAE."""
-    if log_mae <= raw_mae * (1.0 - margin):
+    if improves_by(raw_mae, log_mae, margin):
         return "log"
     return "raw"
+
+
+def improves_by(current: float, candidate: float, margin: float = FEATURE_MARGIN) -> bool:
+    """True when ``candidate`` error is lower than ``current`` by at least ``margin``."""
+    return float(candidate) <= float(current) * (1.0 - margin) + 1e-9
 
 
 def nights_cleared(mae: float, baseline_mae: float, r2: float) -> bool:

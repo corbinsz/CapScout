@@ -30,6 +30,8 @@ def missing_snapshots() -> list[str]:
 
 
 def main() -> None:
+    if sys.version_info < (3, 12):
+        raise SystemExit("CapScout needs Python 3.12 or newer.")
     missing = missing_snapshots()
     if missing:
         from data.download import main as download
