@@ -10,17 +10,16 @@ import numpy as np
 import pandas as pd
 from data.clean import load_clean_city
 from evaluation.study_models import apply_interval
-from features.columns import pretty
 from features.frame import _amenity_frame
 from features.geo import distance_to_airport_km, distance_to_center_km
 from features.places import attraction_index, distance_to_coast_km
 
 from models.artifacts import load_artifact
+from models.explain import rate_reasons
 from models.grade import annual_revenue, grade_revenue, gross_yield
 
 HOUSE_TYPES = {"House", "Townhouse", "Cabin", "Guest unit", "Cottage"}
 ROOM_FLAGS = ("is_private_room", "is_shared_room", "is_hotel_room")
-FLAG_COLUMNS = {"bath_is_shared", "is_superhost"}
 
 
 def nearby_comps(
@@ -213,63 +212,12 @@ def _area_nights(artifact: dict, neighbourhood) -> tuple[str | None, float]:
 
 
 def _reasons(model, row: pd.DataFrame) -> list[dict]:
-    """Dollar change from putting one filled-in feature back to its training median."""
-    base = float(model.predict(row)[0])
-    reasons = []
-    for column in model.columns:
-        value = row.iloc[0][column]
-        if not np.isfinite(value):
-            continue
-        median = float(model.medians_[column])
-        if abs(float(value) - median) < 1e-9:
-            continue
-        altered = row.copy()
-        altered[column] = median
-        delta = base - float(model.predict(altered)[0])
-        if abs(delta) < 1.0:
-            continue
-        reasons.append(
-            {
-                "feature": column,
-                "label": pretty(column),
-                "dollars": delta,
-                "sentence": _sentence(column, float(value), median, delta),
-            }
-        )
-    reasons.sort(key=lambda item: abs(item["dollars"]), reverse=True)
-    return reasons[:5]
+    """Dollar change from putting one fact back to the training median.
 
-
-def _sentence(column: str, value: float, median: float, delta: float) -> str:
-    name = pretty(column)
-    if column == "distance_to_center_km":
-        fact = (
-            f"{name} is {_num(value)} km. "
-            f"The median training home is about {_num(median)} km from downtown"
-        )
-    elif column == "attraction_index":
-        fact = (
-            f"The public-place score is {_num(value)}. "
-            f"The median training home's score is {_num(median)}"
-        )
-    elif column.startswith(("is_", "has_")) or column in FLAG_COLUMNS:
-        now = "yes" if value >= 0.5 else "no"
-        usual = "yes" if median >= 0.5 else "no"
-        fact = f"{name} is {now}. The median training home is {usual}"
-    else:
-        fact = f"{name} is {_num(value)}. The median training home is {_num(median)}"
-    amount = f"${abs(delta):,.0f}"
-    if delta > 0:
-        move = f"Putting it back to that median lowers the nightly rate by {amount}."
-    else:
-        move = f"Putting it back to that median raises the nightly rate by {amount}."
-    return f"{fact}. {move}"
-
-
-def _num(value: float) -> str:
-    if abs(value - round(value)) < 0.05:
-        return str(int(round(value)))
-    return f"{value:.1f}"
+    Bedrooms times guests is recomputed with the fact, and the pin moves
+    with the distances. See ``models.explain``.
+    """
+    return rate_reasons(model, row)
 
 
 def _km(lat, lon, lat2, lon2) -> np.ndarray:

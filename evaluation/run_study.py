@@ -2,14 +2,16 @@
 
 python -m evaluation.run_study
 
-The app artifact is that ridge model plus the adopted place features.
-This command refits the comparison columns and would replace that artifact.
-The committed artifact is the one scored after the feature rule cleared.
+The app artifact is the ridge model after the adopted place features.
+This command refits the earlier comparison and rewrites the reports.
+It does not replace the app models unless ``--write-artifacts`` is passed.
+That flag writes the comparison fit, which does not include the adopted features.
 """
 
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -139,7 +141,7 @@ def _metrics_at(y, pred, idx) -> dict:
     return regression_metrics(np.asarray(y)[idx], np.asarray(pred)[idx])
 
 
-def run() -> dict:
+def run(*, write_artifacts: bool = False) -> dict:
     assert_seeds()
     print("Loading and cleaning", flush=True)
     frames: dict[str, pd.DataFrame] = {}
@@ -773,19 +775,26 @@ def run() -> dict:
             "nights_by_neighbourhood": by_neighbourhood,
             "grade_cuts": cuts,
         }
-        save_artifact(city, artifact)
-        print(f"  saved {city}", flush=True)
+        if write_artifacts:
+            save_artifact(city, artifact)
+            print(f"  replaced the app model for {city}", flush=True)
+        else:
+            print(f"  left the app model for {city} in place", flush=True)
 
     every_city_cleared = all(cities_out[city]["nights"]["cleared_bar"] for city in STUDY_CITIES)
     # The rough-estimate flag is global: one city missing the bar labels every city.
-    for city in STUDY_CITIES:
-        artifact = __import__("models.artifacts", fromlist=["load_artifact"]).load_artifact(city)
-        artifact["nights_rough_estimate"] = not every_city_cleared
-        artifact["nights_holdout_r2"] = nights_holdout[city][nights_simple]["r2"]
-        artifact["nights_holdout_mae"] = nights_holdout[city][nights_simple]["mae"]
-        artifact["nights_baseline_mae"] = nights_holdout[city]["area_median"]["mae"]
-        artifact["nights_cleared_bar"] = bool(cities_out[city]["nights"]["cleared_bar"])
-        save_artifact(city, artifact)
+    # Only the explicit flag rewrites the files the app loads.
+    if write_artifacts:
+        for city in STUDY_CITIES:
+            artifact = __import__("models.artifacts", fromlist=["load_artifact"]).load_artifact(
+                city
+            )
+            artifact["nights_rough_estimate"] = not every_city_cleared
+            artifact["nights_holdout_r2"] = nights_holdout[city][nights_simple]["r2"]
+            artifact["nights_holdout_mae"] = nights_holdout[city][nights_simple]["mae"]
+            artifact["nights_baseline_mae"] = nights_holdout[city]["area_median"]["mae"]
+            artifact["nights_cleared_bar"] = bool(cities_out[city]["nights"]["cleared_bar"])
+            save_artifact(city, artifact)
 
     simple_scores = [(name, price_means[name]) for name in ELIGIBLE_MODELS]
     payload = {
@@ -927,8 +936,16 @@ def _fit_one(name, frame, y, train_idx, columns, kind, high, tuned):
     return model
 
 
-def main() -> None:
-    run()
+def main(argv: list[str] | None = None) -> None:
+    args = list(sys.argv[1:] if argv is None else argv)
+    write_artifacts = "--write-artifacts" in args
+    if write_artifacts:
+        print(
+            "Replacing the app models with the comparison fit. "
+            "That fit does not include the adopted place features.",
+            flush=True,
+        )
+    run(write_artifacts=write_artifacts)
 
 
 if __name__ == "__main__":

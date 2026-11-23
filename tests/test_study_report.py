@@ -142,10 +142,10 @@ def test_holdout_csv_matches_the_json_and_the_rules():
 def test_artifact_is_the_simple_model_and_docs_have_no_deployed_site():
     artifact = load_artifact("austin")
     assert artifact["kind"] == "simple-study"
-    assert artifact["library"] == "ridge"
+    assert artifact["library"] == "linear"
     assert artifact["nights_library"] == "linear"
     assert artifact["nights_rough_estimate"] is True
-    assert type(artifact["model"].estimator.named_steps["model"]).__name__ == "Ridge"
+    assert type(artifact["model"].estimator.named_steps["model"]).__name__ == "LinearRegression"
     assert "attraction_index" in artifact["columns"]
     assert not (ROOT / "vercel.json").exists()
     adopted = pd.read_csv(ROOT / "reports" / "study_adopted_predictions.csv")

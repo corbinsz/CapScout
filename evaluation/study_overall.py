@@ -46,6 +46,13 @@ def _city_parts(predictions: pd.DataFrame) -> dict[str, pd.DataFrame]:
     return {city: predictions[predictions["city"] == city] for city in CITY_ORDER}
 
 
+def prediction_column(frame: pd.DataFrame) -> str:
+    """Shipped prediction column. Older files named it after ridge."""
+    if "price_model" in frame.columns:
+        return "price_model"
+    return "price_ridge"
+
+
 def _equal_weight(parts: dict[str, pd.DataFrame]) -> dict[str, float]:
     """Mean of the three city scores. Each city is one vote.
 
@@ -56,7 +63,7 @@ def _equal_weight(parts: dict[str, pd.DataFrame]) -> dict[str, float]:
     rows = [
         _score(
             part["y_price"].to_numpy(),
-            part["price_ridge"].to_numpy(),
+            part[prediction_column(part)].to_numpy(),
             part["price_area_median"].to_numpy(),
         )
         for part in parts.values()
@@ -74,7 +81,7 @@ def _every_home(parts: dict[str, pd.DataFrame]) -> dict[str, float]:
     frame = pd.concat(parts.values(), ignore_index=True)
     return _score(
         frame["y_price"].to_numpy(),
-        frame["price_ridge"].to_numpy(),
+        frame[prediction_column(frame)].to_numpy(),
         frame["price_area_median"].to_numpy(),
     )
 
@@ -210,7 +217,7 @@ def readme_overall_table(predictions: pd.DataFrame) -> str:
     for city, part in parts.items():
         score = _score(
             part["y_price"].to_numpy(),
-            part["price_ridge"].to_numpy(),
+            part[prediction_column(part)].to_numpy(),
             part["price_area_median"].to_numpy(),
         )
         lines.append(

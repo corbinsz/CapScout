@@ -2,7 +2,7 @@
 
     python -m evaluation.study_figures
 
-Predicted-versus-actual and the price-tier chart use the adopted ridge model.
+Predicted-versus-actual and the price-tier chart use the shipped linear model.
 The comparison chart is the holdout that chose ridge, before those features.
 """
 
@@ -29,7 +29,11 @@ def _pred_vs_actual(adopted: pd.DataFrame) -> None:
     for axis, city in zip(axes, CITIES, strict=True):
         part = adopted[adopted["city"] == city]
         y = part["y_price"].to_numpy()
-        pred = part["price_ridge"].to_numpy()
+        pred = (
+            part["price_model"].to_numpy()
+            if "price_model" in part.columns
+            else part["price_ridge"].to_numpy()
+        )
         axis.scatter(y, pred, s=8, alpha=0.35, color="#0f6e56", linewidths=0)
         limit = float(np.quantile(np.concatenate([y, pred]), 0.98))
         axis.plot([0, limit], [0, limit], color="#1c1915", linewidth=1)
@@ -46,7 +50,8 @@ def _pred_vs_actual(adopted: pd.DataFrame) -> None:
 
 def _tiers(adopted: pd.DataFrame) -> None:
     y = adopted["y_price"].to_numpy()
-    pred = adopted["price_ridge"].to_numpy()
+    column = "price_model" if "price_model" in adopted.columns else "price_ridge"
+    pred = adopted[column].to_numpy()
     edges = np.quantile(y, [0.25, 0.5, 0.75])
     bins = np.digitize(y, edges, right=True)
     names = ["Lowest quartile", "Second", "Third", "Highest quartile", "Top 10%"]
@@ -86,7 +91,7 @@ def _coefficients() -> None:
         axis.axvline(0, color="#1c1915", linewidth=0.6)
         axis.set_title(LABELS[city])
         axis.set_xlabel("% change in (1 + rate) per 1 SD")
-    figure.suptitle("Ridge coefficients, standardized features", fontsize=12)
+    figure.suptitle("Shipped model coefficients, standardized features", fontsize=12)
     figure.tight_layout()
     figure.savefig(FIGURES / "ridge_coefficients.png", dpi=140)
     plt.close(figure)
