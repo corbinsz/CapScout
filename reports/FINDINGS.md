@@ -104,6 +104,14 @@ Austin's interval is R² 0.484 to 0.671 and a miss of $54.47 to $83.96, on 2,101
 
 Counting each city once, the shipped miss is $53.63 against $84.59, which is 36.6% less error (33.7% to 41.7%).
 
+The same linear specification on seeds 19, 29, and 37. These seeds were not used to pick the model. San Diego's R² on one of them is −0.184. The dollar miss on San Diego's three seeds stays between $63.62 and $71.22.
+
+| City | Primary R² | Other seeds R² | Primary MAE | Other seeds MAE |
+| --- | ---: | ---: | ---: | ---: |
+| Austin, TX | 0.540 | 0.502, 0.452, 0.586 (spread 0.134) | $70.00 | $51.91, $60.83, $47.40 (spread $13.43) |
+| San Diego, CA | 0.641 | 0.683, 0.652, -0.184 (spread 0.867) | $54.48 | $66.38, $71.22, $63.62 (spread $7.60) |
+| Seattle, WA | 0.536 | 0.486, 0.569, 0.497 (spread 0.083) | $36.41 | $39.12, $34.94, $32.01 (spread $7.11) |
+
 ## The columns the model was chosen on
 
 These paragraphs are the score before the added features. They are why ridge was chosen. They are not the shipped score above.
@@ -173,16 +181,16 @@ Seed 17, and the held-out cell ids in `evaluation/study_ids.json`, were fixed be
 
 ## A later snapshot
 
-Inside Airbnb has a newer listing file for each city: Austin 2026-09-17, San Diego 2026-09-20, and Seattle 2026-09-20. The ridge model, before linear regression replaced it, was scored on rows that pass the same cleaning and whose listing id and host id are both absent from the training rows. That check was not repeated for the linear model. The local median rate is the one fit on the training rows, not a median from the new file. This is a check, not a new model choice.
+Inside Airbnb has a newer listing file for each city: Austin 2026-09-17, San Diego 2026-09-20, and Seattle 2026-09-20. The shipped linear model was scored on rows that pass the same cleaning and whose listing id and host id are both absent from the training rows. The local median rate is the one fit on the training rows, not a median from the new file. This is a check, not a new model choice. The home counts and the local-median misses match the earlier ridge check on this same set of homes.
 
 | City | Snapshot | Homes | R² | Average miss | Median error | Local median miss | Less error |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Austin | 2026-09-17 | 4,794 | 0.287 | $145.95 | 40.8% | $198.70 | 26.5% |
-| San Diego | 2026-09-20 | 3,855 | 0.438 | $135.52 | 32.5% | $196.09 | 30.9% |
-| Seattle | 2026-09-20 | 3,093 | −0.017 | $124.53 | 43.2% | $155.47 | 19.9% |
-| Every home once | | 11,742 | 0.328 | $136.89 | 38.8% | $186.46 | 26.6% |
+| Austin | 2026-09-17 | 4,794 | 0.290 | $145.10 | 40.4% | $198.70 | 27.0% |
+| San Diego | 2026-09-20 | 3,855 | 0.453 | $133.81 | 32.2% | $196.09 | 31.8% |
+| Seattle | 2026-09-20 | 3,093 | -0.013 | $124.59 | 43.2% | $155.47 | 19.9% |
+| Every home once | | 11,742 | 0.336 | $135.99 | 38.8% | $186.46 | 27.1% |
 
-A year later, on homes and hosts the model did not train on, the error is much larger and Seattle's R² is slightly negative. The model still has less average error than the training-set local median rate. Prices moved, and a stale neighbourhood median is a weak baseline. This is not the 0.571 from the frozen holdout, and it is not a score for the linear model that ships now.
+A year later, on homes and hosts the model did not train on, the error is much larger and Seattle's R² is slightly negative. The model still has less average error than the training-set local median rate. Prices moved, and a stale neighbourhood median is a weak baseline. This is not the 0.571 from the frozen holdout.
 
 ## Booked nights
 
@@ -222,9 +230,9 @@ Yearly revenue, predicted rate times predicted nights, has holdout R² 0.287, 0.
 
 ## What to say, and what not to say
 
-Say that ridge was inside 2% of XGBoost on the columns used for the first choice, that three pre-registered features then cleared a 2% training-cell bar, and that a later check on those columns scored the eligible models once. Linear regression had the lowest equal-city error and is the simplest model inside 2% of it, so that is what ships. On that score, counting every home once, the average error is 37.3% lower than the local median rate and R² is 0.571. Say the test was geographic and frozen first. Say the nights figure is rough and missed a bar that was not moved. Say expensive homes are underpredicted. Say the later-snapshot numbers are the previous ridge model and were not re-run.
+Say that ridge was inside 2% of XGBoost on the columns used for the first choice, that three pre-registered features then cleared a 2% training-cell bar, and that a later check on those columns scored the eligible models once. Linear regression had the lowest equal-city error and is the simplest model inside 2% of it, so that is what ships. On that score, counting every home once, the average error is 37.3% lower than the local median rate and R² is 0.571. Say the test was geographic and frozen first. Say the nights figure is rough and missed a bar that was not moved. Say expensive homes are underpredicted. Say a newer snapshot of new homes and new hosts, scored with this linear model, has pooled R² 0.336 and a median error of 38.8%, and Seattle's R² there is −0.013.
 
-Do not say the model knows the booked nights. Do not say the range is an 80% promise. Austin's measured coverage on the shipped model is 78.4%. Do not quote San Diego's 0.641 as if the other seeds had been re-run. Those seeds describe the earlier columns, where San Diego's R² ran from 0.182 to 0.650. Do not quote XGBoost's pooled R². Its equal-city error did not beat linear by enough to leave the 2% band, and it was worse in Seattle.
+Do not say the model knows the booked nights. Do not say the range is an 80% promise. Austin's measured coverage on the shipped model is 78.4%. Do not quote San Diego's 0.641 as if the other seeds agreed. On the shipped linear model those seeds run from −0.184 to 0.683. The earlier column list, where San Diego's R² ran from 0.182 to 0.650, is a different score. Do not quote XGBoost's pooled R². Its equal-city error did not beat linear by enough to leave the 2% band, and it was worse in Seattle.
 
 ## A calendar panel for a later label
 
