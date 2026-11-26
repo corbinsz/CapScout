@@ -1,0 +1,16 @@
+{
+  "city": "austin",
+  "mode": "airbnb_public",
+  "attempted": 309,
+  "succeeded": 290,
+  "missing": 19,
+  "failed": 0,
+  "blocked": false,
+  "block_reason": "",
+  "complete": true,
+  "rows": 105850,
+  "path": "/home/runner/work/_temp/calendars/daily/austin/2026-11-26.csv.gz",
+  "notes": [],
+  "date": "2026-11-26",
+  "max_listings": null
+}
